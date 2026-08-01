@@ -3,7 +3,14 @@ import Foundation
 /// Centralized UserDefaults-backed settings. Keys mirror the semantics of the
 /// BetterDisplay settings surface (see betterdisplay-reverse-engineering.md).
 public enum Settings {
-    private static let defaults = UserDefaults.standard
+    /// The app bundle's standard domain IS dev.fisifla.fbd; anything else
+    /// (CLI, tests) must target the suite explicitly so both read the same plist.
+    private static var defaults: UserDefaults {
+        if Bundle.main.bundleIdentifier == "dev.fisifla.fbd" {
+            return .standard
+        }
+        return UserDefaults(suiteName: suite) ?? .standard
+    }
     private static let suite = "dev.fisifla.fbd"
 
     // MARK: DDC
@@ -51,6 +58,59 @@ public enum Settings {
     @Storage(key: "allowExperimentalDirectXDR", defaultValue: false)
     public static var allowExperimentalDirectXDR: Bool
 
+    // MARK: Virtual displays & layout (Tier 3)
+
+    /// Reconnect virtual screens after wake / app start.
+    @Storage(key: "reconnectVirtualScreensOnWake", defaultValue: true)
+    public static var reconnectVirtualScreensOnWake: Bool
+
+    /// Disconnect virtual screens while the session is locked.
+    @Storage(key: "disconnectVirtualScreensOnLock", defaultValue: false)
+    public static var disconnectVirtualScreensOnLock: Bool
+
+    /// Auto-disconnect the built-in display when an external display connects
+    /// (Apple Silicon only; experimental).
+    @Storage(key: "autoDisconnectBuiltInOnExternal", defaultValue: false)
+    public static var autoDisconnectBuiltInOnExternal: Bool
+
+    /// Re-apply the saved display arrangement when the layout changes.
+    @Storage(key: "layoutProtectionEnabled", defaultValue: false)
+    public static var layoutProtectionEnabled: Bool
+
+    /// Persisted virtual screen configurations (JSON-encoded).
+    private static let virtualScreensKey = "virtualScreens.v1"
+
+    public static func loadVirtualScreens() -> [VirtualScreenConfig] {
+        guard let data = defaults.data(forKey: virtualScreensKey),
+              let configs = try? JSONDecoder().decode([VirtualScreenConfig].self, from: data) else {
+            return []
+        }
+        return configs
+    }
+
+    public static func saveVirtualScreens(_ configs: [VirtualScreenConfig]) {
+        if let data = try? JSONEncoder().encode(configs) {
+            defaults.set(data, forKey: virtualScreensKey)
+        }
+    }
+
+    /// Persisted layout anchors (JSON-encoded).
+    private static let layoutAnchorsKey = "layoutAnchors.v1"
+
+    public static func loadLayoutAnchors() -> [LayoutAnchor] {
+        guard let data = defaults.data(forKey: layoutAnchorsKey),
+              let anchors = try? JSONDecoder().decode([LayoutAnchor].self, from: data) else {
+            return []
+        }
+        return anchors
+    }
+
+    public static func saveLayoutAnchors(_ anchors: [LayoutAnchor]) {
+        if let data = try? JSONEncoder().encode(anchors) {
+            defaults.set(data, forKey: layoutAnchorsKey)
+        }
+    }
+
     // MARK: App
 
     /// Launch at login (menu-bar setting; implemented in the app target).
@@ -88,7 +148,14 @@ public struct Storage<T> {
     public init(key: String, defaultValue: T, suite: String = "dev.fisifla.fbd") {
         self.key = key
         self.defaultValue = defaultValue
-        self.defaults = UserDefaults(suiteName: suite) ?? .standard
+        // Inside the app bundle, standard defaults already use the suite domain
+        // (bundle id); using an explicit suite of the same name is broken.
+        // Custom suites (tests) always use the suite.
+        if suite == "dev.fisifla.fbd" && Bundle.main.bundleIdentifier == "dev.fisifla.fbd" {
+            self.defaults = .standard
+        } else {
+            self.defaults = UserDefaults(suiteName: suite) ?? .standard
+        }
     }
 
     public var wrappedValue: T {

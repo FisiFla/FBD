@@ -30,11 +30,25 @@ final class AppCore {
         displayController.start()
         statusItemController.install()
 
+        // Tier 3 controllers: virtual screens, soft disconnect, layout protection.
+        virtualScreens.start()
+        disconnect.start()
+        layoutProtection.start()
+        // Recreate persisted virtual screens at launch (they are process-lifetime).
+        if Settings.reconnectVirtualScreensOnWake {
+            virtualScreens.reconnectAuto()
+        }
+
         if IOAVServiceAPI.isAppleSilicon && IOAVServiceAPI.isRunningUnderRosetta && Settings.showRosettaWarning {
             log.warning("Running under Rosetta — DDC control is unavailable")
             NotificationCenter.default.post(name: .fbdRosettaWarningActive, object: nil)
         }
     }
+
+    // Tier 3 controller instances (owned here; UI/CLI create their own for one-shot use).
+    let virtualScreens = VirtualScreenController()
+    let disconnect = DisconnectController()
+    let layoutProtection = LayoutProtectionController()
 
     // MARK: - URL scheme (fbd://)
 

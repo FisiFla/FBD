@@ -20,6 +20,11 @@ enum Command: String {
     case xdr
     case preset
     case hdr
+    case virtual
+    case disable
+    case enable
+    case layout
+    case group
     case help
 }
 
@@ -51,6 +56,25 @@ Commands:
   modes <id>                    List all modes for a display
   set-mode <id> <W>x<H>[@<hz>]  Apply a matching mode
   ddc-test <id>                 DDC diagnostics (arch, AVService, VCP reads)
+  virtual list                  List persisted virtual screen configs
+  virtual create <name> <W>x<H>[@<hz>] [--hdr] [--no-auto]
+                                Create and connect a virtual screen
+  virtual destroy <id-or-name>  Disconnect and forget a virtual screen
+  virtual reconnect <id-or-name>
+                                Reconnect a persisted virtual screen
+  virtual disconnect-all        Disconnect all virtual screens (keep configs)
+  disable <id>                  Disable a display (black screen until re-enabled)
+  enable <id>                   Re-enable a disabled display
+  layout save                   Save the current display arrangement
+  layout restore                Restore the saved arrangement
+  layout protect [on|off]       Get or set layout protection
+  group list                    List display groups and their members
+  group create <name> [id...]   Create a group (member ids optional)
+  group delete <name>           Delete a group
+  group add <name> <id>         Add a display to a group
+  group remove <name> <id>      Remove a display from a group
+  group mirror <name>           Mirror the group's displays
+  group unmirror <name>         Unmirror the group's displays
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
@@ -124,6 +148,18 @@ func run(arguments: [String]) -> Int32 {
     case .hdr:
         guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
         return cmdHDR(controller, display: display, args: rest)
+    case .virtual:
+        return cmdVirtual(args: rest)
+    case .disable:
+        guard let displayID = requireOnlineDisplay(rest.first) else { return 1 }
+        return cmdDisableEnable(displayID: displayID, enabled: false)
+    case .enable:
+        guard let displayID = requireOnlineDisplay(rest.first) else { return 1 }
+        return cmdDisableEnable(displayID: displayID, enabled: true)
+    case .layout:
+        return cmdLayout(args: rest)
+    case .group:
+        return cmdGroup(controller, args: rest)
     case .help:
         print(usageText)
         return 0

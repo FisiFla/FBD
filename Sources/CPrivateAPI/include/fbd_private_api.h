@@ -132,4 +132,19 @@ static inline struct CGSDisplayModeDescription fbd_make_test_mode(int modeNumber
     return desc;
 }
 
+#pragma mark - SLVirtualDisplay runtime shims (macOS 26+; see fbd_virtual_display.c)
+
+typedef struct { float x, y; } fbd_point;
+typedef struct { uint32_t w, h; } fbd_size_i;
+typedef struct { fbd_point red, green, blue, white; } fbd_chromaticities;
+
+void *FBDVDConfigCreate(void *cls, void *name, uint64_t vendor, uint64_t product, uint64_t serial,
+                        fbd_point mm, fbd_size_i maxPixels, fbd_chromaticities chroma, void **err);
+void *FBDVDModeCreate(void *cls, fbd_size_i pixels, fbd_size_i points, float refresh, void **err);
+void *FBDVDSettingsCreate(void *cls, void *native, void *preferred, void *optionalModes, uint64_t rotations, void **err);
+void *FBDVDCreate(void *cls, void *config, void **err);
+uint32_t FBDVDDisplayID(void *vd);
+int FBDVDApplySettings(void *vd, void *settings, void **err);
+void FBDVDDestroy(void *vd);
+
 #endif /* FBD_PRIVATE_API_H */

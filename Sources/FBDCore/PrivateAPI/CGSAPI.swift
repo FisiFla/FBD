@@ -56,6 +56,27 @@ public enum CGSAPI {
         return descriptions
     }
 
+    /// Enable/disable a display in the configuration (soft disconnect).
+    /// Disabling removes the display from the active layout; the display can be
+    /// re-enabled later with the same call. Use with care on the built-in
+    /// display (screen goes dark until re-enabled).
+    public static func setEnabled(_ enabled: Bool, displayID: CGDirectDisplayID) throws {
+        var config: CGDisplayConfigRef?
+        let begin = CGBeginDisplayConfiguration(&config)
+        guard begin == .success, let config else {
+            throw PrivateAPIError.status("CGBeginDisplayConfiguration", begin.rawValue)
+        }
+        let status = CGSConfigureDisplayEnabled(config, displayID, enabled)
+        guard status == .success else {
+            CGCancelDisplayConfiguration(config)
+            throw PrivateAPIError.status("CGSConfigureDisplayEnabled", status.rawValue)
+        }
+        let complete = CGCompleteDisplayConfiguration(config, .permanently)
+        guard complete == .success else {
+            throw PrivateAPIError.status("CGCompleteDisplayConfiguration", complete.rawValue)
+        }
+    }
+
     /// Apply a mode via a display configuration transaction (permanent).
     public static func configureMode(_ modeNumber: Int32, on displayID: CGDirectDisplayID) throws {
         var config: CGDisplayConfigRef?

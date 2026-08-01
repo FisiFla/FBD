@@ -4,12 +4,15 @@ import ServiceManagement
 import SwiftUI
 
 /// Settings panel: launch at login, DDC cooldown, Rosetta warning toggle,
-/// experimental unsafe modes, and an About section.
+/// experimental unsafe modes, virtual displays & layout protection, and an
+/// About section.
 @MainActor
 struct SettingsView: View {
     var onDone: () -> Void = {}
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var layoutProtection = LayoutProtectionController()
+    @State private var hasSavedArrangement = false
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
 
     var body: some View {
@@ -64,6 +67,31 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Virtual Displays & Layout") {
+                Toggle("Reconnect virtual screens after wake", isOn: reconnectOnWakeBinding)
+                Toggle("Disconnect virtual screens while locked", isOn: disconnectOnLockBinding)
+                Toggle("Auto-disconnect built-in when external connects", isOn: autoDisconnectBuiltInBinding)
+                Text("Apple Silicon; experimental — screen goes dark while the external is connected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Layout protection", isOn: layoutProtectionBinding)
+                Text("Re-applies the saved arrangement when the display layout changes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Button("Save current arrangement") {
+                        layoutProtection.saveCurrentArrangement()
+                        hasSavedArrangement = layoutProtection.hasSavedArrangement
+                    }
+                    .controlSize(.small)
+                    Button("Restore arrangement") {
+                        _ = layoutProtection.restoreArrangement()
+                    }
+                    .controlSize(.small)
+                    .disabled(!hasSavedArrangement)
+                }
+            }
+
             Section("About") {
                 LabeledContent("Version", value: versionString)
                 Link("GitHub — FisiFla/FBD", destination: URL(string: "https://github.com/FisiFla/FBD")!)
@@ -79,6 +107,7 @@ struct SettingsView: View {
         }
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            hasSavedArrangement = layoutProtection.hasSavedArrangement
         }
     }
 
@@ -157,6 +186,34 @@ struct SettingsView: View {
         Binding(
             get: { Settings.xdrUpscaleTargetNits },
             set: { Settings.xdrUpscaleTargetNits = $0 }
+        )
+    }
+
+    private var reconnectOnWakeBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.reconnectVirtualScreensOnWake },
+            set: { Settings.reconnectVirtualScreensOnWake = $0 }
+        )
+    }
+
+    private var disconnectOnLockBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.disconnectVirtualScreensOnLock },
+            set: { Settings.disconnectVirtualScreensOnLock = $0 }
+        )
+    }
+
+    private var autoDisconnectBuiltInBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.autoDisconnectBuiltInOnExternal },
+            set: { Settings.autoDisconnectBuiltInOnExternal = $0 }
+        )
+    }
+
+    private var layoutProtectionBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.layoutProtectionEnabled },
+            set: { Settings.layoutProtectionEnabled = $0 }
         )
     }
 

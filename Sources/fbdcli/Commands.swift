@@ -1,4 +1,5 @@
 import FBDCore
+import CoreGraphics
 import Foundation
 
 // MARK: - list
@@ -519,5 +520,437 @@ func cmdHDR(_ controller: DisplayController, display: Display, args: [String]) -
         return 0
     }
     print("hdr \(display.id): capable=\(display.isHDRModeCapable ? "yes" : "no") enabled=\(display.isHDRModeEnabled ? "yes" : "no")")
+    return 0
+}
+
+// MARK: - Virtual screens
+
+/// Dispatch `fbdcli virtual <subcommand> [args]`.
+@MainActor
+func cmdVirtual(args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: virtual: expected list, create, destroy, reconnect, or disconnect-all")
+        return 1
+    }
+    let rest = Array(args.dropFirst())
+    switch sub {
+    case "list":
+        return cmdVirtualList()
+    case "create":
+        return cmdVirtualCreate(args: rest)
+    case "destroy":
+        return cmdVirtualDestroy(args: rest)
+    case "reconnect":
+        return cmdVirtualReconnect(args: rest)
+    case "disconnect-all":
+        return cmdVirtualDisconnectAll()
+    default:
+        print("fbdcli: virtual: unknown subcommand '\(sub)'")
+        return 1
+    }
+}
+
+/// "WxH@Hz" spec for a virtual screen config (e.g. "1920x1080@60").
+func virtualSpec(_ config: VirtualScreenConfig) -> String {
+    String(format: "%ux%u@%g", config.width, config.height, config.refreshRate)
+}
+
+/// Resolve a persisted virtual screen config by id or name.
+func resolveVirtualConfig(_ controller: VirtualScreenController, _ idOrName: String) -> VirtualScreenConfig? {
+    controller.configs.first { $0.id == idOrName || $0.name == idOrName }
+}
+
+/// `fbdcli virtual list` — table of persisted configs (id, name, spec, hdr,
+/// auto, state) plus the currently active screens.
+@MainActor
+func cmdVirtualList() -> Int32 {
+    let controller = VirtualScreenController.shared
+    print("\(pad("ID", 36)) \(pad("NAME", 24)) \(pad("SPEC", 16)) \(pad("HDR", 4)) \(pad("AUTO", 5)) STATE")
+    for config in controller.configs {
+        let state: String
+        if let displayID = controller.displayID(for: config.id) {
+            state = String(displayID)
+        } else {
+            state = "—"
+        }
+        let idCol = pad(config.id, 36)
+        let nameCol = pad(config.name, 24)
+        let specCol = pad(virtualSpec(config), 16)
+        let hdrCol = pad(config.isHDR ? "yes" : "no", 4)
+        let autoCol = pad(config.autoConnect ? "yes" : "no", 5)
+        print("\(idCol) \(nameCol) \(specCol) \(hdrCol) \(autoCol) \(state)")
+    }
+    if controller.screens.isEmpty {
+        print("no active screens")
+    } else {
+        print("active screens:")
+        for screen in controller.screens {
+            print("  \(screen.id)  display \(screen.displayID)  \(screen.config.name)")
+        }
+    }
+    return 0
+}
+
+/// `fbdcli virtual create <name> <W>x<H>[@<hz>] [--hdr] [--no-auto]` — create
+/// and connect a virtual screen (default refresh rate 60 Hz, auto-connect on).
+@MainActor
+func cmdVirtualCreate(args: [String]) -> Int32 {
+    guard args.count >= 2 else {
+        print("fbdcli: virtual create: expected <name> <W>x<H>[@<hz>] [--hdr] [--no-auto]")
+        return 1
+    }
+    let name = args[0]
+    guard let (width, height, hz) = parseModeSpec(args[1]) else {
+        print("fbdcli: virtual create: invalid spec '\(args[1])' (expected WxH[@hz], e.g. 1920x1080@60)")
+        return 1
+    }
+    var isHDR = false
+    var autoConnect = true
+    for flag in args.dropFirst(2) {
+        switch flag {
+        case "--hdr": isHDR = true
+        case "--no-auto": autoConnect = false
+        default:
+            print("fbdcli: virtual create: unknown flag '\(flag)' (expected --hdr or --no-auto)")
+            return 1
+        }
+    }
+    let controller = VirtualScreenController.shared
+    guard controller.isAvailable else {
+        print("virtual displays unavailable on this macOS")
+        return 2
+    }
+    let config = VirtualScreenConfig(
+        name: name,
+        width: UInt32(width),
+        height: UInt32(height),
+        refreshRate: hz ?? 60,
+        isHDR: isHDR,
+        autoConnect: autoConnect
+    )
+    guard controller.create(config), let displayID = controller.displayID(for: config.id) else {
+        print("fbdcli: virtual create: failed to create '\(name)'")
+        return 2
+    }
+    print("virtual display created: \(displayID) (\(name) \(virtualSpec(config)))")
+    return 0
+}
+
+/// `fbdcli virtual destroy <id-or-name>` — disconnect and forget a persisted config.
+@MainActor
+func cmdVirtualDestroy(args: [String]) -> Int32 {
+    guard let idOrName = args.first, !idOrName.isEmpty else {
+        print("fbdcli: virtual destroy: expected <id-or-name>")
+        return 1
+    }
+    let controller = VirtualScreenController.shared
+    guard let config = resolveVirtualConfig(controller, idOrName) else {
+        print("no virtual screen '\(idOrName)'")
+        return 1
+    }
+    guard controller.destroy(id: config.id) else {
+        print("fbdcli: virtual destroy: failed to destroy '\(config.name)'")
+        return 2
+    }
+    print("virtual screen '\(config.name)' destroyed")
+    return 0
+}
+
+/// `fbdcli virtual reconnect <id-or-name>` — reconnect a persisted config.
+@MainActor
+func cmdVirtualReconnect(args: [String]) -> Int32 {
+    guard let idOrName = args.first, !idOrName.isEmpty else {
+        print("fbdcli: virtual reconnect: expected <id-or-name>")
+        return 1
+    }
+    let controller = VirtualScreenController.shared
+    guard let config = resolveVirtualConfig(controller, idOrName) else {
+        print("no virtual screen '\(idOrName)'")
+        return 1
+    }
+    guard controller.reconnect(id: config.id) else {
+        print("fbdcli: virtual reconnect: failed to reconnect '\(config.name)' (already active or creation failed)")
+        return 2
+    }
+    print("virtual screen '\(config.name)' reconnected (display \(controller.displayID(for: config.id) ?? 0))")
+    return 0
+}
+
+/// `fbdcli virtual disconnect-all` — disconnect all active screens (keeps configs).
+@MainActor
+func cmdVirtualDisconnectAll() -> Int32 {
+    let controller = VirtualScreenController.shared
+    let count = controller.screens.count
+    controller.disconnectAll()
+    print("disconnected \(count) virtual screen(s)")
+    return 0
+}
+
+// MARK: - disable / enable
+
+/// Parse a display id and require it to be online (a soft-disabled display
+/// stays online, so `enable` can find it after `disable` removed it from the
+/// active list). Prints a message and returns nil on failure (caller exits 1).
+func requireOnlineDisplay(_ idString: String?) -> CGDirectDisplayID? {
+    guard let idString, !idString.isEmpty else {
+        print("fbdcli: missing display id")
+        return nil
+    }
+    guard let id = parseDisplayID(idString) else {
+        print("fbdcli: invalid display id '\(idString)'")
+        return nil
+    }
+    guard CGDisplayIsOnline(id) != 0 else {
+        print("Display \(id) not found")
+        return nil
+    }
+    return id
+}
+
+/// `fbdcli disable <id>` / `fbdcli enable <id>` — soft-disconnect or re-enable
+/// a display in the layout (CGSConfigureDisplayEnabled).
+@MainActor
+func cmdDisableEnable(displayID: CGDirectDisplayID, enabled: Bool) -> Int32 {
+    if !enabled, CGDisplayIsBuiltin(displayID) != 0 {
+        print("warning: built-in display will go dark until re-enabled")
+    }
+    guard DisconnectController().setEnabled(enabled, displayID: displayID) else {
+        print("fbdcli: \(enabled ? "enable" : "disable") \(displayID): display configuration failed")
+        return 2
+    }
+    print("display \(displayID) \(enabled ? "enabled" : "disabled")")
+    return 0
+}
+
+// MARK: - Layout protection
+
+/// Dispatch `fbdcli layout <subcommand> [args]`.
+@MainActor
+func cmdLayout(args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: layout: expected save, restore, or protect [on|off]")
+        return 1
+    }
+    let rest = Array(args.dropFirst())
+    switch sub {
+    case "save":
+        return cmdLayoutSave()
+    case "restore":
+        return cmdLayoutRestore()
+    case "protect":
+        return cmdLayoutProtect(args: rest)
+    default:
+        print("fbdcli: layout: unknown subcommand '\(sub)'")
+        return 1
+    }
+}
+
+/// `fbdcli layout save` — snapshot origins of all active displays.
+@MainActor
+func cmdLayoutSave() -> Int32 {
+    let controller = LayoutProtectionController()
+    controller.saveCurrentArrangement()
+    let count = Settings.loadLayoutAnchors().count
+    print("saved arrangement of \(count) display(s)")
+    return 0
+}
+
+/// `fbdcli layout restore` — re-apply the saved arrangement.
+@MainActor
+func cmdLayoutRestore() -> Int32 {
+    let controller = LayoutProtectionController()
+    guard controller.hasSavedArrangement else {
+        print("no saved arrangement to restore")
+        return 2
+    }
+    guard controller.restoreArrangement() else {
+        print("fbdcli: layout restore: failed to restore arrangement")
+        return 2
+    }
+    print("arrangement restored")
+    return 0
+}
+
+/// `fbdcli layout protect [on|off]` — get or set layout protection.
+@MainActor
+func cmdLayoutProtect(args: [String]) -> Int32 {
+    if let arg = args.first {
+        let enabled: Bool
+        switch arg {
+        case "on": enabled = true
+        case "off": enabled = false
+        default:
+            print("fbdcli: layout protect: expected on or off (got '\(arg)')")
+            return 1
+        }
+        Settings.layoutProtectionEnabled = enabled
+    }
+    print("layout protection: \(Settings.layoutProtectionEnabled ? "on" : "off")")
+    return 0
+}
+
+// MARK: - Display groups
+
+/// Resolve a group by name, printing a message and returning nil on failure
+/// (caller exits 1).
+func requireGroup(_ name: String?, in controller: DisplayGroupsController) -> DisplayGroup? {
+    guard let name, !name.isEmpty else {
+        print("fbdcli: missing group name")
+        return nil
+    }
+    guard let group = controller.group(named: name) else {
+        print("no group named '\(name)'")
+        return nil
+    }
+    return group
+}
+
+/// Dispatch `fbdcli group <subcommand> [args]`.
+@MainActor
+func cmdGroup(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: group: expected list, create, delete, add, remove, mirror, or unmirror")
+        return 1
+    }
+    let rest = Array(args.dropFirst())
+    switch sub {
+    case "list":
+        return cmdGroupList()
+    case "create":
+        return cmdGroupCreate(controller, args: rest)
+    case "delete":
+        return cmdGroupDelete(args: rest)
+    case "add":
+        return cmdGroupAdd(controller, args: rest)
+    case "remove":
+        return cmdGroupRemove(args: rest)
+    case "mirror":
+        return cmdGroupMirror(args: rest, mirror: true)
+    case "unmirror":
+        return cmdGroupMirror(args: rest, mirror: false)
+    default:
+        print("fbdcli: group: unknown subcommand '\(sub)'")
+        return 1
+    }
+}
+
+/// `fbdcli group list` — one line per group with its member display ids.
+@MainActor
+func cmdGroupList() -> Int32 {
+    let controller = DisplayGroupsController()
+    guard !controller.groups.isEmpty else {
+        print("no groups")
+        return 0
+    }
+    for group in controller.groups {
+        let members = group.displayIDs.sorted().map(String.init).joined(separator: ", ")
+        print("\(group.name): \(members.isEmpty ? "(empty)" : members)")
+    }
+    return 0
+}
+
+/// `fbdcli group create <name> [id...]` — create a group; member ids must
+/// belong to known (active) displays.
+@MainActor
+func cmdGroupCreate(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let name = args.first, !name.isEmpty else {
+        print("fbdcli: group create: expected <name> [id...]")
+        return 1
+    }
+    var ids: Set<CGDirectDisplayID> = []
+    for idString in args.dropFirst() {
+        guard let id = parseDisplayID(idString) else {
+            print("fbdcli: invalid display id '\(idString)'")
+            return 1
+        }
+        guard controller.display(withID: id) != nil else {
+            print("Display \(id) not found")
+            return 1
+        }
+        ids.insert(id)
+    }
+    let groups = DisplayGroupsController()
+    groups.createGroup(name: name, displayIDs: ids)
+    print("created group '\(name)' with \(ids.count) display(s)")
+    return 0
+}
+
+/// `fbdcli group delete <name>`.
+@MainActor
+func cmdGroupDelete(args: [String]) -> Int32 {
+    guard let name = args.first, !name.isEmpty else {
+        print("fbdcli: group delete: expected <name>")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = requireGroup(name, in: groups) else { return 1 }
+    groups.deleteGroup(id: group.id)
+    print("deleted group '\(name)'")
+    return 0
+}
+
+/// `fbdcli group add <name> <id>` — add a known display to a group.
+@MainActor
+func cmdGroupAdd(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard args.count >= 2 else {
+        print("fbdcli: group add: expected <name> <id>")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = requireGroup(args[0], in: groups) else { return 1 }
+    guard let id = parseDisplayID(args[1]) else {
+        print("fbdcli: invalid display id '\(args[1])'")
+        return 1
+    }
+    guard controller.display(withID: id) != nil else {
+        print("Display \(id) not found")
+        return 1
+    }
+    guard !group.displayIDs.contains(id) else {
+        print("display \(id) already in group '\(group.name)'")
+        return 0
+    }
+    groups.addDisplay(id, toGroup: group.id)
+    print("added display \(id) to '\(group.name)'")
+    return 0
+}
+
+/// `fbdcli group remove <name> <id>` — remove a display from a group.
+@MainActor
+func cmdGroupRemove(args: [String]) -> Int32 {
+    guard args.count >= 2 else {
+        print("fbdcli: group remove: expected <name> <id>")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = requireGroup(args[0], in: groups) else { return 1 }
+    guard let id = parseDisplayID(args[1]) else {
+        print("fbdcli: invalid display id '\(args[1])'")
+        return 1
+    }
+    guard group.displayIDs.contains(id) else {
+        print("display \(id) not in group '\(group.name)'")
+        return 0
+    }
+    groups.removeDisplay(id, fromGroup: group.id)
+    print("removed display \(id) from '\(group.name)'")
+    return 0
+}
+
+/// `fbdcli group mirror <name>` / `fbdcli group unmirror <name>`.
+@MainActor
+func cmdGroupMirror(args: [String], mirror: Bool) -> Int32 {
+    guard let name = args.first, !name.isEmpty else {
+        print("fbdcli: group \(mirror ? "mirror" : "unmirror"): expected <name>")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = requireGroup(name, in: groups) else { return 1 }
+    let action = mirror ? groups.mirror(inGroup: group.id) : groups.unmirror(inGroup: group.id)
+    guard action else {
+        print("fbdcli: group \(mirror ? "mirror" : "unmirror"): failed for '\(group.name)'")
+        return 2
+    }
+    print("group '\(group.name)' \(mirror ? "mirrored" : "unmirrored")")
     return 0
 }

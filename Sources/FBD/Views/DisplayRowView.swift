@@ -22,6 +22,8 @@ struct DisplayRowView: View {
     /// trailing-debounced so we don't hammer the WindowServer).
     @State private var upscaleTargetNits: Double = 0
     @State private var upscaleDebounceWorkItem: DispatchWorkItem?
+    /// Confirmation for the soft-disconnect action.
+    @State private var confirmingDisable = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -64,6 +66,8 @@ struct DisplayRowView: View {
                         .font(.caption)
                 }
             }
+
+            disableRow
         }
         .padding(.vertical, 6)
         .onAppear {
@@ -198,6 +202,44 @@ struct DisplayRowView: View {
         let trimmed = inputSource.trimmingCharacters(in: .whitespaces)
         guard let value = UInt16(trimmed), value > 0 else { return }
         DisplayController.shared.setInputSource(value, on: display)
+    }
+
+    // MARK: - Disable / re-enable
+
+    /// Soft-disconnect (CGSConfigureDisplayEnabled): the display goes dark
+    /// until re-enabled. Only offered while online; an offline display gets a
+    /// "Re-enable" button instead.
+    private var disableRow: some View {
+        Group {
+            if display.isOnline {
+                Button(role: .destructive) {
+                    confirmingDisable = true
+                } label: {
+                    Label("Disable display", systemImage: "power")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.red)
+                .controlSize(.small)
+                .confirmationDialog(
+                    "Disable display?",
+                    isPresented: $confirmingDisable,
+                    titleVisibility: .visible
+                ) {
+                    Button("Disable", role: .destructive) {
+                        _ = DisconnectController().setEnabled(false, displayID: display.id)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Display will go dark until re-enabled.")
+                }
+            } else {
+                Button("Re-enable display") {
+                    _ = DisconnectController().setEnabled(true, displayID: display.id)
+                }
+                .controlSize(.small)
+            }
+        }
     }
 
     // MARK: - XDR / HDR controls
