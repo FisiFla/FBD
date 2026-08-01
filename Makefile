@@ -17,20 +17,23 @@ test:
 
 # Universal (arm64 + x86_64). On Apple Silicon the macOS SDK may not ship an
 # x86_64 slice; falls back to native arch with a warning.
-# Locate the built executable: SPM emits it at .build/apple/Products/Release/FBD
-# (universal) or .build/arm64-apple-macosx/release/FBD (single arch).
-BIN = $(firstword $(wildcard .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD))
-
+# The built executable is located AFTER the build, inside the shell: SPM
+# emits it at .build/apple/Products/Release/FBD (universal) or
+# .build/<arch>-apple-macosx/release/FBD (single arch). (A make-side
+# wildcard would be expanded before the build ran and came up empty on
+# fresh checkouts.)
 app:
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
 	@if swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 2>/tmp/fbd-universal.log; then \
-		cp $(BIN) $(APP_BUNDLE)/Contents/MacOS/FBD; \
+		BIN="$$(ls -d .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD 2>/dev/null | head -1)"; \
 	else \
 		echo "Universal build failed (see /tmp/fbd-universal.log); building native arch only."; \
 		swift build $(SWIFT_FLAGS) -c $(CONFIG); \
-		cp $(BIN) $(APP_BUNDLE)/Contents/MacOS/FBD; \
-	fi
+		BIN="$$(ls -d .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD 2>/dev/null | head -1)"; \
+	fi; \
+	if [ -z "$$BIN" ] || [ ! -f "$$BIN" ]; then echo "error: built binary not found"; exit 1; fi; \
+	cp "$$BIN" $(APP_BUNDLE)/Contents/MacOS/FBD
 	@cp Sources/FBD/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
 	# Sparkle: copy the framework (SPM binary distribution) into the bundle.
 	@if [ -d .build/apple/Products/Release/Sparkle.framework ]; then \
