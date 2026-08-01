@@ -125,7 +125,12 @@ Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
 /// Parse arguments and dispatch to the requested command.
 @MainActor
 func run(arguments: [String]) -> Int32 {
-    let args = Array(arguments.dropFirst())
+    var args = Array(arguments.dropFirst())
+
+    // `--direct` forces direct-controller execution even when the app is up
+    // (diagnostics); strip it anywhere before parsing the command.
+    let direct = args.contains("--direct")
+    args.removeAll { $0 == "--direct" }
 
     // No arguments / bare help → usage, success.
     guard let rawCommand = args.first else {
@@ -140,6 +145,14 @@ func run(arguments: [String]) -> Int32 {
     if command == .help {
         print(usageText)
         return 0
+    }
+
+    // Route over the app's HTTP API when it is running (single-driver I2C).
+    if !direct, HTTPRouting.routable.contains(command) {
+        if let exitCode = HTTPRouting.route(command, args: args) {
+            return exitCode
+        }
+        print("fbdcli: app HTTP API not available — using direct controllers")
     }
 
     let controller = DisplayController.shared

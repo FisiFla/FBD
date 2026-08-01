@@ -19,13 +19,10 @@ public struct VirtualScreenInstance: Identifiable, Equatable {
 
 /// Owns virtual screens: create/connect via the SLVirtualDisplay API
 /// (macOS 26+, SkyLight — live-verified: create → applySettings → appears in
-/// CGGetActiveDisplayList → destroy → removed), persists configurations, and
+/// CGGetActiveDisplayList → destroy → removed), with a legacy fallback to the
+/// CGVirtualDisplay API (macOS 13–15, VirtualDisplay.framework, dlopen-based,
+/// not live-testable on this macOS 27 machine), persists configurations, and
 /// reconnects after wake/lock transitions.
-///
-/// The legacy CGVirtualDisplay path (macOS 13–15, VirtualDisplay.framework) is
-/// probed via dlopen so `isAvailable` is truthful, but creating a screen
-/// currently uses the SL path only — on 13–15 `create` degrades to a logged
-/// failure instead of crashing. The CG path would be layered in here.
 ///
 /// Plain class; call on the main thread from DisplayController/UI. Wake/lock
 /// notification callbacks hop to the main queue internally.
@@ -43,15 +40,17 @@ public final class VirtualScreenController {
 
     /// True when ANY virtual display path is available (SL on macOS 26+, CG on 13–15).
     public var isAvailable: Bool {
-        if VirtualDisplayAPI.isAvailable { return true }
-        return Self.isCGPathAvailable
+        VirtualDisplayAPI.isAvailable || CGVirtualDisplayAPI.isAvailable
     }
 
     /// Persisted configurations (connected + pending).
     public var configs: [VirtualScreenConfig]
 
-    /// SL handles backing each active screen, keyed by config id.
+    /// SL handles backing each active screen (macOS 26+ path), keyed by config id.
     private var handles: [String: VirtualDisplayAPI.VirtualDisplayHandle] = [:]
+
+    /// CG handles backing each active screen (macOS 13–15 path), keyed by config id.
+    private var cgHandles: [String: CGVirtualDisplayAPI.Handle] = [:]
 
     private var hasRegistered = false
     private var observers: [NSObjectProtocol] = []
@@ -63,6 +62,7 @@ public final class VirtualScreenController {
     // MARK: - Create / destroy
 
     /// Create + connect a virtual screen from a config. Returns false on failure.
+    /// Uses the SL path (macOS 26+) when available, else the CG path (macOS 13–15).
     @discardableResult
     public func create(_ config: VirtualScreenConfig) -> Bool {
         // Defensive: if the id is somehow already active (UI normally calls
@@ -71,10 +71,19 @@ public final class VirtualScreenController {
         if isActive(id: config.id) {
             _ = destroy(id: config.id)
         }
-        guard VirtualDisplayAPI.isAvailable else {
-            log.warning("create(\(config.name)) failed: SLVirtualDisplay unavailable (CG path on 13–15 not yet implemented)")
+        if VirtualDisplayAPI.isAvailable {
+            return createWithSL(config)
+        }
+        guard CGVirtualDisplayAPI.isAvailable else {
+            log.warning("create(\(config.name)) failed: no virtual display API available (SL needs macOS 26+, CG needs macOS 13–15)")
             return false
         }
+        return createWithCG(config)
+    }
+
+    /// macOS 26+ path: SLVirtualDisplay (SkyLight). Body preserved from the
+    /// original single-path implementation.
+    private func createWithSL(_ config: VirtualScreenConfig) -> Bool {
         guard let handle = VirtualDisplayAPI.create(name: config.name, maxPixels: (config.width, config.height)) else {
             log.warning("create(\(config.name)) failed: SLVirtualDisplay creation returned nil")
             return false
@@ -119,12 +128,67 @@ public final class VirtualScreenController {
         return true
     }
 
+    /// Legacy path (macOS 13–15): CGVirtualDisplay via dlopen. The descriptor's
+    /// displayID is a request the WindowServer may ignore, so after creation we
+    /// re-scan CGGetActiveDisplayList and adopt the ID that was not online
+    /// before. HDR is not supported on this path (CGVirtualDisplaySettings has
+    /// no EOTF knob) — the display is created SDR.
+    private func createWithCG(_ config: VirtualScreenConfig) -> Bool {
+        let before = Set(Self.activeDisplayIDs())
+        guard let handle = CGVirtualDisplayAPI.create(
+            name: config.name,
+            width: config.width,
+            height: config.height,
+            refreshRate: config.refreshRate
+        ) else {
+            log.warning("create(\(config.name)) failed: CGVirtualDisplay creation returned nil")
+            return false
+        }
+        if config.isHDR {
+            log.debug("HDR requested for \(config.name); not supported on the CG path (macOS 13–15) — creating SDR")
+        }
+        SkyLightAPI.detectDisplays()
+        // Give the WindowServer a moment to register the new display.
+        Thread.sleep(forTimeInterval: 0.3)
+        guard let displayID = Self.activeDisplayIDs().first(where: { !before.contains($0) }) else {
+            handle.destroy()
+            log.warning("create(\(config.name)) failed: no new display appeared in CGGetActiveDisplayList")
+            return false
+        }
+
+        // Upsert the active instance and its persisted config.
+        let instance = VirtualScreenInstance(id: config.id, displayID: displayID, config: config)
+        screens.removeAll { $0.id == config.id }
+        screens.append(instance)
+        cgHandles[config.id] = handle
+        configs.removeAll { $0.id == config.id }
+        configs.append(config)
+        Settings.saveVirtualScreens(configs)
+        NotificationCenter.default.post(name: .fbdDisplaysChanged, object: nil)
+        log.debug("virtual screen connected (CG path): \(config.name) (display \(displayID))")
+        return true
+    }
+
+    /// Displays currently online per CGGetActiveDisplayList (used to spot the
+    /// display a CG create just added).
+    private static func activeDisplayIDs() -> [CGDirectDisplayID] {
+        var count: UInt32 = 0
+        guard CGGetActiveDisplayList(0, nil, &count) == .success else { return [] }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard ids.withUnsafeMutableBufferPointer({
+            CGGetActiveDisplayList(UInt32($0.count), $0.baseAddress, &count)
+        }) == .success else { return [] }
+        return Array(ids.prefix(Int(count)))
+    }
+
     /// Disconnect + forget (removes from persistence).
     @discardableResult
     public func destroy(id: String) -> Bool {
         var destroyed = false
         if let index = screens.firstIndex(where: { $0.id == id }) {
             let screen = screens[index]
+            cgHandles[id]?.destroy()
+            cgHandles[id] = nil
             handles[id]?.destroy()
             handles[id] = nil
             screens.remove(at: index)
@@ -152,6 +216,8 @@ public final class VirtualScreenController {
         guard !screens.isEmpty else { return }
         let count = screens.count
         for screen in screens {
+            cgHandles[screen.id]?.destroy()
+            cgHandles[screen.id] = nil
             handles[screen.id]?.destroy()
             handles[screen.id] = nil
         }
@@ -259,15 +325,4 @@ public final class VirtualScreenController {
             })
         }
     }
-}
-
-// MARK: - CG path probe (macOS 13–15)
-
-private extension VirtualScreenController {
-    /// The VirtualDisplay.framework exists on macOS 13–15 only; on macOS 26+
-    /// the path is gone, so a lazy dlopen probe is a truthful availability
-    /// check for the legacy CG path. Never closed (process-lifetime probe).
-    static let isCGPathAvailable: Bool = {
-        dlopen("/System/Library/Frameworks/VirtualDisplay.framework/VirtualDisplay", RTLD_LAZY | RTLD_LOCAL) != nil
-    }()
 }

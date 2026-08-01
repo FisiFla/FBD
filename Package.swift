@@ -36,7 +36,12 @@ let package = Package(
         .executableTarget(
             name: "FBD",
             dependencies: ["FBDCore", "FBDIntents", .product(name: "Sparkle", package: "Sparkle")],
-            exclude: ["Resources"] // Info.plist copied into the bundle by `make app`
+            exclude: ["Resources"], // Info.plist copied into the bundle by `make app`
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks",
+                ])
+            ]
         ),
         // Command-line interface.
         .executableTarget(name: "fbdcli", dependencies: ["FBDCore"]),

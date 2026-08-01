@@ -24,6 +24,8 @@
     <string>13.2</string>
     <key>LSUIElement</key>
     <true/>
+    <key>SUFeedURL</key>
+    <string></string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleURLTypes</key>

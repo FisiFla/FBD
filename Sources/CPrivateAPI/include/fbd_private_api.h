@@ -169,4 +169,33 @@ bool FBDTrueToneIsAvailable(void *client);
 bool FBDTrueToneIsEnabled(void *client);
 bool FBDTrueToneSetEnabled(void *client, bool enabled);
 
+#pragma mark - Legacy CGVirtualDisplay (macOS 13-15, dlsym'd at runtime)
+
+/* Layouts from the circulated VirtualDisplay.framework header. */
+typedef struct {
+    uint32_t displayID;
+    void *name;              /* CFStringRef */
+    uint32_t serialNum;
+    uint32_t productID;
+    uint32_t vendorID;
+    uint32_t maxPixelsWide;
+    uint32_t maxPixelsHigh;
+    CGSize sizeInMillimeters;
+    CGPoint redPrimary, greenPrimary, bluePrimary, whitePoint;
+} fbd_cgvd_descriptor;
+
+typedef struct {
+    uint32_t hiDPI;
+    uint32_t width;
+    uint32_t height;
+    double refreshRate;
+} fbd_cgvd_settings;
+
+typedef void *(*fbd_cgvd_create_fn)(const void *descriptor);
+typedef void (*fbd_cgvd_destroy_fn)(void *display);
+typedef void *(*fbd_cgvd_create_mode_fn)(void *display, uint32_t width, uint32_t height, double refreshRate);
+typedef void (*fbd_cgvd_set_mode_fn)(void *display, void *mode);
+typedef void (*fbd_cgvd_apply_settings_fn)(void *display, const void *settings);
+typedef void (*fbd_cgvd_release_mode_fn)(void *display, void *mode);
+
 #endif /* FBD_PRIVATE_API_H */

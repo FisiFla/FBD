@@ -36,6 +36,7 @@ final class AppCore {
         layoutProtection.start()
         edid.start()
         configProtection.start(controller: displayController)
+        HotkeyController.shared.start()
         UpdaterController.shared.start()
         // Recreate persisted virtual screens at launch (they are process-lifetime).
         if Settings.reconnectVirtualScreensOnWake {
@@ -49,8 +50,15 @@ final class AppCore {
                 return self.handleHTTP(method: method, path: path, body: body)
             }
             if httpServer.start(port: UInt16(clamping: Settings.httpServerPort), handler: handler) {
+                // Prefer the configured port (listener.port may not be
+                // populated synchronously); ephemeral ports fall back to it.
+                let published = Settings.httpServerPort != 0
+                    ? Settings.httpServerPort
+                    : Int(self.httpServer.port)
+                Settings.httpServerActivePort = published
                 log.info("HTTP API listening on 127.0.0.1:\(self.httpServer.port)")
             } else {
+                Settings.httpServerActivePort = 0
                 log.error("HTTP API failed to start on port \(Settings.httpServerPort)")
             }
         }
@@ -231,8 +239,20 @@ final class AppCore {
                 return (404, HTTPJSON.error("display not found"))
             }
             var info = HTTPJSON.display(display)
+            // Live brightness when the model value is stale (nothing read it yet).
+            if info["brightness"] == nil, let value = displayController.getBrightness(for: display) {
+                info["brightness"] = value
+            }
             info["modes"] = display.modes.map { HTTPJSON.mode($0) }
             return (200, HTTPJSON.encode(info))
+        }
+        if components.count == 4, method == "GET" {
+            // GET /api/displays/<id>/controls | caps
+            guard let id = HTTPJSON.parseDisplayID(components[2]),
+                  let display = displayController.display(withID: id) else {
+                return (404, HTTPJSON.error("display not found"))
+            }
+            return readDisplayInfo(components[3], for: display)
         }
         if components.count == 4, method == "POST" {
             guard let id = HTTPJSON.parseDisplayID(components[2]),
@@ -244,12 +264,42 @@ final class AppCore {
         return (404, HTTPJSON.error("not found"))
     }
 
+    /// GET /api/displays/<id>/controls — live DDC reads (contrast/volume/mute/input).
+    /// GET /api/displays/<id>/caps — capabilities string.
+    @MainActor private func readDisplayInfo(_ what: String, for display: Display) -> (Int, String) {
+        let ddc = DDCController(external: ExternalController())
+        switch what {
+        case "controls":
+            var controls: [String: Any] = [:]
+            if let value = ddc.getFeature(.contrast, for: display) { controls["contrast"] = value }
+            if let value = ddc.getFeature(.volume, for: display) { controls["volume"] = value }
+            if let value = ddc.getFeature(.mute, for: display) { controls["muted"] = value > 0 }
+            if let value = ddc.getFeature(.inputSource, for: display) { controls["inputSource"] = value }
+            return (200, HTTPJSON.encode(["displayID": display.id, "controls": controls]))
+        case "caps":
+            if let caps = ddc.readCapabilities(for: display) {
+                return (200, HTTPJSON.encode(["displayID": display.id, "raw": caps.raw, "mccsVersion": caps.mccsVersion, "vcp": caps.vcpCodes.sorted().map { String(format: "0x%02X", $0) }]))
+            }
+            return (404, HTTPJSON.error("no capabilities for display"))
+        default:
+            return (404, HTTPJSON.error("unknown display info '\(what)'"))
+        }
+    }
+
     /// POST /api/displays/<id>/brightness|volume|mute|input|mode|xdr.
     @MainActor private func applyDisplayAction(_ action: String, to display: Display, body: String?) -> (Int, String) {
         guard let body, let object = HTTPJSON.parse(body) else {
             return (400, HTTPJSON.error("invalid JSON body"))
         }
         switch action {
+        case "contrast":
+            guard let value = object["value"] as? Double, (0...1).contains(value) else {
+                return (400, HTTPJSON.error("value must be a number between 0 and 1"))
+            }
+            guard displayController.setContrast(value, on: display) else {
+                return (500, HTTPJSON.error("write not accepted"))
+            }
+            return (200, HTTPJSON.encode(["ok": true]))
         case "brightness":
             guard let value = object["value"] as? Double, (0...1).contains(value) else {
                 return (400, HTTPJSON.error("value must be a number between 0 and 1"))
@@ -314,6 +364,12 @@ final class AppCore {
 
     /// POST /api/virtual/create, POST /api/virtual/destroy.
     @MainActor private func routeVirtual(method: String, components: [String], body: String?) -> (Int, String) {
+        if components.count == 2, method == "GET" {
+            let controller = VirtualScreenController.shared
+            let screens = controller.screens.map { ["id": $0.id, "name": $0.config.name, "displayID": $0.displayID] }
+            let configs = controller.configs.map { ["id": $0.id, "name": $0.name] }
+            return (200, HTTPJSON.encode(["screens": screens, "configs": configs]))
+        }
         guard components.count == 3, method == "POST" else {
             return (404, HTTPJSON.error("not found"))
         }
@@ -415,6 +471,11 @@ private enum HTTPJSON {
         }
         if let mode = display.currentMode {
             info["currentMode"] = mode.key
+        }
+        info["xdrCapable"] = display.isXDRCapable
+        info["xdrUpscaled"] = display.isXDRUpscaled
+        if let target = display.xdrUpscaleTargetNits {
+            info["xdrTargetNits"] = target
         }
         return info
     }

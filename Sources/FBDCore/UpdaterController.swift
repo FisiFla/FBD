@@ -19,22 +19,22 @@ public final class UpdaterController {
     public init() {}
 
     /// Start checking for updates (once per launch, delayed). No-op when
-    /// unbundled or no feed URL is configured.
+    /// unbundled or no SUFeedURL is configured in Info.plist (Sparkle 2.9+
+    /// reads the feed URL from the bundle; it is not settable at runtime).
     public func start() {
         #if canImport(Sparkle)
         guard Bundle.main.bundleIdentifier == "dev.fisifla.fbd",
-              !Settings.updateFeedURL.isEmpty else {
-            log.info("updater disabled (unbundled or no feed URL)")
+              let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+              !feed.isEmpty else {
+            log.info("updater disabled (unbundled or no SUFeedURL in Info.plist)")
             return
         }
-        let controller = SPUStandardUpdaterController(
+        updater = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
-        controller.updater.feedURL = URL(string: Settings.updateFeedURL)
-        updater = controller
-        log.info("Sparkle updater active (feed: \(Settings.updateFeedURL, privacy: .public))")
+        log.info("Sparkle updater active (feed: \(feed, privacy: .public))")
         #else
         log.info("updater unavailable (Sparkle not linked)")
         #endif

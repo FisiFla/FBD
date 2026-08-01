@@ -17,18 +17,29 @@ test:
 
 # Universal (arm64 + x86_64). On Apple Silicon the macOS SDK may not ship an
 # x86_64 slice; falls back to native arch with a warning.
+# Locate the built executable: SPM emits it at .build/apple/Products/Release/FBD
+# (universal) or .build/arm64-apple-macosx/release/FBD (single arch).
+BIN = $(firstword $(wildcard .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD))
+
 app:
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
 	@if swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 2>/tmp/fbd-universal.log; then \
-		cp .build/apple/Products/$(CONFIG)/FBD $(APP_BUNDLE)/Contents/MacOS/FBD; \
+		cp $(BIN) $(APP_BUNDLE)/Contents/MacOS/FBD; \
 	else \
 		echo "Universal build failed (see /tmp/fbd-universal.log); building native arch only."; \
 		swift build $(SWIFT_FLAGS) -c $(CONFIG); \
-		cp .build/apple/Products/$(CONFIG)/FBD $(APP_BUNDLE)/Contents/MacOS/FBD; \
+		cp $(BIN) $(APP_BUNDLE)/Contents/MacOS/FBD; \
 	fi
 	@cp Sources/FBD/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
+	# Sparkle: copy the framework (SPM binary distribution) into the bundle.
+	@if [ -d .build/apple/Products/Release/Sparkle.framework ]; then \
+		mkdir -p $(APP_BUNDLE)/Contents/Frameworks; \
+		cp -R .build/apple/Products/Release/Sparkle.framework $(APP_BUNDLE)/Contents/Frameworks/; \
+		rm -rf $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework/_CodeSignature; \
+	fi
 	@codesign --force --sign - $(APP_BUNDLE) >/dev/null 2>&1 || true
+	@codesign --force --sign - $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework >/dev/null 2>&1 || true
 	@echo "Built $(APP_BUNDLE)"
 
 run: app

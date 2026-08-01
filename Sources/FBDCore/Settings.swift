@@ -23,6 +23,10 @@ public enum Settings {
     @Storage(key: "brightnessDebounceMilliseconds", defaultValue: 100)
     public static var brightnessDebounceMilliseconds: Int
 
+    /// Intercept F1/F2 and F10/F11/F12 media keys for external displays.
+    @Storage(key: "interceptMediaKeys", defaultValue: true)
+    public static var interceptMediaKeys: Bool
+
     /// Allow applying modes outside the safe-mode flag set (experimental).
     @Storage(key: "allowUnsafeInvalidModes", defaultValue: false)
     public static var allowUnsafeInvalidModes: Bool
@@ -104,13 +108,15 @@ public enum Settings {
     @Storage(key: "httpServerPort", defaultValue: 0)
     public static var httpServerPort: Int
 
+    /// ACTUAL listening port of the running app's HTTP API (0 = not running).
+    /// Written by the app after the server starts so fbdcli can discover an
+    /// ephemeral port; never read by the app itself.
+    @Storage(key: "httpServerActivePort", defaultValue: 0)
+    public static var httpServerActivePort: Int
+
     /// Show the custom brightness/volume OSD overlay.
     @Storage(key: "customOSDEnabled", defaultValue: true)
     public static var customOSDEnabled: Bool
-
-    /// Sparkle appcast feed URL (empty = updates disabled).
-    @Storage(key: "updateFeedURL", defaultValue: "")
-    public static var updateFeedURL: String
 
     /// Persisted LG webOS client key (granted on first pairing).
     @Storage(key: "tvLGClientKey", defaultValue: "")

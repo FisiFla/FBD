@@ -14,7 +14,21 @@ final class StatusItemController: NSObject {
     override init() {
         super.init()
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: DisplayListView())
+        installRoot()
+    }
+
+    /// Host the SwiftUI root and size the popover from the view's fitting size
+    /// (the root view declares min/ideal/max widths), clamped so content never
+    /// gets clipped and the popover never becomes unwieldy.
+    private func installRoot() {
+        let hosting = NSHostingController(rootView: DisplayListView())
+        hosting.view.layoutSubtreeIfNeeded()
+        let fitting = hosting.view.fittingSize
+        popover.contentViewController = hosting
+        popover.contentSize = NSSize(
+            width: min(max(fitting.width, 360), 480),
+            height: min(max(fitting.height, 240), 720)
+        )
     }
 
     /// Configure the status item (called once from AppCore.start()).
@@ -37,7 +51,7 @@ final class StatusItemController: NSObject {
     /// rebuild while closed to avoid clobbering in-flight interaction.
     func refreshUI() {
         guard !popover.isShown else { return }
-        popover.contentViewController = NSHostingController(rootView: DisplayListView())
+        installRoot()
     }
 
     func showPopover() {

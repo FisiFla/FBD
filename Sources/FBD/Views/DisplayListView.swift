@@ -37,7 +37,7 @@ struct DisplayListView: View {
                 mainContent
             }
         }
-        .frame(width: 380)
+        .frame(minWidth: 360, idealWidth: 380, maxWidth: 460)
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplaysChanged)) { _ in
             displays = DisplayController.shared.displays
             virtualScreensTick += 1
@@ -59,29 +59,37 @@ struct DisplayListView: View {
 
     // MARK: - Content
 
+    /// The whole popover scrolls vertically; display rows are plain VStack
+    /// entries (not a nested List) so nothing clips and row heights adapt.
     private var mainContent: some View {
-        VStack(spacing: 0) {
-            header
-            if rosettaWarningVisible {
-                RosettaWarningView()
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-            }
-            Divider()
-            if displays.isEmpty {
-                emptyState
-            } else {
-                List(displays) { display in
-                    DisplayRowView(display: display)
+        ScrollView {
+            VStack(spacing: 0) {
+                header
+                if rosettaWarningVisible {
+                    RosettaWarningView()
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
                 }
-                .listStyle(.plain)
-            }
-            if virtualScreens.isAvailable {
                 Divider()
-                virtualScreensSection
+                if displays.isEmpty {
+                    emptyState
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(displays) { display in
+                            DisplayRowView(display: display)
+                                .padding(.horizontal, 12)
+                            Divider()
+                        }
+                    }
+                }
+                if virtualScreens.isAvailable {
+                    Divider()
+                    virtualScreensSection
+                }
+                Divider()
+                displayGroupsSection
             }
-            Divider()
-            displayGroupsSection
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -183,7 +191,7 @@ struct DisplayListView: View {
                     }
                 }
                 .labelsHidden()
-                .frame(width: 120)
+                .frame(minWidth: 90, idealWidth: 120, maxWidth: .infinity)
                 .controlSize(.small)
             }
             HStack(spacing: 8) {

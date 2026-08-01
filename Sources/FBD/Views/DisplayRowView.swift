@@ -46,23 +46,28 @@ struct DisplayRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(display.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                ForEach(badges, id: \.self) { badge in
-                    Text(badge)
-                        .font(.caption2)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(display.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    ForEach(badges, id: \.self) { badge in
+                        Text(badge)
+                            .font(.caption2)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                            .layoutPriority(1)
+                    }
+                    Spacer(minLength: 4)
                 }
-                Spacer(minLength: 8)
                 if !resolutionLabel.isEmpty {
                     Text(resolutionLabel)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
 
@@ -200,7 +205,7 @@ struct DisplayRowView: View {
                 Spacer()
                 TextField("Input source", text: $inputSource)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 90)
+                    .frame(minWidth: 60, idealWidth: 90, maxWidth: 110)
                     .help("DDC input source (VCP 0x60), 1–15")
                 Button("Apply") {
                     applyInputSource()
@@ -277,10 +282,19 @@ struct DisplayRowView: View {
 
     private var edidControls: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Button("Export EDID…") { exportEDID() }
-                Button("Apply override…") { applyOverrideFromFile() }
-                Button("Restore factory") { restoreFactoryEDID() }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    Button("Export EDID…") { exportEDID() }
+                    Button("Apply override…") { applyOverrideFromFile() }
+                    Button("Restore factory") { restoreFactoryEDID() }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Button("Export EDID…") { exportEDID() }
+                        Button("Apply override…") { applyOverrideFromFile() }
+                    }
+                    Button("Restore factory") { restoreFactoryEDID() }
+                }
             }
             .controlSize(.small)
 
@@ -339,8 +353,9 @@ struct DisplayRowView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(label)
                 .foregroundStyle(.secondary)
-                .frame(width: 96, alignment: .leading)
+                .frame(minWidth: 72, idealWidth: 96, alignment: .leading)
             Text(value)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .font(.caption)
@@ -449,13 +464,15 @@ struct DisplayRowView: View {
         Group {
             if !colorProfiles.isEmpty {
                 Divider()
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
                     Picker("Color Profile", selection: colorProfileBinding) {
                         ForEach(colorProfiles) { profile in
                             Text(profile.name).tag(profile.url as URL?)
                         }
                     }
+                    .labelsHidden()
                     .controlSize(.small)
+                    .frame(maxWidth: .infinity)
                     Button("Restore default") {
                         if colorProfileController.restoreDefault(for: display) {
                             refreshTick += 1
@@ -519,7 +536,9 @@ struct DisplayRowView: View {
                         Text(preset.name).tag(preset.index)
                     }
                 }
+                .labelsHidden()
                 .controlSize(.small)
+                .frame(maxWidth: .infinity)
             }
 
             if display.isHDRModeCapable {

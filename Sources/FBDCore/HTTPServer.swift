@@ -20,8 +20,10 @@ public final class HTTPServer {
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "dev.fisifla.fbd.http")
     private var handler: ((String, String, String?) -> (Int, String))?
+    /// Requested port (0 = ephemeral); used until the listener reports its port.
+    private var requestedPort: UInt16 = 0
 
-    public var port: UInt16 { listener?.port?.rawValue ?? 0 }
+    public var port: UInt16 { listener?.port?.rawValue ?? requestedPort }
 
     public init() {}
 
@@ -29,6 +31,7 @@ public final class HTTPServer {
     @discardableResult
     public func start(port: UInt16 = 0, handler: @escaping (String, String, String?) -> (Int, String)) -> Bool {
         self.handler = handler
+        requestedPort = port
         do {
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
@@ -84,11 +87,28 @@ public final class HTTPServer {
                 connection.cancel()
                 return
             }
-            if isComplete || accumulated.range(of: Data("\r\n\r\n".utf8)) != nil {
+            // Headers and body can arrive in separate TCP segments: only
+            // respond once the full Content-Length body has been received.
+            if let headerRange = accumulated.range(of: Data("\r\n\r\n".utf8)) {
+                let headerText = String(data: accumulated[..<headerRange.lowerBound], encoding: .utf8) ?? ""
+                let contentLength = headerText
+                    .split(separator: "\r\n")
+                    .compactMap { line -> Int? in
+                        let parts = line.split(separator: ":", maxSplits: 1)
+                        guard parts.count == 2, parts[0].lowercased() == "content-length" else { return nil }
+                        return Int(parts[1].trimmingCharacters(in: .whitespaces))
+                    }
+                    .first ?? 0
+                let receivedBody = accumulated.distance(from: headerRange.upperBound, to: accumulated.endIndex)
+                if receivedBody >= contentLength || isComplete {
+                    self.respond(connection, request: accumulated)
+                    return
+                }
+            } else if isComplete {
                 self.respond(connection, request: accumulated)
-            } else {
-                self.receive(connection, buffer: accumulated)
+                return
             }
+            self.receive(connection, buffer: accumulated)
         }
     }
 
