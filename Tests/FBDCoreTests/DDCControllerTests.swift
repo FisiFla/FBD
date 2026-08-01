@@ -35,6 +35,15 @@ private final class MockExternal: ExternalControlling {
 }
 
 final class DDCControllerTests: XCTestCase {
+    /// The DDC I2C path exists only on Apple Silicon; on Intel runners the
+    /// controller reports unavailable and these tests would fail, so skip.
+    private func requireAppleSilicon() throws {
+        try XCTSkipUnless(
+            IOAVServiceAPI.isAppleSilicon,
+            "DDC I2C tests require an Apple Silicon host"
+        )
+    }
+
     private var display: Display {
         Display(
             id: 0x1234,
@@ -55,7 +64,8 @@ final class DDCControllerTests: XCTestCase {
 
     // MARK: - Read retries
 
-    func testReadVCPSucceedsOnFirstAttempt() {
+    func testReadVCPSucceedsOnFirstAttempt() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
         let controller = makeController(mock: mock)
@@ -68,7 +78,8 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertEqual(mock.lastWriteData, Data(DDC.readVCPRequest(code: 0x10)))
     }
 
-    func testReadVCPRetriesWhenDisplayDoesNotAnswerFirst() {
+    func testReadVCPRetriesWhenDisplayDoesNotAnswerFirst() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         // First read: no reply (nil). Second read: valid reply.
         mock.readScript = [nil, Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
@@ -80,7 +91,8 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertEqual(mock.readCalls, 2)
     }
 
-    func testReadVCPRetriesUntilSuccessAcrossMultipleFailures() {
+    func testReadVCPRetriesUntilSuccessAcrossMultipleFailures() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         mock.readScript = [nil, nil, Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
         let controller = makeController(mock: mock)
@@ -95,7 +107,8 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertEqual(mock.readCalls, 3)
     }
 
-    func testReadVCPGivesUpAfterExhaustingRetries() {
+    func testReadVCPGivesUpAfterExhaustingRetries() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         mock.readScript = [nil]
         let controller = makeController(mock: mock)
@@ -109,7 +122,8 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertEqual(mock.readCalls, 2) // initial + 1 retry
     }
 
-    func testReadVCPDoesNotExceedRetryBudgetWhenRequestWriteFails() {
+    func testReadVCPDoesNotExceedRetryBudgetWhenRequestWriteFails() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         mock.shouldFailWrites = true
         mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
@@ -125,7 +139,8 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertEqual(mock.readCalls, 0)
     }
 
-    func testReadVCPRetriesWhenRequestWriteFails() {
+    func testReadVCPRetriesWhenRequestWriteFails() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         mock.shouldFailWrites = true
         mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
@@ -145,7 +160,8 @@ final class DDCControllerTests: XCTestCase {
 
     // MARK: - Writes
 
-    func testWriteVCPDeliversPacketOnDisplayQueue() {
+    func testWriteVCPDeliversPacketOnDisplayQueue() throws {
+        try requireAppleSilicon()
         let mock = MockExternal()
         let controller = makeController(mock: mock)
         let expectation = expectation(description: "async DDC write delivered")
@@ -164,7 +180,8 @@ final class DDCControllerTests: XCTestCase {
 
     // MARK: - Capabilities
 
-    func testReadCapabilitiesConcatenatesChunkedReply() {
+    func testReadCapabilitiesConcatenatesChunkedReply() throws {
+        try requireAppleSilicon()
         // A full capabilities reply (header + payload + terminator) split
         // mid-payload across two reads; the third read returns nil so the
         // loop stops.

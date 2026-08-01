@@ -7,16 +7,14 @@ on:
 
 jobs:
   build-test:
-    name: Build & test (macOS arm64)
-    # arm64 runners match the primary target (IOAVService/Apple Silicon paths);
-    # the DDC tests assert native behavior, so x64 runners would fail them.
-    # Public repos: macos-15-xlarge is GitHub-hosted arm64 (billed at 2x).
-    runs-on: macos-15-xlarge
+    name: Build & test (macOS)
+    # Standard macos-15 runner (included in free minutes on all plans).
+    # Note: it is Intel (x64); the DDC integration tests skip themselves off
+    # Apple Silicon, everything else runs. arm64-only coverage needs
+    # macos-15-xlarge, which requires a paid spending limit.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
 
       - name: Cache SwiftPM dependencies
         uses: actions/cache@v4
