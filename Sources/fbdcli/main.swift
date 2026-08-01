@@ -29,6 +29,12 @@ enum Command: String {
     case profile
     case underscan
     case protect
+    case http
+    case pip
+    case osd
+    case nightshift
+    case truetone
+    case tv
     case help
 }
 
@@ -91,6 +97,24 @@ Commands:
   protect config [on|off]       Get or set config protection
   protect save <id>             Save current resolution/preset/brightness
   protect restore <id>          Re-apply saved config if needed
+  http on [port]                Enable the HTTP control API (port 1024-65535;
+                                default keeps the current port). The API is
+                                served by the app — restart the app to apply
+  http off                      Disable the HTTP control API
+  http status                   Show HTTP API state and port
+  pip <id> [b] [c] [s]          Stream a display in a picture-in-picture window
+                                (optional brightness/contrast/saturation, 1 =
+                                none). Streams until the window closes or a
+                                key is pressed
+  pip stop                      Stop the active CLI PiP stream
+  osd <icon> <0-100>            Show a transient OSD HUD (e.g. sun.max,
+                                speaker.wave.2) at the given percentage
+  nightshift [0-100]            Get or set Night Shift strength
+  truetone [on|off]             Get or set True Tone
+  tv <brand> <host> [action]    Control a TV/AVR over the network: brand is
+                                lg, samsung, philips, or yamaha; action is
+                                volume <0-100>, power, or input <name>
+                                (requires the device in network/API mode)
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
@@ -185,6 +209,18 @@ func run(arguments: [String]) -> Int32 {
         return cmdUnderscan(display: display, args: rest)
     case .protect:
         return cmdProtect(controller, args: rest)
+    case .http:
+        return cmdHTTP(args: rest)
+    case .pip:
+        return cmdPip(controller, args: rest)
+    case .osd:
+        return cmdOSD(args: rest)
+    case .nightshift:
+        return cmdNightShift(args: rest)
+    case .truetone:
+        return cmdTrueTone(args: rest)
+    case .tv:
+        return cmdTV(args: rest)
     case .help:
         print(usageText)
         return 0

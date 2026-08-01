@@ -1321,3 +1321,379 @@ func cmdProtectRestore(_ controller: DisplayController, args: [String]) -> Int32
     print("config restore requested for display \(display.id)")
     return 0
 }
+
+// MARK: - HTTP API settings (Tier 5)
+
+/// `fbdcli http on [port]` / `http off` / `http status` — manage the app's
+/// HTTP control API setting. The server itself is owned by the app process
+/// (it reads these settings at launch), so changes apply after a restart.
+@MainActor
+func cmdHTTP(args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: http: expected on, off, or status")
+        return 1
+    }
+    switch sub {
+    case "on":
+        if let portString = args.dropFirst().first {
+            guard let port = Int(portString), (1024...65535).contains(port) else {
+                print("fbdcli: http on: port must be between 1024 and 65535 (got '\(portString)')")
+                return 1
+            }
+            Settings.httpServerPort = port
+        }
+        Settings.httpServerEnabled = true
+        print("HTTP API enabled on port \(httpPortLabel(Settings.httpServerPort))")
+    case "off":
+        Settings.httpServerEnabled = false
+        print("HTTP API disabled")
+    case "status":
+        print("HTTP API: \(Settings.httpServerEnabled ? "enabled" : "disabled")"
+            + " (port \(httpPortLabel(Settings.httpServerPort)))")
+    default:
+        print("fbdcli: http: unknown subcommand '\(sub)' (expected on, off, or status)")
+        return 1
+    }
+    print("Note: the HTTP API is served by the app; enable it in Settings or via this command, then restart the app.")
+    return 0
+}
+
+/// "0" (Settings default) means the app picks an ephemeral port at launch.
+func httpPortLabel(_ port: Int) -> String {
+    port == 0 ? "ephemeral" : String(port)
+}
+
+// MARK: - Picture-in-picture (Tier 5)
+
+/// `fbdcli pip <id> [brightness] [contrast] [saturation]` — open a PiP window
+/// streaming a display's content, with optional video-filter values (defaults
+/// 1 = none). The command keeps the window alive until it closes or a key is
+/// pressed. `fbdcli pip stop` stops the CLI's own stream (the app's PiP is
+/// owned by the app process and cannot be touched from the CLI).
+/// Process-wide PiP controller so `pip start`/`pip stop` share state.
+@MainActor
+private let cliPip = PipStreamController()
+
+@MainActor
+func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
+    if args.first == "stop" {
+        PipStreamController().stop()
+        print("pip stopped")
+        return 0
+    }
+    guard let display = requireDisplay(args.first, in: controller) else { return 1 }
+    let filterArgs = Array(args.dropFirst())
+    guard filterArgs.count <= 3 else {
+        print("fbdcli: pip: too many arguments (expected [brightness] [contrast] [saturation])")
+        return 1
+    }
+    var values = [1.0, 1.0, 1.0]
+    for (index, string) in filterArgs.enumerated() {
+        guard let value = Double(string), value >= 0 else {
+            print("fbdcli: pip: filter values must be non-negative numbers (got '\(string)')")
+            return 1
+        }
+        values[index] = value
+    }
+    let pip = PipStreamController()
+    let filter = VideoFilter(brightness: values[0], contrast: values[1], saturation: values[2])
+    guard pip.startPiP(displayID: display.id, filter: filter) else {
+        print("fbdcli: pip: failed to start PiP for display \(display.id) (grant Screen Recording to FBD if prompted)")
+        return 2
+    }
+    // isActive flips true asynchronously once the capture stream starts; give
+    // it a few seconds before declaring failure.
+    let startDeadline = Date().addingTimeInterval(3)
+    while !pip.isActive, Date() < startDeadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+    guard pip.isActive else {
+        print("fbdcli: pip: stream failed to start for display \(display.id) (screen-recording permission?)")
+        return 2
+    }
+    print("pip streaming display \(display.id) (brightness \(values[0]), contrast \(values[1]), saturation \(values[2]))")
+    print("press any key to stop")
+    while pip.isActive, !stdinHasInput() {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+    }
+    cliPip.stop()
+    print("pip stopped")
+    return 0
+}
+
+/// True when a byte (or EOF) is available on stdin — the interactive "press
+/// any key to stop" for the pip/osd commands. Non-blocking; restores flags.
+func stdinHasInput() -> Bool {
+    let flags = fcntl(0, F_GETFL, 0)
+    guard flags >= 0 else { return false }
+    _ = fcntl(0, F_SETFL, flags | O_NONBLOCK)
+    var byte: UInt8 = 0
+    let count = read(0, &byte, 1)
+    _ = fcntl(0, F_SETFL, flags)
+    // 1 = a key was pressed, 0 = EOF (piped stdin closed). -1/EAGAIN = idle.
+    return count != -1
+}
+
+// MARK: - OSD (Tier 5)
+
+/// `fbdcli osd <icon> <0-100>` — show a transient OSD HUD (e.g. sun.max,
+/// speaker.wave.2) at the given percentage. Keeps the process alive for the
+/// HUD's ~1.2 s auto-hide window.
+@MainActor
+func cmdOSD(args: [String]) -> Int32 {
+    guard args.count >= 2 else {
+        print("fbdcli: osd: expected <icon> <0-100> (e.g. 'fbdcli osd sun.max 50')")
+        return 1
+    }
+    guard let value = parsePercent(args[1], command: "osd") else { return 1 }
+    let osd = CustomOSD()
+    if !Settings.customOSDEnabled {
+        print("note: custom OSD is disabled in Settings — nothing will be shown")
+    }
+    osd.show(icon: args[0], value: value / 100.0)
+    print("osd: showing '\(args[0])' at \(Int(value))%")
+    let deadline = Date().addingTimeInterval(1.5)
+    while osd.isVisible, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+    return 0
+}
+
+// MARK: - Night Shift (Tier 5)
+
+/// `fbdcli nightshift [0-100]` — get or set Night Shift strength.
+@MainActor
+func cmdNightShift(args: [String]) -> Int32 {
+    let controller = NightShiftController()
+    guard controller.isAvailable else {
+        print("nightshift: unavailable on this Mac")
+        return 2
+    }
+    if let arg = args.first {
+        guard let value = parsePercent(arg, command: "nightshift") else { return 1 }
+        guard controller.setStrength(value / 100.0) else {
+            print("fbdcli: nightshift: failed to set strength")
+            return 2
+        }
+    }
+    guard let strength = controller.strength() else {
+        print("fbdcli: nightshift: failed to read strength")
+        return 2
+    }
+    print(String(format: "nightshift = %.1f%%", strength * 100))
+    return 0
+}
+
+// MARK: - True Tone (Tier 5)
+
+/// `fbdcli truetone [on|off]` — get or set True Tone.
+@MainActor
+func cmdTrueTone(args: [String]) -> Int32 {
+    let controller = TrueToneController()
+    guard controller.isAvailable else {
+        print("truetone: unavailable on this Mac")
+        return 2
+    }
+    if let arg = args.first {
+        let enabled: Bool
+        switch arg {
+        case "on": enabled = true
+        case "off": enabled = false
+        default:
+            print("fbdcli: truetone: expected on or off (got '\(arg)')")
+            return 1
+        }
+        guard controller.setEnabled(enabled) else {
+            print("fbdcli: truetone: failed to set True Tone")
+            return 2
+        }
+    }
+    guard let enabled = controller.isEnabled() else {
+        print("fbdcli: truetone: failed to read state")
+        return 2
+    }
+    print("truetone = \(enabled ? "on" : "off")")
+    return 0
+}
+
+// MARK: - TV / AVR network control (Tier 5)
+
+/// `fbdcli tv <brand> <host> [volume <v>|power|input <name>]` — thin wrappers
+/// over the network controllers. All calls are async with completion handlers;
+/// the main thread blocks on a semaphore until the result lands (completions
+/// fire on the controllers' own queues, so no run-loop pumping is needed).
+@MainActor
+func cmdTV(args: [String]) -> Int32 {
+    guard args.count >= 2 else {
+        print("fbdcli: tv: expected <lg|samsung|philips|yamaha> <host> [volume <0-100>|power|input <name>]")
+        return 1
+    }
+    let brand = args[0]
+    let host = args[1]
+    var action = "power"
+    var value = ""
+    if args.count >= 3 {
+        action = args[2].lowercased()
+        if args.count >= 4 { value = args[3] }
+    }
+    guard ["volume", "power", "input"].contains(action) else {
+        print("fbdcli: tv: unknown action '\(action)' (expected volume, power, or input)")
+        return 1
+    }
+    if action == "volume" {
+        guard let level = Int(value), (0...100).contains(level) else {
+            print("fbdcli: tv volume: expected a number between 0 and 100 (got '\(value)')")
+            return 1
+        }
+    }
+    if action == "input", value.isEmpty {
+        print("fbdcli: tv input: expected an input name (e.g. 'HDMI1', 'HDMI 1', 'WatchTV')")
+        return 1
+    }
+    switch brand {
+    case "lg":
+        return cmdTVLG(host: host, action: action, value: value)
+    case "samsung":
+        return cmdTVSamsung(host: host, action: action, value: value)
+    case "philips":
+        return cmdTVPhilips(host: host, action: action, value: value)
+    case "yamaha":
+        return cmdTVYamaha(host: host, action: action, value: value)
+    default:
+        print("fbdcli: tv: unknown brand '\(brand)' (expected lg, samsung, philips, or yamaha)")
+        return 1
+    }
+}
+
+/// Shared "result printed, exit code chosen" tail for the tv commands.
+func printTVResult(brand: String, host: String, action: String, value: String, ok: Bool?) -> Int32 {
+    let actionLabel = action == "input" ? "input '\(value)'" : action
+    if ok == true {
+        print("tv \(brand) \(host): \(actionLabel) ok")
+        return 0
+    }
+    print("tv \(brand) \(host): \(actionLabel) failed")
+    print("note: requires the device to be in network/API mode (and powered on)")
+    return 2
+}
+
+/// `tv lg <host> [volume <v>|power|input <name>]` — LG webOS (ssap://, port 3000).
+@MainActor
+func cmdTVLG(host: String, action: String, value: String) -> Int32 {
+    let tv = LGWebOSController()
+    let semaphore = DispatchSemaphore(value: 0)
+    var connectOK = false
+    var connectInfo = ""
+    let savedKey = Settings.tvLGClientKey.isEmpty ? nil : Settings.tvLGClientKey
+    tv.connect(host: host, clientKey: savedKey) { ok, info in
+        connectOK = ok
+        connectInfo = info ?? ""
+        semaphore.signal()
+    }
+    _ = semaphore.wait(timeout: .now() + 20)
+    if Settings.tvLGClientKey.isEmpty, !connectInfo.isEmpty {
+        Settings.tvLGClientKey = connectInfo
+        print("client key persisted for future connections")
+    }
+    guard connectOK else {
+        print("tv lg \(host): connection failed — \(connectInfo.isEmpty ? "no reply" : connectInfo)")
+        print("note: requires the TV to be powered on and in network mode (accept the pairing prompt on the TV if this is the first connection)")
+        return 2
+    }
+    var commandResult: Bool?
+    switch action {
+    case "volume":
+        tv.setVolume(Int(value) ?? 0) { commandResult = $0 }
+    case "power":
+        tv.powerOn { commandResult = $0 }
+    default:
+        tv.setInput(value) { commandResult = $0 }
+    }
+    _ = semaphore.wait(timeout: .now() + 10)
+    return printTVResult(brand: "lg", host: host, action: action, value: value, ok: commandResult)
+}
+
+/// `tv samsung <host> [volume <v>|power|input <name>]` — Samsung Tizen
+/// (samsung.remote.control, port 8002). Power/input map to KEY_POWER/KEY_SOURCE;
+/// volume is applied via repeated KEY_VOLUP presses.
+@MainActor
+func cmdTVSamsung(host: String, action: String, value: String) -> Int32 {
+    let tv = TizenController()
+    let semaphore = DispatchSemaphore(value: 0)
+    var connectOK = false
+    var connectInfo = ""
+    tv.connect(host: host) { ok, info in
+        connectOK = ok
+        connectInfo = info ?? ""
+        semaphore.signal()
+    }
+    // First pairing shows a dialog on the TV; the controller waits up to 60 s.
+    _ = semaphore.wait(timeout: .now() + 65)
+    guard connectOK else {
+        print("tv samsung \(host): connection failed — \(connectInfo.isEmpty ? "no reply" : connectInfo)")
+        print("note: requires the TV to be powered on and in network mode (accept the pairing dialog on the TV if prompted)")
+        return 2
+    }
+    var commandResult: Bool?
+    switch action {
+    case "volume":
+        tv.setVolume(Int(value) ?? 0) { commandResult = $0 }
+    case "power":
+        tv.sendKey("KEY_POWER") { commandResult = $0 }
+    default:
+        tv.sendKey("KEY_SOURCE") { commandResult = $0 }
+    }
+    // setVolume presses keys up to ~12 s; give the sequence room to finish.
+    _ = semaphore.wait(timeout: .now() + 30)
+    return printTVResult(brand: "samsung", host: host, action: action, value: value, ok: commandResult)
+}
+
+/// `tv philips <host> [volume <v>|power|input <name>]` — Philips Android TV
+/// (jointSPACE, port 1926). The CLI has no PIN-entry UI, so the host is used
+/// directly — this works for already-paired TVs and Simple-IP mode.
+@MainActor
+func cmdTVPhilips(host: String, action: String, value: String) -> Int32 {
+    let tv = PhilipsTVController()
+    tv.host = host
+    let semaphore = DispatchSemaphore(value: 0)
+    var commandResult: Bool?
+    let completion: (Bool) -> Void = { ok in
+        commandResult = ok
+        semaphore.signal()
+    }
+    switch action {
+    case "volume":
+        tv.setVolume(Int(value) ?? 0, completion: completion)
+    case "power":
+        tv.powerOn(completion: completion)
+    default:
+        tv.setInput(value, completion: completion)
+    }
+    _ = semaphore.wait(timeout: .now() + 15)
+    return printTVResult(brand: "philips", host: host, action: action, value: value, ok: commandResult)
+}
+
+/// `tv yamaha <host> [volume <v>|power|input <name>]` — Yamaha AVR (YXC, port
+/// 80). Volume is the raw YXC scale 0…161 (0.5 dB steps); the CLI passes the
+/// 0…100 value through (clamped by the controller).
+@MainActor
+func cmdTVYamaha(host: String, action: String, value: String) -> Int32 {
+    let tv = YamahaAVRController()
+    tv.host = host
+    let semaphore = DispatchSemaphore(value: 0)
+    var commandResult: Bool?
+    let completion: (Bool) -> Void = { ok in
+        commandResult = ok
+        semaphore.signal()
+    }
+    switch action {
+    case "volume":
+        tv.setVolume(Int(value) ?? 0, completion: completion)
+    case "power":
+        tv.powerOn(completion: completion)
+    default:
+        tv.setInput(value, completion: completion)
+    }
+    _ = semaphore.wait(timeout: .now() + 15)
+    return printTVResult(brand: "yamaha", host: host, action: action, value: value, ok: commandResult)
+}

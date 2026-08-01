@@ -9,6 +9,10 @@ let package = Package(
         .executable(name: "FBD", targets: ["FBD"]),
         .executable(name: "fbdcli", targets: ["fbdcli"]),
     ],
+    dependencies: [
+        // Auto-update framework (optional; requires a signed release + appcast).
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.6.0"),
+    ],
     targets: [
         // C shims: private-framework function declarations + CGS struct layout.
         .target(name: "CPrivateAPI", publicHeadersPath: "include"),
@@ -31,11 +35,13 @@ let package = Package(
         // Menu-bar app (LSUIElement). Bundle assembled by `make app`.
         .executableTarget(
             name: "FBD",
-            dependencies: ["FBDCore"],
+            dependencies: ["FBDCore", "FBDIntents", .product(name: "Sparkle", package: "Sparkle")],
             exclude: ["Resources"] // Info.plist copied into the bundle by `make app`
         ),
         // Command-line interface.
         .executableTarget(name: "fbdcli", dependencies: ["FBDCore"]),
+        // App Intents / Shortcuts (Tier 5).
+        .target(name: "FBDIntents", dependencies: ["FBDCore"]),
         .testTarget(name: "FBDCoreTests", dependencies: ["FBDCore"]),
     ]
 )

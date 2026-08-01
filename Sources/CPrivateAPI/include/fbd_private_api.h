@@ -153,4 +153,20 @@ uint32_t FBDVDDisplayID(void *vd);
 int FBDVDApplySettings(void *vd, void *settings, void **err);
 void FBDVDDestroy(void *vd);
 
+#pragma mark - CoreBrightness — Night Shift & True Tone (private ObjC, fbd_nightshift.c)
+
+/* Selector ground truth: Lunar's CoreBrightness headers (CBBlueLightClient.h,
+   CBTrueToneClient.h). Objects are created with alloc/init and handed to
+   Swift as +1 (takeRetainedValue). CoreBrightness is not linked — call
+   FBDLoadCoreBrightness() before NSClassFromString. */
+bool FBDLoadCoreBrightness(void);
+void *FBDNightShiftCreate(void *cls);
+bool FBDNightShiftSupportsBlueLightReduction(void *cls);
+bool FBDNightShiftGetStrength(void *client, float *strength);
+bool FBDNightShiftSetStrength(void *client, float strength, bool commit);
+void *FBDTrueToneCreate(void *cls);
+bool FBDTrueToneIsAvailable(void *client);
+bool FBDTrueToneIsEnabled(void *client);
+bool FBDTrueToneSetEnabled(void *client, bool enabled);
+
 #endif /* FBD_PRIVATE_API_H */

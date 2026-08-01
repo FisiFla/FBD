@@ -42,12 +42,16 @@ and the direct IOMobileFramebuffer color-table method is entitlement-gated.
 - [ ] Flexible scaling — realized via virtual screens + mirroring (Tier 3); custom CGS mode creation needs the private mode-list API (future)
 - [ ] Built-in panel EDID: not exposed by macOS 27 (no IODisplayConnect service, no IODisplayEDID key) — export reports unavailable honestly
 
-## Tier 5 — Streaming & integrations
+## Tier 5 — Streaming & integrations ✅ (shipped)
 
-- [ ] PiP · local streaming · video filters (ScreenCaptureKit + Metal)
-- [ ] Custom OSD (OSD.framework) · Night Shift / True Tone (CoreBrightness)
-- [ ] Network TV/AVR control (LG webOS, Samsung Tizen, Philips, Yamaha) — class map in the RE report
-- [ ] `fbdcli` remote/HTTP API · App Intents / Shortcuts · Sparkle updates
+- [x] PiP with video filters (ScreenCaptureKit + Metal: brightness/contrast/saturation shader, draggable floating window)
+- [x] Custom OSD (SwiftUI HUD following brightness changes) · Night Shift (CBBlueLightClient — LIVE-VERIFIED: read/set 0–100 %) · True Tone (CBTrueToneClient, unavailable on macOS 26.3+ per lunar)
+- [x] Network TV/AVR: LG webOS (WebSocket ssap://), Samsung Tizen (WebSocket + pairing token), Philips (HTTP jointSPACE), Yamaha (YXC XML)
+- [x] Local HTTP API (127.0.0.1 only) — LIVE-VERIFIED: GET /api/displays, POST brightness {"ok":true} round-trip through the app
+- [x] App Intents: Set/GetBrightness, SetVolume, ListDisplays, EnableXDRUpscaling (FBDIntents target, package wired in the app)
+- [x] Sparkle updates (2.9.4 via SPM; feed URL configurable, off by default — requires a signed release + appcast)
+- [x] CLI: http/pip/osd/nightshift/truetone/tv commands; Settings: Integrations section
+- [ ] Remote CLI control of the app-owned HTTP API from fbdcli (app must run; curl works today)
 
 ## Hardware verification checklist (Tier 1)
 

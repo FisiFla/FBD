@@ -137,6 +137,8 @@ public final class DisplayController {
         let workItem = DispatchWorkItem {
             combined.setBrightness(clamped, on: display)
             display.updateBrightness(clamped)
+            // Let the OSD and any observers follow UI/CLI brightness writes.
+            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id])
         }
         brightnessDebounceWorkItems[display.id] = workItem
         DispatchQueue.main.asyncAfter(

@@ -94,6 +94,28 @@ public enum Settings {
         }
     }
 
+    // MARK: Integrations (Tier 5)
+
+    /// Enable the local HTTP control API.
+    @Storage(key: "httpServerEnabled", defaultValue: false)
+    public static var httpServerEnabled: Bool
+
+    /// Port for the HTTP control API (0 = ephemeral).
+    @Storage(key: "httpServerPort", defaultValue: 0)
+    public static var httpServerPort: Int
+
+    /// Show the custom brightness/volume OSD overlay.
+    @Storage(key: "customOSDEnabled", defaultValue: true)
+    public static var customOSDEnabled: Bool
+
+    /// Sparkle appcast feed URL (empty = updates disabled).
+    @Storage(key: "updateFeedURL", defaultValue: "")
+    public static var updateFeedURL: String
+
+    /// Persisted LG webOS client key (granted on first pairing).
+    @Storage(key: "tvLGClientKey", defaultValue: "")
+    public static var tvLGClientKey: String
+
     // MARK: EDID & config protection (Tier 4)
 
     /// Auto-apply a custom EDID when the display connects.

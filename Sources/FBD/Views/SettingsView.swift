@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var layoutProtection = LayoutProtectionController()
     @State private var hasSavedArrangement = false
+    @State private var nightShift = NightShiftController()
+    @State private var trueTone = TrueToneController()
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
 
     var body: some View {
@@ -105,6 +107,41 @@ struct SettingsView: View {
                 Text("Re-applies the saved resolution, preset and brightness when a display reconnects.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Integrations") {
+                Toggle("HTTP API", isOn: httpAPIEnabledBinding)
+                HStack(spacing: 8) {
+                    Text("Port")
+                    Spacer()
+                    Stepper(value: httpPortBinding, in: 1024...65535) {
+                        Text("\(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort)")
+                            .monospacedDigit()
+                    }
+                }
+                Text("Serves the control API on 127.0.0.1. Restart the app to apply.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Custom OSD", isOn: customOSDBinding)
+                Text("Shows a brightness HUD when the display brightness changes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text("Night Shift strength")
+                    Spacer()
+                    Text("\(Int((nightShift.strength() ?? 0) * 100))%")
+                        .monospacedDigit()
+                }
+                Slider(value: nightShiftStrengthBinding, in: 0...1)
+                    .disabled(!nightShift.isAvailable)
+                if !nightShift.isAvailable {
+                    Text("Night Shift is unavailable on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if trueTone.isAvailable {
+                    Toggle("True Tone", isOn: trueToneBinding)
+                }
             }
 
             Section("About") {
@@ -250,6 +287,41 @@ struct SettingsView: View {
         Binding(
             get: { Settings.configProtectionEnabled },
             set: { Settings.configProtectionEnabled = $0 }
+        )
+    }
+
+    private var httpAPIEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.httpServerEnabled },
+            set: { Settings.httpServerEnabled = $0 }
+        )
+    }
+
+    private var httpPortBinding: Binding<Int> {
+        Binding(
+            get: { Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort },
+            set: { Settings.httpServerPort = $0 }
+        )
+    }
+
+    private var customOSDBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.customOSDEnabled },
+            set: { Settings.customOSDEnabled = $0 }
+        )
+    }
+
+    private var nightShiftStrengthBinding: Binding<Double> {
+        Binding(
+            get: { nightShift.strength() ?? 0 },
+            set: { _ = nightShift.setStrength($0) }
+        )
+    }
+
+    private var trueToneBinding: Binding<Bool> {
+        Binding(
+            get: { trueTone.isEnabled() ?? false },
+            set: { _ = trueTone.setEnabled($0) }
         )
     }
 
