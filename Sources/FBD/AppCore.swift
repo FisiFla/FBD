@@ -34,6 +34,8 @@ final class AppCore {
         virtualScreens.start()
         disconnect.start()
         layoutProtection.start()
+        edid.start()
+        configProtection.start(controller: displayController)
         // Recreate persisted virtual screens at launch (they are process-lifetime).
         if Settings.reconnectVirtualScreensOnWake {
             virtualScreens.reconnectAuto()
@@ -45,10 +47,12 @@ final class AppCore {
         }
     }
 
-    // Tier 3 controller instances (owned here; UI/CLI create their own for one-shot use).
+    // Tier 3/4 controller instances (owned here; UI/CLI create their own for one-shot use).
     let virtualScreens = VirtualScreenController()
     let disconnect = DisconnectController()
     let layoutProtection = LayoutProtectionController()
+    let edid = EDIDController()
+    let configProtection = ConfigProtectionController()
 
     // MARK: - URL scheme (fbd://)
 

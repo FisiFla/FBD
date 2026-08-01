@@ -23,6 +23,7 @@ let package = Package(
                     "-F/System/Library/PrivateFrameworks",
                     "-framework", "DisplayServices",
                     "-framework", "SkyLight",
+                    "-framework", "CoreDisplay",
                     "-framework", "IOMobileFramebuffer",
                 ])
             ]

@@ -92,6 +92,21 @@ struct SettingsView: View {
                 }
             }
 
+            Section("EDID & Protection") {
+                Toggle("Auto-apply saved EDID on connect", isOn: autoApplyEDIDOverrideBinding)
+                Text("Re-applies a saved custom EDID whenever the display connects.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Restore factory EDID on quit", isOn: restoreFactoryEDIDOnQuitBinding)
+                Text("Reverts any active EDID override when FBD quits.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Config protection", isOn: configProtectionEnabledBinding)
+                Text("Re-applies the saved resolution, preset and brightness when a display reconnects.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("About") {
                 LabeledContent("Version", value: versionString)
                 Link("GitHub — FisiFla/FBD", destination: URL(string: "https://github.com/FisiFla/FBD")!)
@@ -214,6 +229,27 @@ struct SettingsView: View {
         Binding(
             get: { Settings.layoutProtectionEnabled },
             set: { Settings.layoutProtectionEnabled = $0 }
+        )
+    }
+
+    private var autoApplyEDIDOverrideBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.autoApplyEDIDOverride },
+            set: { Settings.autoApplyEDIDOverride = $0 }
+        )
+    }
+
+    private var restoreFactoryEDIDOnQuitBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.restoreFactoryEDIDOnQuit },
+            set: { Settings.restoreFactoryEDIDOnQuit = $0 }
+        )
+    }
+
+    private var configProtectionEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.configProtectionEnabled },
+            set: { Settings.configProtectionEnabled = $0 }
         )
     }
 

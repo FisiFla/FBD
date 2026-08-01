@@ -13,6 +13,10 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 
+#pragma mark - CoreDisplay — display info dictionary
+
+CFDictionaryRef CoreDisplay_DisplayCreateInfoDictionary(CGDirectDisplayID display);
+
 #pragma mark - CGS (CoreGraphicsServices) — display modes & configuration
 
 struct CGSDisplayModeDescription {
@@ -70,6 +74,7 @@ typedef struct __IOAVService *IOAVServiceRef;
 
 IOAVServiceRef IOAVServiceCreateWithService(io_service_t service);
 CFDictionaryRef IOAVServiceCopyEDID(IOAVServiceRef service);
+kern_return_t IOAVServiceSetVirtualEDIDMode(IOAVServiceRef service, CFDictionaryRef edid);
 kern_return_t IOAVServiceReadI2C(IOAVServiceRef service, uint32_t address, uint8_t *data, uint32_t length);
 kern_return_t IOAVServiceWriteI2C(IOAVServiceRef service, uint32_t address, uint8_t *data, uint32_t length);
 
@@ -96,6 +101,7 @@ void SLSDisplaySetPresetData(int displayID, int presetIndex, CFDictionaryRef dat
 /* 1-arg (Bool return) per probe; SetHDRModeEnabled 2-arg symmetric (untested
    write — only called with the current state by the controller). */
 int SLSDisplaySupportsHDRMode(int displayID);
+int SLSDisplaySetUnderscan(int displayID, bool enabled);
 int SLSDisplayIsHDRModeEnabled(int displayID);
 int SLSDisplaySetHDRModeEnabled(int displayID, bool enabled);
 

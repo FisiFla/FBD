@@ -111,6 +111,18 @@ public enum IOAVServiceAPI {
         return nil
     }
 
+    /// Install a virtual EDID on the display (Apple Silicon; the OS then sees
+    /// the display's capabilities through this EDID). Pass the original EDID
+    /// dictionary to restore factory behavior.
+    @discardableResult
+    public static func setVirtualEDIDMode(_ edid: CFDictionary, service: IOAVServiceRef) -> Bool {
+        let status = IOAVServiceSetVirtualEDIDMode(service, edid)
+        if status != KERN_SUCCESS {
+            log.debug("IOAVServiceSetVirtualEDIDMode failed: \(status)")
+        }
+        return status == KERN_SUCCESS
+    }
+
     public static var isAppleSilicon: Bool {
         #if arch(arm64)
         return ProcessInfo.processInfo.isAppleSilicon && !ProcessInfo.processInfo.isRosettaTranslated

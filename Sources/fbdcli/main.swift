@@ -25,6 +25,10 @@ enum Command: String {
     case enable
     case layout
     case group
+    case edid
+    case profile
+    case underscan
+    case protect
     case help
 }
 
@@ -75,6 +79,18 @@ Commands:
   group remove <name> <id>      Remove a display from a group
   group mirror <name>           Mirror the group's displays
   group unmirror <name>         Unmirror the group's displays
+  edid export <id> [file]       Export the display's EDID (hex dump + parsed
+                                summary, or write the raw bytes to file)
+  edid apply <id> <file|hex>    Apply an EDID override from a file or hex string
+  edid restore <id>             Restore the factory EDID
+  edid auto [on|off]            Get or set auto-apply of saved EDID overrides
+  profile list <id>             List color profiles (index, name, url) + default
+  profile apply <id> <index|url> Apply a color profile by list index or URL
+  profile restore <id>          Restore the default color profile
+  underscan <id> [on|off]       Get or set underscan (TVs; set only)
+  protect config [on|off]       Get or set config protection
+  protect save <id>             Save current resolution/preset/brightness
+  protect restore <id>          Re-apply saved config if needed
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
@@ -160,6 +176,15 @@ func run(arguments: [String]) -> Int32 {
         return cmdLayout(args: rest)
     case .group:
         return cmdGroup(controller, args: rest)
+    case .edid:
+        return cmdEDID(controller, args: rest)
+    case .profile:
+        return cmdProfile(controller, args: rest)
+    case .underscan:
+        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
+        return cmdUnderscan(display: display, args: rest)
+    case .protect:
+        return cmdProtect(controller, args: rest)
     case .help:
         print(usageText)
         return 0

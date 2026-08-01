@@ -94,6 +94,33 @@ public enum Settings {
         }
     }
 
+    // MARK: EDID & config protection (Tier 4)
+
+    /// Auto-apply a custom EDID when the display connects.
+    @Storage(key: "autoApplyEDIDOverride", defaultValue: false)
+    public static var autoApplyEDIDOverride: Bool
+
+    /// Restore the factory EDID when the app quits (identity preservation).
+    @Storage(key: "restoreFactoryEDIDOnQuit", defaultValue: true)
+    public static var restoreFactoryEDIDOnQuit: Bool
+
+    /// Re-apply the saved resolution/preset/brightness when a display reconnects.
+    @Storage(key: "configProtectionEnabled", defaultValue: false)
+    public static var configProtectionEnabled: Bool
+
+    /// Persisted custom EDID per display identity (key: "edidOverride.<identity>", Data).
+    public static func edidOverride(for identity: String) -> Data? {
+        defaults.data(forKey: "edidOverride.\(identity)")
+    }
+
+    public static func setEDIDOverride(_ data: Data?, for identity: String) {
+        if let data {
+            defaults.set(data, forKey: "edidOverride.\(identity)")
+        } else {
+            defaults.removeObject(forKey: "edidOverride.\(identity)")
+        }
+    }
+
     /// Persisted layout anchors (JSON-encoded).
     private static let layoutAnchorsKey = "layoutAnchors.v1"
 

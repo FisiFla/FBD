@@ -35,10 +35,12 @@ and the direct IOMobileFramebuffer color-table method is entitlement-gated.
 - [ ] Soft disconnect (`CGSConfigureDisplayEnabled`) · auto-disconnect built-in on external
 - [ ] Display groups · UI-scale matching · layout protection · mirrored sets
 
-## Tier 4 — EDID & advanced config
+## Tier 4 — EDID & advanced config ✅ (shipped)
 
-- [ ] EDID export/parse (pure parser + tests) · override via `IOAVServiceSetVirtualEDIDMode` (AS) / chunked I2C write (Intel)
-- [ ] Flexible scaling (custom CGS modes) · color profiles (`ColorSyncDeviceSetCustomProfiles`) · underscan (`SLSDisplaySetUnderscan`) · config protection
+- [x] EDID export/parse (pure parser + 6 tests; checksum bug caught by tests) · override via `IOAVServiceSetVirtualEDIDMode` (AS) / Intel chunked I2C write documented as unsupported (needs framebuffer I2C)
+- [x] Color profiles (`ColorSyncDeviceSetCustomProfiles`; `CGDisplayCreateUUIDFromDisplayID` is public in ColorSyncDevice.h) · underscan (`SLSDisplaySetUnderscan`, user-initiated) · config protection (mode+brightness+preset re-apply on reconnect)
+- [ ] Flexible scaling — realized via virtual screens + mirroring (Tier 3); custom CGS mode creation needs the private mode-list API (future)
+- [ ] Built-in panel EDID: not exposed by macOS 27 (no IODisplayConnect service, no IODisplayEDID key) — export reports unavailable honestly
 
 ## Tier 5 — Streaming & integrations
 
