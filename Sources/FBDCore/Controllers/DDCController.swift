@@ -16,7 +16,7 @@ import os
 ///
 /// Never throws: failures degrade to nil/false with a logged warning.
 public final class DDCController {
-    private let external: ExternalController
+    private let external: ExternalControlling
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DDCController")
 
     /// Per-display serial queues keyed by display identity.
@@ -29,7 +29,7 @@ public final class DDCController {
     private var liveCapabilitiesChecked: Set<String> = []
     private let lock = NSLock()
 
-    public init(external: ExternalController) {
+    public init(external: ExternalControlling) {
         self.external = external
     }
 
@@ -67,28 +67,45 @@ public final class DDCController {
 
     // MARK: - VCP
 
-    /// Read a VCP feature. Synchronous: write request → 30 ms settle → read
-    /// 8-byte reply → parse. Returns nil on any failure.
+    /// Read a VCP feature. Synchronous: write request → settle → read 8-byte
+    /// reply → parse. Retries up to `Settings.ddcReadRetries` extra attempts
+    /// (some monitors only answer on the 2nd–3rd try). Returns nil on failure.
     public func readVCP(_ code: UInt8, for display: Display) -> DDC.DDCValue? {
         guard isAvailable(for: display) else { return nil }
+        let attempts = max(1, Settings.ddcReadRetries + 1)
         return queue(for: display).sync {
-            guard external.writeI2C(DDC.i2cAddress, data: Data(DDC.readVCPRequest(code: code)), for: display) else {
-                log.warning("readVCP: request write failed for \(display.id) (code \(String(format: "0x%02X", code)))")
-                return nil
+            for attempt in 1...attempts {
+                if let value = attemptVCPRead(code, for: display) {
+                    return value
+                }
+                if attempt < attempts {
+                    log.debug("readVCP: attempt \(attempt)/\(attempts) failed for \(display.id) (code \(String(format: "0x%02X", code))) — retrying")
+                    Thread.sleep(forTimeInterval: 0.05)
+                }
             }
-            // Give the display a moment to prepare its reply.
-            Thread.sleep(forTimeInterval: 0.03)
-            guard let reply = external.readI2C(DDC.i2cAddress, length: 8, for: display) else {
-                log.warning("readVCP: no reply for \(display.id) (code \(String(format: "0x%02X", code)))")
-                return nil
-            }
-            guard let parsed = DDC.parseVCPReply(reply) else {
-                log.warning("readVCP: malformed reply for \(display.id) (code \(String(format: "0x%02X", code)))")
-                return nil
-            }
-            rememberMax(parsed.value.maxValue, code: code, for: display)
-            return parsed.value
+            log.warning("readVCP: all \(attempts) attempts failed for \(display.id) (code \(String(format: "0x%02X", code)))")
+            return nil
         }
+    }
+
+    /// One request → settle → reply → parse cycle (see `readVCP` for retries).
+    private func attemptVCPRead(_ code: UInt8, for display: Display) -> DDC.DDCValue? {
+        guard external.writeI2C(DDC.i2cAddress, data: Data(DDC.readVCPRequest(code: code)), for: display) else {
+            log.warning("readVCP: request write failed for \(display.id) (code \(String(format: "0x%02X", code)))")
+            return nil
+        }
+        // Give the display a moment to prepare its reply.
+        Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
+        guard let reply = external.readI2C(DDC.i2cAddress, length: 8, for: display) else {
+            log.warning("readVCP: no reply for \(display.id) (code \(String(format: "0x%02X", code)))")
+            return nil
+        }
+        guard let parsed = DDC.parseVCPReply(reply) else {
+            log.warning("readVCP: malformed reply for \(display.id) (code \(String(format: "0x%02X", code)))")
+            return nil
+        }
+        rememberMax(parsed.value.maxValue, code: code, for: display)
+        return parsed.value
     }
 
     /// Write a VCP feature. Returns true when the write was accepted for
@@ -153,12 +170,16 @@ public final class DDCController {
                 log.warning("readCapabilities: request write failed for \(display.id)")
                 return nil
             }
-            Thread.sleep(forTimeInterval: 0.03)
+            Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
             var collected = Data()
             for _ in 0..<3 {
                 guard let chunk = external.readI2C(DDC.i2cAddress, length: 256, for: display) else { break }
                 collected.append(chunk)
-                if let text = DDC.parseCapabilitiesText(collected) {
+                if let text = DDC.parseCapabilitiesText(collected),
+                   // Only accept a *complete* reply: a truncated first chunk
+                   // can already contain "vcp(" — require the group to be
+                   // closed so we keep collecting until the full blob arrives.
+                   text.range(of: #"vcp\([0-9A-Fa-f ]*\)"#, options: .regularExpression) != nil {
                     let caps = DDC.parseCapabilities(text)
                     lock.lock()
                     liveCapabilitiesChecked.remove(display.identityKey)

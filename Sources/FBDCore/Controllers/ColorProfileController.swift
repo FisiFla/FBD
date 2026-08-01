@@ -109,12 +109,15 @@ public final class ColorProfileController {
     /// keyed by `kColorSyncDeviceDefaultProfileID`). Returns false on failure.
     @discardableResult
     public func applyProfile(_ url: URL, for display: Display) -> Bool {
-        let uuid = CGDisplayCreateUUIDFromDisplayID(display.id)
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(display.id) else {
+            log.warning("applyProfile: no ColorSync UUID for display \(display.id)")
+            return false
+        }
         let custom: [String: Any] = [CSKey.defaultProfileID: url]
         let profileInfo: [String: Any] = [CSKey.custom: custom]
         let ok = ColorSyncDeviceSetCustomProfiles(
             kColorSyncDisplayDeviceClass!.takeUnretainedValue(),
-            uuid!.takeUnretainedValue(),
+            uuid.takeUnretainedValue(),
             profileInfo as CFDictionary
         )
         if !ok {
@@ -128,16 +131,19 @@ public final class ColorProfileController {
     /// unset (kCFNull in lieu of the profile URL). Returns false on failure.
     @discardableResult
     public func restoreDefault(for display: Display) -> Bool {
-        let uuid = CGDisplayCreateUUIDFromDisplayID(display.id)
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(display.id) else {
+            log.warning("restoreDefault: no ColorSync UUID for display \(display.id)")
+            return false
+        }
         let empty: [String: Any] = [CSKey.custom: [String: Any]()]
-        if ColorSyncDeviceSetCustomProfiles(kColorSyncDisplayDeviceClass!.takeUnretainedValue(), uuid!.takeUnretainedValue(), empty as CFDictionary) {
+        if ColorSyncDeviceSetCustomProfiles(kColorSyncDisplayDeviceClass!.takeUnretainedValue(), uuid.takeUnretainedValue(), empty as CFDictionary) {
             return true
         }
         // Documented reset: pass kCFNull in lieu of the profile URL.
         let unset: [String: Any] = [
             CSKey.custom: [CSKey.defaultProfileID: NSNull()],
         ]
-        let ok = ColorSyncDeviceSetCustomProfiles(kColorSyncDisplayDeviceClass!.takeUnretainedValue(), uuid!.takeUnretainedValue(), unset as CFDictionary)
+        let ok = ColorSyncDeviceSetCustomProfiles(kColorSyncDisplayDeviceClass!.takeUnretainedValue(), uuid.takeUnretainedValue(), unset as CFDictionary)
         if !ok {
             log.warning("restoreDefault failed for display \(display.id)")
         }
@@ -150,8 +156,11 @@ public final class ColorProfileController {
     /// profiles resolved for the current host/user). nil when the display is
     /// not registered with ColorSync.
     private func deviceInfo(for display: Display) -> [String: Any]? {
-        let uuid = CGDisplayCreateUUIDFromDisplayID(display.id)
-        guard let info = ColorSyncDeviceCopyDeviceInfo(kColorSyncDisplayDeviceClass!.takeUnretainedValue(), uuid!.takeUnretainedValue()) else {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(display.id) else {
+            log.warning("deviceInfo: no ColorSync UUID for display \(display.id)")
+            return nil
+        }
+        guard let info = ColorSyncDeviceCopyDeviceInfo(kColorSyncDisplayDeviceClass!.takeUnretainedValue(), uuid.takeUnretainedValue()) else {
             log.warning("ColorSyncDeviceCopyDeviceInfo failed for display \(display.id)")
             return nil
         }

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    name: Build & test (macOS arm64)
+    # arm64 runners match the primary target (IOAVService/Apple Silicon paths);
+    # the DDC tests assert native behavior, so x64 runners would fail them.
+    # Public repos: macos-15-xlarge is GitHub-hosted arm64 (billed at 2x).
+    runs-on: macos-15-xlarge
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            Package.resolved
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Build (debug)
+        run: swift build --disable-sandbox
+
+      - name: Run tests
+        run: swift test --disable-sandbox
+
+      - name: Build release app bundle
+        run: make app
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FBD-app
+          path: build/FBD.app
+          if-no-files-found: error

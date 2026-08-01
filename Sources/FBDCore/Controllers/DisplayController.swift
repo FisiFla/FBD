@@ -16,8 +16,8 @@ public final class DisplayController {
     public private(set) var displays: [Display] = []
 
     private let apple = AppleController()
-    private let external = ExternalController()
-    private let ddc: DDCController
+    public let external = ExternalController()
+    public let ddc: DDCController
     private let resolution = ResolutionController()
     private let xdr = XDRNativeController()
     private let overlay = OverlayController()

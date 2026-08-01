@@ -7,6 +7,8 @@ XDR/HDR brightness upscaling, EDID overrides, and more.
 **Goal: full feature parity with BetterDisplay — no Pro tier, no licensing, no telemetry.
 Updates via Sparkle (optional).**
 
+[![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
+
 > ⚠️ Early development. Tier 1 (core display control + DDC) is in progress.
 > Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 > Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md)

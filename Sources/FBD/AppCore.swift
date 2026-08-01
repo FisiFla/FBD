@@ -213,6 +213,10 @@ final class AppCore {
 
     /// Route an HTTP control-API request to the right endpoint.
     @MainActor private func routeHTTP(method: String, path: String, body: String?) -> (Int, String) {
+        // The API is read/write over GET and POST only.
+        guard method == "GET" || method == "POST" else {
+            return (405, HTTPJSON.error("method not allowed"))
+        }
         let components = path.split(separator: "/").map(String.init)
         guard components.count >= 2, components[0] == "api" else {
             return (404, HTTPJSON.error("not found"))
@@ -267,7 +271,9 @@ final class AppCore {
     /// GET /api/displays/<id>/controls — live DDC reads (contrast/volume/mute/input).
     /// GET /api/displays/<id>/caps — capabilities string.
     @MainActor private func readDisplayInfo(_ what: String, for display: Display) -> (Int, String) {
-        let ddc = DDCController(external: ExternalController())
+        // Share DisplayController's DDC instance (single AVService cache and
+        // cooldown across CLI/hotkey/UI paths).
+        let ddc = DisplayController.shared.ddc
         switch what {
         case "controls":
             var controls: [String: Any] = [:]

@@ -148,9 +148,24 @@ public final class VirtualScreenController {
             log.debug("HDR requested for \(config.name); not supported on the CG path (macOS 13–15) — creating SDR")
         }
         SkyLightAPI.detectDisplays()
-        // Give the WindowServer a moment to register the new display.
-        Thread.sleep(forTimeInterval: 0.3)
-        guard let displayID = Self.activeDisplayIDs().first(where: { !before.contains($0) }) else {
+        // Wait (bounded) for the WindowServer to register the new display.
+        // Yields to the run loop on the main thread so the UI stays
+        // responsive; polls instead of a fixed sleep so we return as soon
+        // as the display appears.
+        var displayID: CGDirectDisplayID?
+        let deadline = Date().addingTimeInterval(1.0)
+        while Date() < deadline {
+            if let id = Self.activeDisplayIDs().first(where: { !before.contains($0) }) {
+                displayID = id
+                break
+            }
+            if Thread.isMainThread {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+            } else {
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+        }
+        guard let displayID else {
             handle.destroy()
             log.warning("create(\(config.name)) failed: no new display appeared in CGGetActiveDisplayList")
             return false

@@ -3,13 +3,32 @@ import CPrivateAPI
 import Foundation
 import os
 
+/// The I2C transport surface DDCController depends on. Extracted so the DDC
+/// controller can be tested with a mock transport (no real hardware needed).
+public protocol ExternalControlling: AnyObject {
+    /// The AVService ref for a display (nil when unavailable). Only use the
+    /// returned ref synchronously within a single call.
+    func avService(for display: Display) -> IOAVServiceRef?
+
+    /// Raw I2C read (DDC address 0x37, EDID address 0x50).
+    func readI2C(_ address: UInt8, length: Int, for display: Display) -> Data?
+
+    /// Raw I2C write. Returns false when no AVService is available or the
+    /// transaction fails.
+    @discardableResult
+    func writeI2C(_ address: UInt8, data: Data, for display: Display) -> Bool
+
+    /// Drop all cached services (call after display topology changes).
+    func invalidateCache()
+}
+
 /// Owns the IOAVService (DDC/EDID I2C transport) lifecycle for external
 /// displays on Apple Silicon, plus raw I2C read/write access.
 ///
 /// AVService lookup walks the IORegistry, which is expensive; results are
 /// cached per display identity. Negative results are cached for 30 seconds
 /// so we don't hammer the registry when DDC is repeatedly probed.
-public final class ExternalController {
+public final class ExternalController: ExternalControlling {
     /// Retains an IOAVServiceRef (CF type) and releases it on deinit.
     final class AVServiceHandle {
         let ref: IOAVServiceRef

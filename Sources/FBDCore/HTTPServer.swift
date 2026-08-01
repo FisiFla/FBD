@@ -28,8 +28,14 @@ public final class HTTPServer {
     public init() {}
 
     /// Start listening on 127.0.0.1. `handler(requestMethod, requestPath, requestBody) -> (statusCode, responseBody)`.
+    /// `onReady` is invoked once the listener is ready (immediately for fixed
+    /// ports; after binding for ephemeral port 0) with the actual port.
     @discardableResult
-    public func start(port: UInt16 = 0, handler: @escaping (String, String, String?) -> (Int, String)) -> Bool {
+    public func start(
+        port: UInt16 = 0,
+        handler: @escaping (String, String, String?) -> (Int, String),
+        onReady: ((UInt16) -> Void)? = nil
+    ) -> Bool {
         self.handler = handler
         requestedPort = port
         do {
@@ -41,8 +47,13 @@ public final class HTTPServer {
                 self?.accept(connection)
             }
             listener.stateUpdateHandler = { state in
-                if case .failed(let error) = state {
+                switch state {
+                case .ready:
+                    onReady?(listener.port?.rawValue ?? port)
+                case .failed(let error):
                     log.error("listener failed: \(error)")
+                default:
+                    break
                 }
             }
             listener.start(queue: queue)
@@ -139,13 +150,18 @@ public final class HTTPServer {
             path = String(path[..<q])
         }
 
+        let started = Date()
         let (status, responseBody) = handler?(method, path, body) ?? (404, #"{"error":"not found"}"#)
+        let latencyMs = Int(Date().timeIntervalSince(started) * 1000)
+        log.debug("\(method) \(path) -> \(status) (\(latencyMs) ms)")
         let statusText: String
         switch status {
         case 200: statusText = "OK"
         case 201: statusText = "Created"
         case 400: statusText = "Bad Request"
         case 404: statusText = "Not Found"
+        case 405: statusText = "Method Not Allowed"
+        case 503: statusText = "Service Unavailable"
         default: statusText = "Error"
         }
         let response = """

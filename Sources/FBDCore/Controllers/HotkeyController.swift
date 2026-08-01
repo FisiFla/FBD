@@ -12,7 +12,9 @@ import os
 public final class HotkeyController {
     public static let shared = HotkeyController()
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "HotkeyController")
-    private let ddc = DDCController(external: ExternalController())
+    /// Shares the DisplayController's DDC controller so AVService caches,
+    /// per-display serial queues and cooldowns are single-instance.
+    private var ddc: DDCController { DisplayController.shared.ddc }
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?

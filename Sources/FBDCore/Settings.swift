@@ -35,6 +35,16 @@ public enum Settings {
     @Storage(key: "ddcAutoConfigure", defaultValue: true)
     public static var ddcAutoConfigure: Bool
 
+    /// Extra attempts after the first for a VCP read (some displays only
+    /// answer on the 2nd-3rd try). Total attempts = retries + 1.
+    @Storage(key: "ddcReadRetries", defaultValue: 2)
+    public static var ddcReadRetries: Int
+
+    /// Settle time between DDC request write and reply read, milliseconds
+    /// (some displays need 50-100 ms).
+    @Storage(key: "ddcSettleMilliseconds", defaultValue: 30)
+    public static var ddcSettleMilliseconds: Int
+
     // MARK: XDR/HDR (Tier 2)
 
     /// Target for native XDR upscaling in nits (built-in XDR panel: up to 1600).
