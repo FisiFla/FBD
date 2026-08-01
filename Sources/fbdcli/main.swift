@@ -17,6 +17,9 @@ enum Command: String {
     case modes
     case setMode = "set-mode"
     case ddcTest = "ddc-test"
+    case xdr
+    case preset
+    case hdr
     case help
 }
 
@@ -112,6 +115,15 @@ func run(arguments: [String]) -> Int32 {
     case .ddcTest:
         guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
         return cmdDdcTest(display)
+    case .xdr:
+        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
+        return cmdXDR(controller, display: display, args: rest)
+    case .preset:
+        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
+        return cmdPreset(controller, display: display, args: rest)
+    case .hdr:
+        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
+        return cmdHDR(controller, display: display, args: rest)
     case .help:
         print(usageText)
         return 0

@@ -27,15 +27,28 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 | `SLSMainConnectionID` | yabai/skhd headers | SkyLightAPI | 1 |
 | `SLSDetectDisplays` | BetterDisplay imports | SkyLightAPI / ResolutionController | 1 |
 
-## Not yet declared (Tier 2+)
+## Tier 2 declared (verified by live probe on macOS 27)
+
+| API | Status on macOS 27 | Used by |
+|---|---|---|
+| `SLSDisplayCopyPresetData(display, index)` | ✅ reads work; 4 factory presets + blank slots 11–15 on built-in XDR | SkyLightAPI / XDRNativeController |
+| `SLSDisplaySetPresetData(display, index, dict)` | ⚠️ **write-protected** — silently no-ops on valid AND blank slots (readback unchanged); `makeValidWithSettings:` (MonitorPanel) also restricted | XDRNativeController (self-tests, falls back to software upscaling) |
+| `SLSDisplaySetActivePresetIndex(display, index)` | ✅ works (preset switch verified live) | XDRNativeController / preset picker |
+| `SLSDisplayGetActivePresetIndex` | ❌ always -1 on macOS 27 — use `SLSDisplayCopyActivePreset` + uniqueID match instead | SkyLightAPI.activePresetIndex |
+| `SLSDisplayCopyActivePreset(display)` | ✅ returns active preset dict | SkyLightAPI |
+| `SLSDisplayIsPresetValid / IsPresetWritable` | ✅ 2-arg confirmed (11–15 blank & writable) | SkyLightAPI |
+| `SLSDisplayGetFactoryDefaultPresetIndex` | ✅ returns 0 | SkyLightAPI |
+| `SLSDisplaySupportsHDRMode / IsHDRModeEnabled / SetHDRModeEnabled` | reports 0 for built-in XDR (external HDR displays expected true) | XDRNativeController |
+| Preset data keys (`PresetHostMaxPotentialEDRHeadroom`, `PresetMaxHDRLuminance`, `PresetMaxSDRLuminance`, `PresetHostMaxSliderBrightness`, `PresetHostMinSliderBrightness`, `PresetName`, `PresetValid`, …) | ✅ read live from the built-in XDR (47–48 keys per preset) | SkyLightAPI / XDRPreset |
+| `IOMobileFramebufferOpen` (type 0) | ❌ kIOReturnNotPrivileged — entitlement-gated; no Close export | IOMobileFramebufferAPI (probe-only, degrades) |
+| `IOMobileFramebufferGetGammaTable / SetGammaTable / GetColorRemapMode / SetColorRemapMode` | exports present (GammaTable = 771×uint32) but unreachable without open | IOMobileFramebufferAPI |
+| `DisplayServicesRegisterForBrightnessChangeNotifications` | ✅ pattern from lunar: observer token = display ID, value in userInfo["value"] | BrightnessChangeObserver |
+
+## Not yet declared (Tier 3+)
 
 | API | Purpose | Tier |
 |---|---|---|
-| `SLSDisplayGetPresetCount / CopyPreset / CopyPresetData / SetPreset / SetPresetData / GetActivePresetIndex / SetActivePresetIndex` | native XDR upscaling (preset rewrite) | 2 |
-| Preset data keys: `PresetHostMaxPotentialEDRHeadroom`, `PresetMaxHDRLuminance`, `PresetMaxSDRLuminance`, `PresetSDRMaxNits`, `PresetHostMaxSliderBrightness`, `PresetHostMinSliderBrightness`, `PresetHostReferenceColor` | verified in BetterDisplay strings | 2 |
-| `SLSDisplayIsHDRModeEnabled / SetHDRModeEnabled / SupportsHDRMode` | forced HDR mode / 16-bpc extended luminance | 2 |
-| `IOMobileFramebufferOpen`, `IOMobileFramebufferSetColorRemapMode` | direct built-in XDR (color-table method) | 2 |
-| `SLSDisplaySetUnderscan`, `SLSGetDisplayModeMinRefreshRate`, `SLSIsDisplayModeProMotion / VRR`, `SLSSetDisplayRotation` | underscan, VRR/ProMotion metadata, rotation | 1→2 (partially Tier 1: VRR detection planned) |
+| `SLSDisplaySetUnderscan`, `SLSGetDisplayModeMinRefreshRate`, `SLSIsDisplayModeProMotion / VRR`, `SLSSetDisplayRotation` | underscan, VRR/ProMotion metadata, rotation | 2→3 |
 | `IOAVServiceSetVirtualEDIDMode` | EDID override (Apple Silicon) | 4 |
 | `CGVirtualDisplay*` classes (`VirtualDisplay.framework`, dlopen — absent on macOS 27) + SidecarCore `SidecarDisplayManager` | virtual displays | 3 |
 | `ColorSyncDeviceSetCustomProfiles` | color profiles / HDR color mode | 4 |

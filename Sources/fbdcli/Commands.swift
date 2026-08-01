@@ -437,3 +437,87 @@ func cmdDdcTest(_ display: Display) -> Int32 {
     print("  result: \(ok ? "DDC working" : "DDC unavailable") (exit \(ok ? 0 : 2))")
     return ok ? 0 : 2
 }
+
+// MARK: - XDR / HDR commands
+
+/// `fbdcli xdr <id>` — show XDR state. `fbdcli xdr <id> <nits>` — enable upscaling.
+/// `fbdcli xdr <id> off` — disable upscaling.
+@MainActor
+func cmdXDR(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
+    if args.count >= 2 {
+        if args[1] == "off" {
+            guard controller.disableXDRUpscaling(on: display) else {
+                print("fbdcli: xdr \(display.id): failed to disable upscaling")
+                return 2
+            }
+            print("xdr \(display.id): upscaling disabled")
+            return 0
+        }
+        guard let nits = Int(args[1]), nits > 0 else {
+            print("fbdcli: xdr: expected a nits value or 'off' (got '\(args[1])')")
+            return 1
+        }
+        guard controller.setXDRUpscaleTarget(nits, on: display) else {
+            print("fbdcli: xdr \(display.id): failed to enable upscaling to \(nits) nits (no blank preset slot?)")
+            return 2
+        }
+        print("xdr \(display.id): upscaling enabled to \(nits) nits")
+        return 0
+    }
+    guard display.isXDRCapable else {
+        print("xdr \(display.id): display has no Apple preset support")
+        return 0
+    }
+    print("xdr \(display.id): capable=yes presets=\(display.presets.filter { $0.isValid }.count) active=\(display.activePresetIndex.map(String.init) ?? "factory") upscaled=\(display.isXDRUpscaled ? "yes (\(display.xdrUpscaleTargetNits ?? 0) nits)" : "no")")
+    return 0
+}
+
+/// `fbdcli preset <id>` — list presets. `fbdcli preset <id> <index>` — activate.
+@MainActor
+func cmdPreset(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
+    if args.count >= 2 {
+        guard let index = Int(args[1]) else {
+            print("fbdcli: preset: expected an index (got '\(args[1])')")
+            return 1
+        }
+        guard display.presets.contains(where: { $0.index == index && $0.isValid }) else {
+            print("fbdcli: preset \(index): not a valid preset for display \(display.id)")
+            return 2
+        }
+        guard controller.selectPreset(index, on: display) else {
+            print("fbdcli: preset \(index): activation failed")
+            return 2
+        }
+        print("preset \(display.id): activated \(index)")
+        return 0
+    }
+    for preset in display.presets {
+        let marker = preset.index == display.activePresetIndex ? " *" : ""
+        let valid = preset.isValid ? "valid" : "blank"
+        print("  \(preset.index)  \(preset.name)  \(valid)  SDR=\(preset.maxSDRLuminance) HDR=\(preset.maxHDRLuminance)\(marker)")
+    }
+    return 0
+}
+
+/// `fbdcli hdr <id>` — show HDR mode. `fbdcli hdr <id> on|off` — set (external HDR displays).
+@MainActor
+func cmdHDR(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
+    if args.count >= 2 {
+        let enabled: Bool
+        switch args[1] {
+        case "on": enabled = true
+        case "off": enabled = false
+        default:
+            print("fbdcli: hdr: expected on or off (got '\(args[1])')")
+            return 1
+        }
+        guard controller.setHDRMode(enabled, on: display) else {
+            print("fbdcli: hdr \(display.id): display does not support the HDR framebuffer mode")
+            return 2
+        }
+        print("hdr \(display.id): \(enabled ? "on" : "off")")
+        return 0
+    }
+    print("hdr \(display.id): capable=\(display.isHDRModeCapable ? "yes" : "no") enabled=\(display.isHDRModeEnabled ? "yes" : "no")")
+    return 0
+}

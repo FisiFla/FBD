@@ -58,7 +58,10 @@ int DisplayServicesHasAmbientLightCompensation(CGDirectDisplayID display);
 int DisplayServicesAmbientLightCompensationEnabled(CGDirectDisplayID display, bool *enabled);
 int DisplayServicesEnableAmbientLightCompensation(CGDirectDisplayID display, bool enabled);
 int DisplayServicesResetAmbientLight(CGDirectDisplayID display1, CGDirectDisplayID display2);
-int DisplayServicesRegisterForBrightnessChangeNotifications(CGDirectDisplayID display, CGDirectDisplayID displayObserver, CFNotificationCallback callback);
+/* Explicit function-pointer typedef: the CFNotificationCallback import crashes
+   the Swift compiler when passed a closure argument on this SDK. */
+typedef void (*FBDDisplayServicesBrightnessChangeCallback)(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo);
+int DisplayServicesRegisterForBrightnessChangeNotifications(CGDirectDisplayID display, CGDirectDisplayID displayObserver, FBDDisplayServicesBrightnessChangeCallback callback);
 int DisplayServicesUnregisterForBrightnessChangeNotifications(CGDirectDisplayID display, CGDirectDisplayID displayObserver);
 
 #pragma mark - IOAVService — DDC/EDID over I2C (Apple Silicon)
@@ -74,6 +77,43 @@ kern_return_t IOAVServiceWriteI2C(IOAVServiceRef service, uint32_t address, uint
 
 int SLSMainConnectionID(void);
 CGError SLSDetectDisplays(int cid);
+
+#pragma mark - SkyLight — display presets + HDR mode (Tier 2, verified on macOS 27)
+
+/* Signatures verified empirically: CopyPresetData(display, index) confirmed by
+   XDR-Enabler; validity/writability/factory-default confirmed by probe on
+   macOS 27 (presets 0–10 valid, 11–15 blank & writable on built-in XDR).
+   NOTE: SLSDisplayGetPresetCount returns status 51 with every candidate
+   signature on macOS 27 — enumeration uses IsPresetValid/CopyPresetData. */
+int SLSDisplayIsPresetValid(int displayID, int presetIndex);
+int SLSDisplayIsPresetWritable(int displayID, int presetIndex);
+int SLSDisplayGetFactoryDefaultPresetIndex(int displayID);
+int SLSDisplayGetActivePresetIndex(int displayID, int *index);
+int SLSDisplaySetActivePresetIndex(int displayID, int presetIndex);
+CFDictionaryRef SLSDisplayCopyPresetData(int displayID, int presetIndex);
+CFDictionaryRef SLSDisplayCopyActivePreset(int displayID);
+void SLSDisplaySetPresetData(int displayID, int presetIndex, CFDictionaryRef data);
+/* 1-arg (Bool return) per probe; SetHDRModeEnabled 2-arg symmetric (untested
+   write — only called with the current state by the controller). */
+int SLSDisplaySupportsHDRMode(int displayID);
+int SLSDisplayIsHDRModeEnabled(int displayID);
+int SLSDisplaySetHDRModeEnabled(int displayID, bool enabled);
+
+#pragma mark - IOMobileFramebuffer — built-in panel control (Tier 2, experimental)
+
+/* Entitlement-gated on macOS 27 (IOMobileFramebufferOpen → kIOReturnNotPrivileged);
+   wrappers degrade gracefully. No Close export exists in the framework. */
+typedef struct __IOMobileFramebuffer *IOMobileFramebufferRef;
+typedef int IOMobileFramebufferReturn;
+typedef struct {
+    uint32_t values[771]; /* 257 entries × 3 channels, 16.16 fixed point */
+} IOMobileFramebufferGammaTable;
+
+kern_return_t IOMobileFramebufferOpen(io_service_t service, uint32_t type, uint32_t flags, IOMobileFramebufferRef *fb);
+IOMobileFramebufferReturn IOMobileFramebufferGetColorRemapMode(IOMobileFramebufferRef fb, int *mode);
+IOMobileFramebufferReturn IOMobileFramebufferSetColorRemapMode(IOMobileFramebufferRef fb, int mode);
+IOMobileFramebufferReturn IOMobileFramebufferGetGammaTable(IOMobileFramebufferRef fb, uint32_t *table);
+IOMobileFramebufferReturn IOMobileFramebufferSetGammaTable(IOMobileFramebufferRef fb, const uint32_t *table);
 
 /* Test helper (used by unit tests only): build a CGSDisplayModeDescription. */
 static inline struct CGSDisplayModeDescription fbd_make_test_mode(int modeNumber, int flags, int width, int height, int pixelsWide, int pixelsHigh, int fixPtRefreshRate, const char *encoding) {

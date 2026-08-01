@@ -33,6 +33,30 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("XDR / HDR") {
+                Toggle("Combined brightness (hardware + XDR)", isOn: combinedBrightnessEnabled)
+                Toggle("Software upscaling (Metal overlay)", isOn: softwareUpscalingEnabled)
+                Text("Used when native XDR upscaling is unavailable. Requires Screen Recording permission.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Dim to black", isOn: dimToBlackEnabled)
+                Text("Allows turning a display fully black.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("Experimental direct color-table method", isOn: allowExperimentalDirectXDR)
+                Text("Entitlement-gated on macOS 26+; has no effect there.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text("XDR upscale target")
+                    Spacer()
+                    Stepper(value: xdrTarget, in: 100...1600, step: 100) {
+                        Text("\(Settings.xdrUpscaleTargetNits) nits")
+                            .monospacedDigit()
+                    }
+                }
+            }
+
             Section("Experimental") {
                 Toggle("Allow unsafe modes", isOn: unsafeModesBinding)
                 Text("Allows applying modes outside the safe-mode flag set — experimental.")
@@ -98,6 +122,41 @@ struct SettingsView: View {
         Binding(
             get: { Settings.ddcCooldownMilliseconds },
             set: { Settings.ddcCooldownMilliseconds = max(0, $0) }
+        )
+    }
+
+    private var combinedBrightnessEnabled: Binding<Bool> {
+        Binding(
+            get: { Settings.combinedBrightnessEnabled },
+            set: { Settings.combinedBrightnessEnabled = $0 }
+        )
+    }
+
+    private var softwareUpscalingEnabled: Binding<Bool> {
+        Binding(
+            get: { Settings.softwareUpscalingEnabled },
+            set: { Settings.softwareUpscalingEnabled = $0 }
+        )
+    }
+
+    private var dimToBlackEnabled: Binding<Bool> {
+        Binding(
+            get: { Settings.dimToBlackEnabled },
+            set: { Settings.dimToBlackEnabled = $0 }
+        )
+    }
+
+    private var allowExperimentalDirectXDR: Binding<Bool> {
+        Binding(
+            get: { Settings.allowExperimentalDirectXDR },
+            set: { Settings.allowExperimentalDirectXDR = $0 }
+        )
+    }
+
+    private var xdrTarget: Binding<Int> {
+        Binding(
+            get: { Settings.xdrUpscaleTargetNits },
+            set: { Settings.xdrUpscaleTargetNits = $0 }
         )
     }
 

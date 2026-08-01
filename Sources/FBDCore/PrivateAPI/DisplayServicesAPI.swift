@@ -5,6 +5,31 @@ import os
 
 private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayServicesAPI")
 
+// MARK: - Brightness-change notification registry (file scope: the C callback
+// must not capture context).
+
+private var brightnessCallbacks: [CGDirectDisplayID: (CGDirectDisplayID, Double) -> Void] = [:]
+private let brightnessRegistryLock = NSLock()
+
+private func displayServicesBrightnessCallback(
+    _ center: CFNotificationCenter?,
+    _ observer: UnsafeMutableRawPointer?,
+    _ name: CFString?,
+    _ object: UnsafeRawPointer?,
+    _ userInfo: CFDictionary?
+) {
+    guard let observer else { return }
+    let id = CGDirectDisplayID(UInt(bitPattern: observer))
+    guard let value = (userInfo as NSDictionary?)?["value"] as? Double else {
+        log.debug("brightness notification without value for \(id)")
+        return
+    }
+    brightnessRegistryLock.lock()
+    let handler = brightnessCallbacks[id]
+    brightnessRegistryLock.unlock()
+    handler?(id, value)
+}
+
 /// Typed wrappers over DisplayServices.framework (Apple display brightness).
 /// Brightness values are 0…1 floats. Status 0 = success.
 public enum DisplayServicesAPI {
@@ -51,9 +76,37 @@ public enum DisplayServicesAPI {
         let status = DisplayServicesEnableAmbientLightCompensation(displayID, enabled)
         guard status == 0 else { throw PrivateAPIError.status("DisplayServicesEnableAmbientLightCompensation", status) }
     }
-}
 
-// Note: DisplayServicesRegisterForBrightnessChangeNotifications (C decl in
-// fbd_private_api.h) is not wrapped yet — the CFNotificationCallback gets no
-// context pointer, so the handler would need a global registry. Brightness sync
-// (Tier 2) will own that; Tier 1 refreshes on display-reconfiguration events.
+    // MARK: - Brightness-change notifications
+
+    /// Register a callback for hardware brightness changes on a display
+    /// (brightness keys, ambient-light adjustments). The private notification
+    /// carries the display ID in the observer token and the value in
+    /// userInfo["value"] — the same pattern lunar uses.
+    @discardableResult
+    public static func registerForBrightnessChanges(
+        displayID: CGDirectDisplayID,
+        callback: @escaping (CGDirectDisplayID, Double) -> Void
+    ) -> Bool {
+        brightnessRegistryLock.lock()
+        brightnessCallbacks[displayID] = callback
+        brightnessRegistryLock.unlock()
+
+        let status = DisplayServicesRegisterForBrightnessChangeNotifications(displayID, displayID, displayServicesBrightnessCallback)
+        if status != 0 {
+            log.warning("DisplayServicesRegisterForBrightnessChangeNotifications failed: \(status)")
+            brightnessRegistryLock.lock()
+            brightnessCallbacks.removeValue(forKey: displayID)
+            brightnessRegistryLock.unlock()
+            return false
+        }
+        return true
+    }
+
+    public static func unregisterForBrightnessChanges(displayID: CGDirectDisplayID) {
+        DisplayServicesUnregisterForBrightnessChangeNotifications(displayID, displayID)
+        brightnessRegistryLock.lock()
+        brightnessCallbacks.removeValue(forKey: displayID)
+        brightnessRegistryLock.unlock()
+    }
+}

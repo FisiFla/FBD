@@ -26,6 +26,22 @@ public final class Display: ObservableObject, Identifiable {
     /// Cached DDC capabilities (parsed VCP feature list), set by DDCController.
     @Published public var ddcCapabilities: DDC.DDCCapabilities?
 
+    // MARK: XDR state (set by XDRNativeController)
+
+    /// Display presets (Apple displays only; empty for non-Apple displays).
+    @Published public private(set) var presets: [XDRPreset] = []
+    /// Whether the display has Apple preset support (XDR-capable).
+    @Published public private(set) var isXDRCapable: Bool = false
+    /// Currently active preset index (nil = factory default).
+    @Published public private(set) var activePresetIndex: Int?
+    /// True while native XDR upscaling is applied.
+    @Published public private(set) var isXDRUpscaled: Bool = false
+    /// Target nits of the active upscaling, when applied.
+    @Published public private(set) var xdrUpscaleTargetNits: Int?
+    /// Whether the display supports the HDR framebuffer mode.
+    @Published public private(set) var isHDRModeCapable: Bool = false
+    @Published public private(set) var isHDRModeEnabled: Bool = false
+
     public init(
         id: CGDirectDisplayID,
         name: String,
@@ -72,6 +88,24 @@ public final class Display: ObservableObject, Identifiable {
     public func updateDDCStatus(available: Bool, capabilities: DDC.DDCCapabilities?) {
         ddcAvailable = available
         ddcCapabilities = capabilities
+    }
+
+    public func updateXDRState(
+        presets: [XDRPreset],
+        isXDRCapable: Bool,
+        activePresetIndex: Int?,
+        isXDRUpscaled: Bool,
+        xdrUpscaleTargetNits: Int?,
+        isHDRModeCapable: Bool,
+        isHDRModeEnabled: Bool
+    ) {
+        self.presets = presets
+        self.isXDRCapable = isXDRCapable
+        self.activePresetIndex = activePresetIndex
+        self.isXDRUpscaled = isXDRUpscaled
+        self.xdrUpscaleTargetNits = xdrUpscaleTargetNits
+        self.isHDRModeCapable = isHDRModeCapable
+        self.isHDRModeEnabled = isHDRModeEnabled
     }
 
     public func updateAppleBrightnessStatus(available: Bool) {

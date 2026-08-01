@@ -1,8 +1,11 @@
 # FBD — Roadmap
 
-Status: **Tier 1 complete** (compiles, 40 unit tests green, CLI smoke-tested on macOS 27).
-Stop condition for Tier 1 ("DDC brightness works on an external monitor") requires
-real hardware — verification steps at the bottom.
+Status: **Tier 1 complete** (shipped), **Tier 2 shipped** (52 unit tests green).
+Tier 1 stop condition ("DDC brightness works on an external monitor") still
+requires real hardware. Tier 2 caveats for macOS 27 are documented in
+docs/PRIVATE_APIS.md — notably: `SLSDisplaySetPresetData` is write-protected on
+macOS 27 (native XDR upscaling self-tests and falls back to the software method),
+and the direct IOMobileFramebuffer color-table method is entitlement-gated.
 
 ## Tier 1 — Core ✅ (this milestone)
 
@@ -16,14 +19,14 @@ real hardware — verification steps at the bottom.
 - [x] Unit tests: DDC wire format, capabilities parser (hex VCP), mode mapping, settings
 - [x] Docs: README, AGENTS.md, ARCHITECTURE.md, PRIVATE_APIS.md, ROADMAP.md
 
-## Tier 2 — XDR/HDR
+## Tier 2 — XDR/HDR ✅ (shipped)
 
-- [ ] Native XDR upscaling: SkyLight preset rewrite (`SLSDisplaySetPresetData` + `PresetHostMaxPotentialEDRHeadroom`, `PresetMaxHDRLuminance`, `PresetSDRMaxNits`, …)
-- [ ] Direct built-in XDR: `IOMobileFramebufferOpen` + `SetColorRemapMode` (color-table method)
-- [ ] Software XDR: Metal overlay at `CGShieldingWindowLevel` (+ ScreenCaptureKit self-streaming variant)
-- [ ] Combined brightness controller (hardware + software dimming + upscale in one curve)
-- [ ] Dim-to-black · forced HDR mode (`SLSDisplaySetHDRModeEnabled`) · XDR preset selector · nits-normalized brightness sync
-- [ ] Brightness-change notifications (DisplayServices register — needs the global registry noted in PRIVATE_APIS.md)
+- [x] Native XDR upscaling: SkyLight preset rewrite (preset enumeration, `SLSDisplaySetPresetData` + `SetActivePresetIndex`, factory restore). **macOS 13–15**: works. **macOS 27**: preset writes are write-protected (verified by probe) → runtime self-test + automatic software fallback
+- [ ] Direct built-in XDR: `IOMobileFramebufferOpen` — **entitlement-gated on macOS 27** (kIOReturnNotPrivileged); wrappers ship probe-only, degrade gracefully. Open item: private entitlement or older-OS support
+- [x] Software XDR: Metal overlay at `CGShieldingWindowLevel` with ScreenCaptureKit capture + brightness shader (the working upscale method on macOS 27)
+- [x] Combined brightness controller: nits-based curve (hardware 0…100 % → native XDR → software boost), maxNits/hardwareMaxNits helpers
+- [x] Dim-to-black overlay · forced HDR mode (`SLSDisplaySetHDRModeEnabled`) · XDR preset selector (live-verified preset switching) · brightness-change notifications (DisplayServices registry, lunar pattern)
+- [x] fbdcli: `xdr`, `preset`, `hdr` commands · menu-bar UI: XDR/HDR section (upscale toggle, nits slider, preset picker, HDR toggle) + settings toggles
 
 ## Tier 3 — Virtual displays & layout
 

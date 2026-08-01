@@ -19,6 +19,10 @@ public final class DisplayController {
     private let external = ExternalController()
     private let ddc: DDCController
     private let resolution = ResolutionController()
+    private let xdr = XDRNativeController()
+    private let overlay = OverlayController()
+    private let brightnessObserver = BrightnessChangeObserver()
+    private let combined: CombinedController
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayController")
 
     private var hasRegistered = false
@@ -30,6 +34,7 @@ public final class DisplayController {
 
     public init() {
         ddc = DDCController(external: external)
+        combined = CombinedController(apple: apple, ddc: ddc, xdr: xdr, overlay: overlay)
     }
 
     // MARK: - Lifecycle
@@ -63,7 +68,8 @@ public final class DisplayController {
     }
 
     /// Re-enumerate displays with CGGetActiveDisplayList, preserving existing
-    /// Display instances by id, and refresh per-display mode/DDC status.
+    /// Display instances by id, and refresh per-display mode/DDC/XDR status,
+    /// plus hardware brightness-change observation.
     public func refresh() {
         var count: UInt32 = 0
         guard CGGetActiveDisplayList(0, nil, &count) == .success else {
@@ -86,6 +92,10 @@ public final class DisplayController {
         for id in ids {
             let display = byID[id] ?? makeDisplay(id: id)
             populate(display, id: id)
+            xdr.refresh(for: display)
+            if display.appleBrightnessAvailable {
+                brightnessObserver.observe(display: display)
+            }
             updated.append(display)
         }
         displays = updated
@@ -97,6 +107,7 @@ public final class DisplayController {
         for id in vanished {
             brightnessDebounceWorkItems[id]?.cancel()
             brightnessDebounceWorkItems[id] = nil
+            brightnessObserver.unobserve(displayID: id)
         }
 
         NotificationCenter.default.post(name: .fbdDisplaysChanged, object: nil)
@@ -109,7 +120,9 @@ public final class DisplayController {
     // MARK: - Brightness
 
     /// Set brightness 0…1, debounced per display via `Settings.brightnessDebounceMilliseconds`.
-    /// Routes to AppleController when `display.appleBrightnessAvailable`, else DDC.
+    /// Routes through CombinedController: Tier 1 (Apple when
+    /// `display.appleBrightnessAvailable`, else DDC) unless combined mode is
+    /// on, which extends the curve with XDR upscaling / software boost.
     /// Returns true when a control path exists for the display (delivery of the
     /// debounced write is asynchronous; DDC delivery is confirmed by read-back).
     @discardableResult
@@ -119,15 +132,10 @@ public final class DisplayController {
             log.warning("setBrightness: no control path for \(display.id)")
             return false
         }
-        let apple = self.apple
-        let ddc = self.ddc
+        let combined = self.combined
         brightnessDebounceWorkItems[display.id]?.cancel()
         let workItem = DispatchWorkItem {
-            if display.appleBrightnessAvailable {
-                apple.setBrightness(clamped, on: display)
-            } else {
-                ddc.setFeature(.brightness, value: clamped, for: display)
-            }
+            combined.setBrightness(clamped, on: display)
             display.updateBrightness(clamped)
         }
         brightnessDebounceWorkItems[display.id] = workItem
@@ -140,16 +148,54 @@ public final class DisplayController {
 
     /// Current brightness 0…1 and updates `display.brightness`.
     public func getBrightness(for display: Display) -> Double? {
-        let value: Double?
-        if display.appleBrightnessAvailable {
-            value = apple.getBrightness(for: display)
-        } else {
-            value = ddc.getFeature(.brightness, for: display)
-        }
+        let value = combined.getBrightness(for: display)
         if let value {
             display.updateBrightness(value)
         }
         return value
+    }
+
+    // MARK: - XDR, HDR, overlays (passthroughs)
+
+    /// Raise the native XDR upscale target (nits) for the display.
+    @discardableResult
+    public func setXDRUpscaleTarget(_ nits: Int, on display: Display) -> Bool {
+        xdr.setUpscaleTarget(nits, for: display)
+    }
+
+    /// Remove native XDR upscaling and restore the factory preset.
+    @discardableResult
+    public func disableXDRUpscaling(on display: Display) -> Bool {
+        xdr.disableUpscaling(for: display)
+    }
+
+    /// Activate a display preset by index.
+    @discardableResult
+    public func selectPreset(_ index: Int, on display: Display) -> Bool {
+        xdr.selectPreset(index, for: display)
+    }
+
+    /// Force the HDR framebuffer mode (external HDR displays only).
+    @discardableResult
+    public func setHDRMode(_ enabled: Bool, on display: Display) -> Bool {
+        xdr.setHDRMode(enabled, for: display)
+    }
+
+    /// Start (or update) the software brightness-boost overlay for a display;
+    /// factor <= 1 stops the stream.
+    @discardableResult
+    public func setSoftwareBoost(_ factor: Double, on display: Display) -> Bool {
+        overlay.setSoftwareBoost(factor, displayID: display.id)
+    }
+
+    /// Set the dim-to-black overlay opacity 0…1 (0 = none, 1 = fully black).
+    public func setDimFactor(_ factor: Double, on display: Display) {
+        overlay.setDimFactor(factor, displayID: display.id)
+    }
+
+    /// Dim-to-black on/off (fully black vs. no dimming).
+    public func setDimToBlack(_ enabled: Bool, on display: Display) {
+        combined.setDimToBlack(enabled, on: display)
     }
 
     // MARK: - DDC controls

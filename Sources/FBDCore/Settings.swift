@@ -24,6 +24,33 @@ public enum Settings {
     @Storage(key: "ddcAutoConfigure", defaultValue: true)
     public static var ddcAutoConfigure: Bool
 
+    // MARK: XDR/HDR (Tier 2)
+
+    /// Target for native XDR upscaling in nits (built-in XDR panel: up to 1600).
+    @Storage(key: "xdrUpscaleTargetNits", defaultValue: 1600)
+    public static var xdrUpscaleTargetNits: Int
+
+    /// Clamp for the upscale target relative to the display's HDR maximum.
+    @Storage(key: "xdrUpscaleMaxFactor", defaultValue: 3)
+    public static var xdrUpscaleMaxFactor: Double
+
+    /// Use the Metal software upscaling overlay when native upscaling is unavailable.
+    @Storage(key: "softwareUpscalingEnabled", defaultValue: false)
+    public static var softwareUpscalingEnabled: Bool
+
+    /// Combine hardware + software + XDR upscaling into one brightness slider.
+    @Storage(key: "combinedBrightnessEnabled", defaultValue: false)
+    public static var combinedBrightnessEnabled: Bool
+
+    /// Dim-to-black (allows turning the panel fully black via software).
+    @Storage(key: "dimToBlackEnabled", defaultValue: false)
+    public static var dimToBlackEnabled: Bool
+
+    /// Allow the experimental direct color-table method (entitlement-gated on
+    /// macOS 26+; has no effect there).
+    @Storage(key: "allowExperimentalDirectXDR", defaultValue: false)
+    public static var allowExperimentalDirectXDR: Bool
+
     // MARK: App
 
     /// Launch at login (menu-bar setting; implemented in the app target).
