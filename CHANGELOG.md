@@ -52,6 +52,32 @@ Versioning: semver; 0.x until the first signed/notarized release.
 - Release builds no longer silently copy a stale binary when the build fails
   (Makefile fails loudly now).
 
+### Added (cycles 31-41)
+- `fbdcli info <id> --json`; `fbdcli settings` masked dump (cycle 13);
+  zsh completion (`completions/_fbdcli`).
+- Live HTTP server reconciliation: `fbdcli http on/off` applies without
+  an app restart (Settings watch + poll).
+- `make bump-version`; secrets-ready release workflow
+  (`.github/workflows/release.yml`).
+
+### Fixed (cycles 31-41)
+- `pip` controller instance mismatch (start/stop used different
+  instances) — now shared.
+- `applyMode` failures surfaced: the HTTP API returns 500 and `fbdcli
+  set-mode` exits 2 instead of reporting false success.
+- SIGTERM now routes through `NSApp.terminate` so AppKit cleanup runs on
+  `kill` (cycle 27).
+- XDR upscaling fallback on macOS 27: software boost defaults on, the
+  explicit `xdr` command falls back to the overlay, below-ceiling drags
+  stop an active overlay boost (cycles 21-22, planner-tested).
+- Mode-spec and `tv` brand leniency fixes (cycles 17, 23).
+
+### Verified (cycles 31-41)
+- Close-read audit series across every remaining path (2 real fixes
+  found, rest clean); memory-leak audit (framework-internal only);
+  dependency drift (all current); full 23-command live regression matrix
+  (cycle 30); launch-captured settings audit (clean); repo hygiene.
+
 ### Added (cycles 22-29)
 - `XDRBoostPlanner`: the XDR fallback decision chain is a pure, tested layer
   shared by the slider and the `xdr` command.
