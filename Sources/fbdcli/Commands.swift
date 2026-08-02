@@ -1,3 +1,4 @@
+import FBDCLIParser
 import FBDCore
 import CoreGraphics
 import Foundation
@@ -1544,50 +1545,35 @@ func cmdTrueTone(args: [String]) -> Int32 {
 /// fire on the controllers' own queues, so no run-loop pumping is needed).
 @MainActor
 func cmdTV(args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: tv: expected <lg|samsung|philips|yamaha> <host> [volume <0-100>|power|input <name>]")
+    switch TVCommandValidation.parse(args) {
+    case .failure(let failure):
+        print("fbdcli: tv: \(failure.message)")
         return 1
-    }
-    let brand = args[0]
-    let host = args[1]
-    var action = "power"
-    var value = ""
-    if args.count >= 3 {
-        action = args[2].lowercased()
-        if args.count >= 4 { value = args[3] }
-    }
-    guard ["volume", "power", "input"].contains(action) else {
-        print("fbdcli: tv: unknown action '\(action)' (expected volume, power, or input)")
-        return 1
-    }
-    if action == "volume" {
-        guard let level = Int(value), (0...100).contains(level) else {
-            print("fbdcli: tv volume: expected a number between 0 and 100 (got '\(value)')")
-            return 1
+    case .success(let command):
+        switch command.brand {
+        case .lg:
+            return cmdTVLG(host: command.host, action: command.action)
+        case .samsung:
+            return cmdTVSamsung(host: command.host, action: command.action)
+        case .philips:
+            return cmdTVPhilips(host: command.host, action: command.action)
+        case .yamaha:
+            return cmdTVYamaha(host: command.host, action: command.action)
         }
-    }
-    if action == "input", value.isEmpty {
-        print("fbdcli: tv input: expected an input name (e.g. 'HDMI1', 'HDMI 1', 'WatchTV')")
-        return 1
-    }
-    switch brand {
-    case "lg":
-        return cmdTVLG(host: host, action: action, value: value)
-    case "samsung":
-        return cmdTVSamsung(host: host, action: action, value: value)
-    case "philips":
-        return cmdTVPhilips(host: host, action: action, value: value)
-    case "yamaha":
-        return cmdTVYamaha(host: host, action: action, value: value)
-    default:
-        print("fbdcli: tv: unknown brand '\(brand)' (expected lg, samsung, philips, or yamaha)")
-        return 1
     }
 }
 
 /// Shared "result printed, exit code chosen" tail for the tv commands.
-func printTVResult(brand: String, host: String, action: String, value: String, ok: Bool?) -> Int32 {
-    let actionLabel = action == "input" ? "input '\(value)'" : action
+func printTVResult(brand: String, host: String, action: TVCommand.Action, ok: Bool?) -> Int32 {
+    let actionLabel: String
+    switch action {
+    case .power:
+        actionLabel = "power"
+    case .volume(let level):
+        actionLabel = "volume \(level)"
+    case .input(let name):
+        actionLabel = "input '\(name)'"
+    }
     if ok == true {
         print("tv \(brand) \(host): \(actionLabel) ok")
         return 0
@@ -1599,7 +1585,7 @@ func printTVResult(brand: String, host: String, action: String, value: String, o
 
 /// `tv lg <host> [volume <v>|power|input <name>]` — LG webOS (ssap://, port 3000).
 @MainActor
-func cmdTVLG(host: String, action: String, value: String) -> Int32 {
+func cmdTVLG(host: String, action: TVCommand.Action) -> Int32 {
     let tv = LGWebOSController()
     let semaphore = DispatchSemaphore(value: 0)
     var connectOK = false
@@ -1622,22 +1608,22 @@ func cmdTVLG(host: String, action: String, value: String) -> Int32 {
     }
     var commandResult: Bool?
     switch action {
-    case "volume":
-        tv.setVolume(Int(value) ?? 0) { commandResult = $0 }
-    case "power":
+    case .volume(let level):
+        tv.setVolume(level) { commandResult = $0 }
+    case .power:
         tv.powerOn { commandResult = $0 }
-    default:
-        tv.setInput(value) { commandResult = $0 }
+    case .input(let name):
+        tv.setInput(name) { commandResult = $0 }
     }
     _ = semaphore.wait(timeout: .now() + 10)
-    return printTVResult(brand: "lg", host: host, action: action, value: value, ok: commandResult)
+    return printTVResult(brand: "lg", host: host, action: action, ok: commandResult)
 }
 
 /// `tv samsung <host> [volume <v>|power|input <name>]` — Samsung Tizen
 /// (samsung.remote.control, port 8002). Power/input map to KEY_POWER/KEY_SOURCE;
 /// volume is applied via repeated KEY_VOLUP presses.
 @MainActor
-func cmdTVSamsung(host: String, action: String, value: String) -> Int32 {
+func cmdTVSamsung(host: String, action: TVCommand.Action) -> Int32 {
     let tv = TizenController()
     let semaphore = DispatchSemaphore(value: 0)
     var connectOK = false
@@ -1656,23 +1642,23 @@ func cmdTVSamsung(host: String, action: String, value: String) -> Int32 {
     }
     var commandResult: Bool?
     switch action {
-    case "volume":
-        tv.setVolume(Int(value) ?? 0) { commandResult = $0 }
-    case "power":
+    case .volume(let level):
+        tv.setVolume(level) { commandResult = $0 }
+    case .power:
         tv.sendKey("KEY_POWER") { commandResult = $0 }
-    default:
+    case .input:
         tv.sendKey("KEY_SOURCE") { commandResult = $0 }
     }
     // setVolume presses keys up to ~12 s; give the sequence room to finish.
     _ = semaphore.wait(timeout: .now() + 30)
-    return printTVResult(brand: "samsung", host: host, action: action, value: value, ok: commandResult)
+    return printTVResult(brand: "samsung", host: host, action: action, ok: commandResult)
 }
 
 /// `tv philips <host> [volume <v>|power|input <name>]` — Philips Android TV
 /// (jointSPACE, port 1926). The CLI has no PIN-entry UI, so the host is used
 /// directly — this works for already-paired TVs and Simple-IP mode.
 @MainActor
-func cmdTVPhilips(host: String, action: String, value: String) -> Int32 {
+func cmdTVPhilips(host: String, action: TVCommand.Action) -> Int32 {
     let tv = PhilipsTVController()
     tv.host = host
     let semaphore = DispatchSemaphore(value: 0)
@@ -1682,22 +1668,22 @@ func cmdTVPhilips(host: String, action: String, value: String) -> Int32 {
         semaphore.signal()
     }
     switch action {
-    case "volume":
-        tv.setVolume(Int(value) ?? 0, completion: completion)
-    case "power":
+    case .volume(let level):
+        tv.setVolume(level, completion: completion)
+    case .power:
         tv.powerOn(completion: completion)
-    default:
-        tv.setInput(value, completion: completion)
+    case .input(let name):
+        tv.setInput(name, completion: completion)
     }
     _ = semaphore.wait(timeout: .now() + 15)
-    return printTVResult(brand: "philips", host: host, action: action, value: value, ok: commandResult)
+    return printTVResult(brand: "philips", host: host, action: action, ok: commandResult)
 }
 
 /// `tv yamaha <host> [volume <v>|power|input <name>]` — Yamaha AVR (YXC, port
 /// 80). Volume is the raw YXC scale 0…161 (0.5 dB steps); the CLI passes the
 /// 0…100 value through (clamped by the controller).
 @MainActor
-func cmdTVYamaha(host: String, action: String, value: String) -> Int32 {
+func cmdTVYamaha(host: String, action: TVCommand.Action) -> Int32 {
     let tv = YamahaAVRController()
     tv.host = host
     let semaphore = DispatchSemaphore(value: 0)
@@ -1707,13 +1693,13 @@ func cmdTVYamaha(host: String, action: String, value: String) -> Int32 {
         semaphore.signal()
     }
     switch action {
-    case "volume":
-        tv.setVolume(Int(value) ?? 0, completion: completion)
-    case "power":
+    case .volume(let level):
+        tv.setVolume(level, completion: completion)
+    case .power:
         tv.powerOn(completion: completion)
-    default:
-        tv.setInput(value, completion: completion)
+    case .input(let name):
+        tv.setInput(name, completion: completion)
     }
     _ = semaphore.wait(timeout: .now() + 15)
-    return printTVResult(brand: "yamaha", host: host, action: action, value: value, ok: commandResult)
+    return printTVResult(brand: "yamaha", host: host, action: action, ok: commandResult)
 }

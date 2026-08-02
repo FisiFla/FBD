@@ -66,3 +66,62 @@ public enum CLICommandLine {
         return .command(command, raw: args, direct: direct)
     }
 }
+
+/// Validated `fbdcli tv` command (pure parsing, no controller access).
+public struct TVCommand: Equatable {
+    public enum Brand: String, CaseIterable {
+        case lg, samsung, philips, yamaha
+    }
+
+    public enum Action: Equatable {
+        case power
+        case volume(Int)
+        case input(String)
+    }
+
+    public let brand: Brand
+    public let host: String
+    public let action: Action
+}
+
+/// Argument validation for `fbdcli tv <brand> <host> [volume <0-100>|power|input <name>]`.
+/// Extracted so the CLI's largest free-form validator is unit-tested.
+public enum TVCommandValidation {
+    public struct Failure: Error, Equatable {
+        public let message: String
+        public init(_ message: String) { self.message = message }
+    }
+
+    public static func parse(_ args: [String]) -> Result<TVCommand, Failure> {
+        guard args.count >= 2 else {
+            return .failure(Failure("expected <lg|samsung|philips|yamaha> <host> [volume <0-100>|power|input <name>]"))
+        }
+        // Brands are matched case-insensitively ("LG", "Samsung" work).
+        guard let brand = TVCommand.Brand(rawValue: args[0].lowercased()) else {
+            return .failure(Failure("unknown brand '\(args[0])' (expected lg, samsung, philips, or yamaha)"))
+        }
+        let host = args[1]
+        var actionWord = "power"
+        var value = ""
+        if args.count >= 3 {
+            actionWord = args[2].lowercased()
+            if args.count >= 4 { value = args[3] }
+        }
+        switch actionWord {
+        case "power":
+            return .success(TVCommand(brand: brand, host: host, action: .power))
+        case "volume":
+            guard let level = Int(value), (0...100).contains(level) else {
+                return .failure(Failure("volume: expected a number between 0 and 100 (got '\(value)')"))
+            }
+            return .success(TVCommand(brand: brand, host: host, action: .volume(level)))
+        case "input":
+            guard !value.isEmpty else {
+                return .failure(Failure("input: expected an input name (e.g. 'HDMI1', 'HDMI 1', 'WatchTV')"))
+            }
+            return .success(TVCommand(brand: brand, host: host, action: .input(value)))
+        default:
+            return .failure(Failure("unknown action '\(actionWord)' (expected volume, power, or input)"))
+        }
+    }
+}

@@ -377,7 +377,7 @@ enum HTTPRouting {
                 return 1
             }
             let hz = parts.count > 1 ? Double(parts[1]) : 60
-            var body: [String: Any] = ["name": name, "width": width, "height": height, "hz": hz]
+            var body: [String: Any] = ["name": name, "width": width, "height": height, "hz": hz as Any]
             if args.contains("--hdr") { body["isHDR"] = true }
             guard let (status, data) = HTTPAPIClient.post("/api/virtual/create", json: body),
                   status == 201, let object = HTTPAPIClient.json(data) else {
