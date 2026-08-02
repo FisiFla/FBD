@@ -73,9 +73,12 @@ xcrun stapler staple build/FBD.app
 ## CI note
 
 `.github/workflows/ci.yml` builds/tests/packages on every push (Intel
-`macos-15` runner). A release workflow that signs + notarizes would need the
-certificate + notary credentials as GitHub secrets — add it once the cert
-exists (see Pending in `.ai_infinite_backlog.md`).
+`macos-15` runner). `.github/workflows/release.yml` runs on `v*` tags:
+without the signing secrets it uploads an unsigned artifact and warns; with
+them (APPLE_CERT_BASE64, APPLE_CERT_PASSWORD, APPLE_ID,
+APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID — see the workflow header) it
+codesigns, notarizes, staples and publishes a GitHub Release from the
+CHANGELOG section.
 
 ## First-release sanity list
 

@@ -1,0 +1,95 @@
+name: Release
+
+# Tag-triggered release build (v0.2.0 style). Requires repository secrets
+# (see below); without them the workflow builds + uploads an unsigned
+# artifact and skips signing/notarization with a clear message.
+#
+# Required secrets (Repository → Settings → Secrets and variables → Actions):
+#   APPLE_CERT_BASE64          base64 of the Developer ID Application .p12
+#   APPLE_CERT_PASSWORD        password of the .p12
+#   APPLE_ID                   Apple ID for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD  app-specific password (not the account password)
+#   APPLE_TEAM_ID              team id (e.g. ABCDE12345)
+#
+# Local equivalent: RELEASING.md (make bump-version → sign → notarytool).
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    name: Build, sign, notarize, publish
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build universal app
+        run: make app
+
+      - name: Check signing secrets
+        id: check
+        env:
+          HAS_CERT: ${{ secrets.APPLE_CERT_BASE64 != '' }}
+        run: echo "has_cert=$HAS_CERT" >> "$GITHUB_OUTPUT"
+
+      - name: Import Developer ID certificate
+        if: steps.check.outputs.has_cert == 'true'
+        env:
+          CERT_B64: ${{ secrets.APPLE_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          echo "$CERT_B64" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p temp build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p temp build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp build.keychain
+
+      - name: Codesign (app + Sparkle)
+        if: steps.check.outputs.has_cert == 'true'
+        run: |
+          IDENTITY=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -1 | awk '{print $2}')
+          codesign --force --options runtime --sign "$IDENTITY" \
+            build/FBD.app/Contents/Frameworks/Sparkle.framework
+          codesign --force --options runtime --deep --sign "$IDENTITY" build/FBD.app
+          codesign --verify --deep --strict build/FBD.app
+
+      - name: Notarize and staple
+        if: steps.check.outputs.has_cert == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ditto -c -k --keepParent build/FBD.app build/FBD.zip
+          xcrun notarytool submit build/FBD.zip \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple build/FBD.app
+          ditto -c -k --keepParent build/FBD.app build/FBD-notarized.zip
+          mv build/FBD-notarized.zip build/FBD.zip
+
+      - name: Publish GitHub Release
+        if: steps.check.outputs.has_cert == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          NOTES=$(sed -n "/## \[$TAG\]/,/^## /p" CHANGELOG.md | head -n -1)
+          gh release create "$TAG" build/FBD.zip \
+            --title "FBD $TAG" --notes "$NOTES"
+
+      - name: Upload unsigned artifact
+        if: steps.check.outputs.has_cert != 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: FBD-unsigned
+          path: build/FBD.app
+          if-no-files-found: error
+
+      - name: Warn about missing secrets
+        if: steps.check.outputs.has_cert != 'true'
+        run: |
+          echo "::warning::Release signing secrets not configured — uploaded an unsigned artifact instead."
+          echo "Add APPLE_CERT_BASE64 / APPLE_CERT_PASSWORD / APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID to enable signed + notarized releases (see RELEASING.md)."
