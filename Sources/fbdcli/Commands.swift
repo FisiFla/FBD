@@ -1329,6 +1329,13 @@ func cmdProtectRestore(_ controller: DisplayController, args: [String]) -> Int32
 
 // MARK: - HTTP API settings (Tier 5)
 
+/// `fbdcli settings` — print a masked settings dump for support/debugging.
+@MainActor
+func cmdSettings() -> Int32 {
+    print(Settings.debugSummary)
+    return 0
+}
+
 /// `fbdcli auth-token` — print the local HTTP API token (generated on first
 /// access, shared with the app via the defaults domain).
 @MainActor

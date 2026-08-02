@@ -104,3 +104,21 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(Settings.ddcFeatures(for: ddcIdentity).isEmpty)
     }
 }
+
+    // MARK: - Debug summary
+
+    func testDebugSummaryMasksSecrets() {
+        let token = Settings.httpAPIToken
+        let summary = Settings.debugSummary
+
+        XCTAssertTrue(summary.contains("ddcCooldownMilliseconds ="), "expected settings keys in the dump")
+        XCTAssertTrue(summary.contains("httpAPIToken = "), "token key must be present")
+        XCTAssertFalse(summary.contains(token), "full token must never appear")
+        XCTAssertFalse(summary.contains("tvLGClientKey = \(Settings.tvLGClientKey)"), "LG key must be masked")
+        XCTAssertTrue(summary.contains("ddcReadRetries = \(Settings.ddcReadRetries)"))
+    }
+
+    func testDebugSummaryIsSorted() {
+        let lines = Settings.debugSummary.split(separator: "\n").map(String.init)
+        XCTAssertEqual(lines, lines.sorted())
+    }

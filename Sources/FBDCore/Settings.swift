@@ -4,6 +4,48 @@ import Security
 /// Centralized UserDefaults-backed settings. Keys mirror the semantics of the
 /// BetterDisplay settings surface (see betterdisplay-reverse-engineering.md).
 public enum Settings {
+    /// Human-readable settings dump for support/debugging (one "key =
+    /// value" per line, secrets masked). Safe to paste into a bug report.
+    public static var debugSummary: String {
+        func mask(_ value: String) -> String {
+            value.count <= 8 ? "****" : String(value.prefix(4)) + "…"
+        }
+        var lines: [String] = []
+        func add(_ key: String, _ value: Any) {
+            lines.append("\(key) = \(value)")
+        }
+        add("ddcCooldownMilliseconds", ddcCooldownMilliseconds)
+        add("brightnessDebounceMilliseconds", brightnessDebounceMilliseconds)
+        add("interceptMediaKeys", interceptMediaKeys)
+        add("allowUnsafeInvalidModes", allowUnsafeInvalidModes)
+        add("ddcAutoConfigure", ddcAutoConfigure)
+        add("ddcReadRetries", ddcReadRetries)
+        add("ddcSettleMilliseconds", ddcSettleMilliseconds)
+        add("xdrUpscaleTargetNits", xdrUpscaleTargetNits)
+        add("xdrUpscaleMaxFactor", xdrUpscaleMaxFactor)
+        add("softwareUpscalingEnabled", softwareUpscalingEnabled)
+        add("combinedBrightnessEnabled", combinedBrightnessEnabled)
+        add("dimToBlackEnabled", dimToBlackEnabled)
+        add("allowExperimentalDirectXDR", allowExperimentalDirectXDR)
+        add("reconnectVirtualScreensOnWake", reconnectVirtualScreensOnWake)
+        add("disconnectVirtualScreensOnLock", disconnectVirtualScreensOnLock)
+        add("autoDisconnectBuiltInOnExternal", autoDisconnectBuiltInOnExternal)
+        add("layoutProtectionEnabled", layoutProtectionEnabled)
+        add("virtualDisplayIDs", virtualDisplayIDs)
+        add("httpServerEnabled", httpServerEnabled)
+        add("httpServerPort", httpServerPort)
+        add("httpServerActivePort", httpServerActivePort)
+        add("customOSDEnabled", customOSDEnabled)
+        add("autoApplyEDIDOverride", autoApplyEDIDOverride)
+        add("restoreFactoryEDIDOnQuit", restoreFactoryEDIDOnQuit)
+        add("configProtectionEnabled", configProtectionEnabled)
+        add("launchAtLogin", launchAtLogin)
+        add("showRosettaWarning", showRosettaWarning)
+        add("httpAPIToken", mask(httpAPIToken))
+        add("tvLGClientKey", mask(tvLGClientKey))
+        return lines.sorted().joined(separator: "\n")
+    }
+
     /// The app bundle's standard domain IS dev.fisifla.fbd; anything else
     /// (CLI, tests) must target the suite explicitly so both read the same plist.
     private static var defaults: UserDefaults {

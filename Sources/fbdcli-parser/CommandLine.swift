@@ -30,6 +30,7 @@ public enum Command: String, CaseIterable {
     case protect
     case http
     case authToken = "auth-token"
+    case settings
     case pip
     case osd
     case nightshift

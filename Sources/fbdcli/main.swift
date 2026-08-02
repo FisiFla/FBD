@@ -75,6 +75,7 @@ Commands:
   http status                   Show HTTP API state and port
   auth-token                    Print the local HTTP API token (needed for
                                 curl and other HTTP clients)
+  settings                      Print a masked settings dump (for bug reports)
   pip <id> [b] [c] [s]          Stream a display in a picture-in-picture window
                                 (optional brightness/contrast/saturation, 1 =
                                 none). Streams until the window closes or a
@@ -191,6 +192,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdHTTP(args: rest)
     case .authToken:
         return cmdAuthToken()
+    case .settings:
+        return cmdSettings()
     case .pip:
         return cmdPip(controller, args: rest)
     case .osd:
