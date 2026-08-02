@@ -21,7 +21,7 @@ Usage: fbdcli <command> [args]
 
 Commands:
   list [--json]                 List displays (one line per display, or JSON)
-  info <id>                     Show full detail for a display
+  info <id> [--json]            Show full detail for a display (or JSON)
   brightness <id> [0-100]       Get or set brightness (Apple or DDC path)
   contrast <id> [0-100]         Get or set contrast (DDC)
   volume <id> [0-100]           Get or set speaker volume (DDC)
@@ -130,7 +130,7 @@ func run(arguments: [String]) -> Int32 {
         return cmdList(controller, args: rest)
     case .info:
         guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdInfo(display)
+        return cmdInfo(display, args: rest)
     case .brightness:
         guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
         return cmdBrightness(controller, display: display, args: rest)

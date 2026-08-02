@@ -42,7 +42,14 @@ func cmdList(_ controller: DisplayController, args: [String]) -> Int32 {
 
 /// `fbdcli info <id>` — full detail for one display.
 @MainActor
-func cmdInfo(_ display: Display) -> Int32 {
+func cmdInfo(_ display: Display, args: [String]) -> Int32 {
+    if args.contains("--json") {
+        // Machine-readable output (same serializer as the app's HTTP API).
+        var info = HTTPJSON.display(display)
+        info["modes"] = display.modes.map { HTTPJSON.mode($0) }
+        print(HTTPJSON.encode(info))
+        return 0
+    }
     let modeLine: String
     if let current = display.currentMode {
         var parts = [current.key]
