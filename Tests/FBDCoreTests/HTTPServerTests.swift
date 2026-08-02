@@ -251,6 +251,129 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(received.first?.body, "data")
     }
 
+    // MARK: - Idle timeout + fuzz
+
+    func testIdleConnectionIsDropped() throws {
+        let server = HTTPServer()
+        server.idleTimeout = 1
+        let ready = expectation(description: "listener ready")
+        var boundPort: UInt16 = 0
+        XCTAssertTrue(server.start(port: 0, handler: { _, _, _, _ in
+            (200, #"{"ok":true}"#)
+        }, onReady: { boundPort = $0; ready.fulfill() }))
+        self.server = server
+        wait(for: [ready], timeout: 5)
+
+        // Connect and send NOTHING: the server must drop the connection
+        // after the idle timeout.
+        let connection = NWConnection(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: boundPort)!,
+            using: .tcp
+        )
+        let dropped = expectation(description: "idle connection dropped")
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1024) { data, _, isComplete, _ in
+            // Remote close arrives as EOF (nil data + isComplete).
+            if data == nil, isComplete { dropped.fulfill() }
+        }
+        connection.start(queue: .global())
+        wait(for: [dropped], timeout: 5)
+
+        // And the server still serves requests afterwards.
+        let result = get(boundPort, "/api/displays")
+        XCTAssertEqual(result?.status, 200)
+    }
+
+    /// Deterministic SplitMix64 so fuzz failures are reproducible.
+    private struct SplitMix64: RandomNumberGenerator {
+        var state: UInt64
+        init(seed: UInt64) { state = seed }
+        mutating func next() -> UInt64 {
+            state &+= 0x9E37_79B9_7F4A_7C15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+            z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+            return z ^ (z >> 31)
+        }
+    }
+
+    /// 150 seeded malformed/semi-valid requests: the server must never hang
+    /// and must remain healthy afterwards.
+    func testFuzzedRequestsNeverCrashOrHang() throws {
+        let port = startServer()
+        var rng = SplitMix64(seed: 0xFBD0_FBD0)
+        let ascii = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 /:\r\n{}\"-_.@".utf8)
+
+        for round in 0..<150 {
+            var blob = Data()
+            let kind = Int(rng.next() % 10)
+            switch kind {
+            case 0..<4: // pure random bytes
+                let length = Int(rng.next() % 65)
+                for _ in 0..<length { blob.append(UInt8(truncatingIfNeeded: rng.next())) }
+            case 4..<7: // header soup with occasional dangerous values
+                blob.append(contentsOf: "GET /api/displays HTTP/1.1\r\n".utf8)
+                let headerCount = Int(rng.next() % 5)
+                for _ in 0..<headerCount {
+                    let name = ["Content-Length", "Expect", "Host", "X-FBD-Token", "Content-Type"][Int(rng.next() % 5)]
+                    let value: String
+                    switch Int(rng.next() % 4) {
+                    case 0: value = String(Int(rng.next() % 2_000_000_000))
+                    case 1: value = "100-continue"
+                    case 2: value = ""
+                    default: value = String(ascii.map { Character(UnicodeScalar($0)) }.prefix(Int(rng.next() % 20)))
+                    }
+                    blob.append(contentsOf: "\(name): \(value)\r\n".utf8)
+                }
+                blob.append(contentsOf: "\r\n".utf8)
+                if Int(rng.next() % 3) == 0 {
+                    blob.append(contentsOf: "{\"value\":0.5}".utf8) // valid body
+                }
+            case 7..<9: // truncated mid-headers
+                blob.append(contentsOf: "POST /api/displays/1/brightness HTTP/1.1\r\nContent-Len".utf8)
+                if Int(rng.next() % 2) == 0 { blob.append(UInt8(truncatingIfNeeded: rng.next())) }
+            default: // garbage body after valid head
+                blob.append(contentsOf: "POST /api/displays HTTP/1.1\r\nContent-Length: 5\r\n\r\n".utf8)
+                blob.append(contentsOf: Data([0x00, 0xFF, 0x01, 0xFE, 0x10]))
+            }
+
+            let connection = NWConnection(
+                host: "127.0.0.1",
+                port: NWEndpoint.Port(rawValue: port)!,
+                using: .tcp
+            )
+            var closed = false
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { data, _, isComplete, _ in
+                if data == nil, isComplete { closed = true }
+            }
+            connection.stateUpdateHandler = { state in
+                if case .failed = state { closed = true }
+            }
+            connection.start(queue: .global())
+            // Some blobs intentionally never finish (truncated): send then
+            // give fast-path rounds a moment to complete. The real hang
+            // detector is the final GET (5s timeout) — a wedged server
+            // fails there.
+            if !blob.isEmpty {
+                connection.send(content: blob, completion: .contentProcessed { _ in })
+            }
+            let deadline = Date().addingTimeInterval(0.05)
+            while !closed, Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.005))
+            }
+            connection.cancel()
+        }
+        // Server must still be healthy after the barrage: the final GET is
+        // answered, and some barrage entries legitimately reached the
+        // handler (valid requests) — that is fine, crashing/hanging is not.
+        let result = get(port, "/api/displays")
+        XCTAssertEqual(result?.status, 200)
+        XCTAssertTrue(
+            received.contains { $0.method == "GET" && $0.path == "/api/displays" },
+            "final GET must have been handled"
+        )
+    }
+
     func testServerSurvivesMalformedRequest() throws {
         // A garbage request must not crash or wedge the server: after it,
         // a well-formed request still gets a response.

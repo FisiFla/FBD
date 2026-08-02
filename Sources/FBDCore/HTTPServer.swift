@@ -23,6 +23,17 @@ public final class HTTPServer {
     /// Requested port (0 = ephemeral); used until the listener reports its port.
     private var requestedPort: UInt16 = 0
 
+    /// Connections that send no data for this long are dropped (idle
+    /// resource hygiene — a local client can otherwise hold a connection
+    /// forever).
+    public var idleTimeout: TimeInterval = 10
+
+    /// Per-connection bookkeeping (thread-confined to `queue`).
+    private final class ConnectionState {
+        var sentContinue = false
+        var idleWorkItem: DispatchWorkItem?
+    }
+
     public var port: UInt16 { listener?.port?.rawValue ?? requestedPort }
 
     public init() {}
@@ -74,16 +85,38 @@ public final class HTTPServer {
     // MARK: - Connection handling
 
     private func accept(_ connection: NWConnection) {
+        let state = ConnectionState()
+        connection.stateUpdateHandler = { [weak state] newState in
+            if case .cancelled = newState {
+                state?.idleWorkItem?.cancel()
+            }
+        }
         connection.start(queue: queue)
-        receive(connection, buffer: Data())
+        scheduleIdleTimeout(connection, state: state)
+        receive(connection, buffer: Data(), state: state)
+    }
+
+    /// Reset the idle timer: the connection is dropped when no data arrives
+    /// within `idleTimeout`.
+    private func scheduleIdleTimeout(_ connection: NWConnection, state: ConnectionState) {
+        state.idleWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak connection] in
+            connection?.cancel()
+        }
+        state.idleWorkItem = work
+        queue.asyncAfter(deadline: .now() + idleTimeout, execute: work)
     }
 
     /// Cap request buffering so a local client cannot grow memory without bound.
     private static let maxRequestBytes = 1_048_576
 
-    private func receive(_ connection: NWConnection, buffer: Data, sentContinue: Bool = false) {
+    private func receive(_ connection: NWConnection, buffer: Data, state: ConnectionState) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
             guard let self else { return }
+            if data != nil {
+                // Data arrived: keep the connection alive.
+                self.scheduleIdleTimeout(connection, state: state)
+            }
             var accumulated = buffer
             if let data {
                 accumulated.append(data)
@@ -116,12 +149,13 @@ public final class HTTPServer {
 
                 // Honor Expect: 100-continue so clients send the body (curl
                 // and URLSession otherwise wait for the interim response).
-                if !sentContinue, !bodyComplete,
+                if !state.sentContinue, !bodyComplete,
                    head.headers["expect"]?.lowercased() == "100-continue" {
                     connection.send(
                         content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8),
                         completion: .contentProcessed { _ in
-                            self.receive(connection, buffer: accumulated, sentContinue: true)
+                            state.sentContinue = true
+                            self.receive(connection, buffer: accumulated, state: state)
                         }
                     )
                     return
@@ -135,7 +169,7 @@ public final class HTTPServer {
                 self.respond(connection, request: accumulated)
                 return
             }
-            self.receive(connection, buffer: accumulated, sentContinue: sentContinue)
+            self.receive(connection, buffer: accumulated, state: state)
         }
     }
 
