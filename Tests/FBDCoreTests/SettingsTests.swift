@@ -186,3 +186,17 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(lines, lines.sorted())
     }
 }
+
+    func testLayoutAnchorCodableFormatStability() {
+        // Locks the on-disk JSON format for saved arrangements (upgrade-safe
+        // decode across app versions).
+        let anchor = LayoutAnchor(displayID: 42, x: 1920, y: -100)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let json = String(data: try! encoder.encode(anchor), encoding: .utf8)!
+
+        XCTAssertEqual(json, #"{"displayID":42,"x":1920,"y":-100}"#)
+
+        let legacy = #"{"displayID":42,"x":1920,"y":-100}"#
+        XCTAssertEqual(try? JSONDecoder().decode(LayoutAnchor.self, from: Data(legacy.utf8)), anchor)
+    }
