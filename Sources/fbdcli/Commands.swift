@@ -1386,20 +1386,13 @@ func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
     }
     guard let display = requireDisplay(args.first, in: controller) else { return 1 }
     let filterArgs = Array(args.dropFirst())
-    guard filterArgs.count <= 3 else {
-        print("fbdcli: pip: too many arguments (expected [brightness] [contrast] [saturation])")
+    switch VideoFilterArgs.parse(filterArgs) {
+    case .failure(let failure):
+        print("fbdcli: pip: \(failure.message)")
         return 1
-    }
-    var values = [1.0, 1.0, 1.0]
-    for (index, string) in filterArgs.enumerated() {
-        guard let value = Double(string), value >= 0 else {
-            print("fbdcli: pip: filter values must be non-negative numbers (got '\(string)')")
-            return 1
-        }
-        values[index] = value
-    }
-    let pip = PipStreamController()
-    let filter = VideoFilter(brightness: values[0], contrast: values[1], saturation: values[2])
+    case .success(let values):
+        let pip = PipStreamController()
+        let filter = VideoFilter(brightness: values[0], contrast: values[1], saturation: values[2])
     guard pip.startPiP(displayID: display.id, filter: filter) else {
         print("fbdcli: pip: failed to start PiP for display \(display.id) (grant Screen Recording to FBD if prompted)")
         return 2
@@ -1416,12 +1409,13 @@ func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
     }
     print("pip streaming display \(display.id) (brightness \(values[0]), contrast \(values[1]), saturation \(values[2]))")
     print("press any key to stop")
-    while pip.isActive, !stdinHasInput() {
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        while pip.isActive, !stdinHasInput() {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        }
+        cliPip.stop()
+        print("pip stopped")
+        return 0
     }
-    cliPip.stop()
-    print("pip stopped")
-    return 0
 }
 
 /// True when a byte (or EOF) is available on stdin — the interactive "press

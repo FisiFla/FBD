@@ -189,3 +189,21 @@ public enum EDIDHex {
         return lines.joined(separator: "\n")
     }
 }
+
+/// Parsed `pip <id> [brightness] [contrast] [saturation]` filter arguments
+/// (each a non-negative Double; default 1.0 = no adjustment).
+public enum VideoFilterArgs {
+    public static func parse(_ args: [String]) -> Result<[Double], TVCommandValidation.Failure> {
+        guard args.count <= 3 else {
+            return .failure(TVCommandValidation.Failure("too many arguments (expected [brightness] [contrast] [saturation])"))
+        }
+        var values = [1.0, 1.0, 1.0]
+        for (index, string) in args.enumerated() {
+            guard let value = Double(string), value >= 0 else {
+                return .failure(TVCommandValidation.Failure("filter values must be non-negative numbers (got '\(string)')"))
+            }
+            values[index] = value
+        }
+        return .success(values)
+    }
+}
