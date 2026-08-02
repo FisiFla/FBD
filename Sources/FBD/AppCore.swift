@@ -194,14 +194,6 @@ final class AppCore {
     /// (off the main actor): parsing is pure, then the main-actor routing is
     /// awaited with a semaphore so the synchronous handler API still replies.
     nonisolated private func handleHTTP(method: String, path: String, body: String?, headers: [String: String]) -> (Int, String) {
-        // Local API token auth (fail closed). The token is generated on first
-        // access and shared with the CLI via the same defaults domain.
-        let expected = Settings.httpAPIToken
-        let provided = headers["x-fbd-token"] ?? headers["authorization"]
-            .flatMap { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : nil }
-        guard provided == expected else {
-            return (401, HTTPJSON.error("unauthorized"))
-        }
         let semaphore = DispatchSemaphore(value: 0)
         var response: (Int, String) = (500, HTTPJSON.error("internal error"))
         Task { @MainActor [weak self] in
@@ -210,7 +202,7 @@ final class AppCore {
                 semaphore.signal()
                 return
             }
-            response = self.routeHTTP(method: method, path: path, body: body)
+            response = self.routeHTTP(method: method, path: path, body: body, headers: headers)
             semaphore.signal()
         }
         if semaphore.wait(timeout: .now() + 5) == .timedOut {
@@ -219,35 +211,33 @@ final class AppCore {
         return response
     }
 
-    /// Route an HTTP control-API request to the right endpoint.
-    @MainActor private func routeHTTP(method: String, path: String, body: String?) -> (Int, String) {
-        // The API is read/write over GET and POST only.
-        guard method == "GET" || method == "POST" else {
-            return (405, HTTPJSON.error("method not allowed"))
-        }
-        let components = path.split(separator: "/").map(String.init)
-        guard components.count >= 2, components[0] == "api" else {
-            return (404, HTTPJSON.error("not found"))
-        }
-        switch components[1] {
-        case "displays":
-            return routeDisplays(method: method, components: components, body: body)
-        case "virtual":
-            return routeVirtual(method: method, components: components, body: body)
-        default:
-            return (404, HTTPJSON.error("not found"))
+    /// Pure routing (auth, method, path, body validation) lives in
+    /// HTTPRouter (FBDCore, unit-tested); this method only executes the
+    /// typed route against the controllers.
+    @MainActor private func routeHTTP(method: String, path: String, body: String?, headers: [String: String]) -> (Int, String) {
+        switch HTTPRouter.route(
+            method: method,
+            path: path,
+            body: body,
+            headers: headers,
+            expectedToken: Settings.httpAPIToken
+        ) {
+        case .error(let status, let message):
+            return (status, HTTPJSON.error(message))
+        case .route(let route):
+            return execute(route)
         }
     }
 
-    /// GET /api/displays, GET /api/displays/<id>, POST /api/displays/<id>/<action>.
-    @MainActor private func routeDisplays(method: String, components: [String], body: String?) -> (Int, String) {
-        if components.count == 2, method == "GET" {
+    /// Execute a validated HTTP route. All parseable failures were already
+    /// rejected by HTTPRouter; failures here are runtime/controller-level.
+    @MainActor private func execute(_ route: HTTPRoute) -> (Int, String) {
+        switch route {
+        case .listDisplays:
             let list = displayController.displays.map { HTTPJSON.display($0) }
             return (200, HTTPJSON.encode(["displays": list]))
-        }
-        if components.count == 3, method == "GET" {
-            guard let id = HTTPJSON.parseDisplayID(components[2]),
-                  let display = displayController.display(withID: id) else {
+        case .displayInfo(let id):
+            guard let display = displayController.display(withID: id) else {
                 return (404, HTTPJSON.error("display not found"))
             }
             var info = HTTPJSON.display(display)
@@ -257,156 +247,75 @@ final class AppCore {
             }
             info["modes"] = display.modes.map { HTTPJSON.mode($0) }
             return (200, HTTPJSON.encode(info))
-        }
-        if components.count == 4, method == "GET" {
-            // GET /api/displays/<id>/controls | caps
-            guard let id = HTTPJSON.parseDisplayID(components[2]),
-                  let display = displayController.display(withID: id) else {
+        case .displayControls(let id, let what):
+            guard let display = displayController.display(withID: id) else {
                 return (404, HTTPJSON.error("display not found"))
             }
-            return readDisplayInfo(components[3], for: display)
-        }
-        if components.count == 4, method == "POST" {
-            guard let id = HTTPJSON.parseDisplayID(components[2]),
-                  let display = displayController.display(withID: id) else {
-                return (404, HTTPJSON.error("display not found"))
-            }
-            return applyDisplayAction(components[3], to: display, body: body)
-        }
-        return (404, HTTPJSON.error("not found"))
-    }
-
-    /// GET /api/displays/<id>/controls — live DDC reads (contrast/volume/mute/input).
-    /// GET /api/displays/<id>/caps — capabilities string.
-    @MainActor private func readDisplayInfo(_ what: String, for display: Display) -> (Int, String) {
-        switch what {
-        case "controls":
-            let controls = DisplayController.shared.readDDCControls(for: display)
-            let json: [String: Any] = [
-                "contrast": controls.contrast as Any? ?? NSNull(),
-                "volume": controls.volume as Any? ?? NSNull(),
-                "muted": controls.muted as Any? ?? NSNull(),
-                "inputSource": controls.inputSource as Any? ?? NSNull(),
-            ]
-            return (200, HTTPJSON.encode(["displayID": display.id, "controls": json]))
-        case "caps":
-            if let caps = DisplayController.shared.readDDCCapabilities(for: display) {
-                return (200, HTTPJSON.encode(["displayID": display.id, "raw": caps.raw, "mccsVersion": caps.mccsVersion, "vcp": caps.vcpCodes.sorted().map { String(format: "0x%02X", $0) }]))
-            }
-            return (404, HTTPJSON.error("no capabilities for display"))
-        default:
-            return (404, HTTPJSON.error("unknown display info '\(what)'"))
-        }
-    }
-
-    /// POST /api/displays/<id>/brightness|volume|mute|input|mode|xdr.
-    @MainActor private func applyDisplayAction(_ action: String, to display: Display, body: String?) -> (Int, String) {
-        guard let body, let object = HTTPJSON.parse(body) else {
-            return (400, HTTPJSON.error("invalid JSON body"))
-        }
-        switch action {
-        case "contrast":
-            guard let value = object["value"] as? Double, (0...1).contains(value) else {
-                return (400, HTTPJSON.error("value must be a number between 0 and 1"))
-            }
-            guard displayController.setContrast(value, on: display) else {
-                return (500, HTTPJSON.error("write not accepted"))
-            }
-            return (200, HTTPJSON.encode(["ok": true]))
-        case "brightness":
-            guard let value = object["value"] as? Double, (0...1).contains(value) else {
-                return (400, HTTPJSON.error("value must be a number between 0 and 1"))
-            }
-            guard displayController.setBrightness(value, on: display) else {
-                return (500, HTTPJSON.error("no control path for display"))
-            }
-            return (200, HTTPJSON.encode(["ok": true]))
-        case "volume":
-            guard let value = object["value"] as? Double, (0...1).contains(value) else {
-                return (400, HTTPJSON.error("value must be a number between 0 and 1"))
-            }
-            guard displayController.setVolume(value, on: display) else {
-                return (500, HTTPJSON.error("write not accepted"))
-            }
-            return (200, HTTPJSON.encode(["ok": true]))
-        case "mute":
-            guard let muted = object["muted"] as? Bool else {
-                return (400, HTTPJSON.error("muted must be a boolean"))
-            }
-            guard displayController.setMuted(muted, on: display) else {
-                return (500, HTTPJSON.error("write not accepted"))
-            }
-            return (200, HTTPJSON.encode(["ok": true]))
-        case "input":
-            guard let source = (object["source"] as? NSNumber).flatMap({ UInt16(exactly: $0.uint32Value) }) else {
-                return (400, HTTPJSON.error("source must be a number"))
-            }
-            guard displayController.setInputSource(source, on: display) else {
-                return (500, HTTPJSON.error("write not accepted"))
-            }
-            return (200, HTTPJSON.encode(["ok": true]))
-        case "mode":
-            guard let width = (object["width"] as? NSNumber)?.int32Value,
-                  let height = (object["height"] as? NSNumber)?.int32Value else {
-                return (400, HTTPJSON.error("width and height are required"))
-            }
-            let hz = (object["hz"] as? NSNumber)?.doubleValue
-            guard let mode = HTTPJSON.bestMode(matchingWidth: width, height: height, hz: hz, in: display) else {
-                return (404, HTTPJSON.error("no matching mode"))
-            }
-            displayController.applyMode(mode, to: display)
-            return (200, HTTPJSON.encode(["ok": true, "mode": mode.key]))
-        case "xdr":
-            if let nits = (object["nits"] as? NSNumber)?.intValue, nits > 0 {
-                guard displayController.setXDRUpscaleTarget(nits, on: display) else {
-                    return (500, HTTPJSON.error("XDR upscaling failed"))
+            switch what {
+            case "controls":
+                let controls = displayController.readDDCControls(for: display)
+                let json: [String: Any] = [
+                    "contrast": controls.contrast as Any? ?? NSNull(),
+                    "volume": controls.volume as Any? ?? NSNull(),
+                    "muted": controls.muted as Any? ?? NSNull(),
+                    "inputSource": controls.inputSource as Any? ?? NSNull(),
+                ]
+                return (200, HTTPJSON.encode(["displayID": display.id, "controls": json]))
+            default: // "caps"
+                if let caps = displayController.readDDCCapabilities(for: display) {
+                    return (200, HTTPJSON.encode(["displayID": display.id, "raw": caps.raw, "mccsVersion": caps.mccsVersion, "vcp": caps.vcpCodes.sorted().map { String(format: "0x%02X", $0) }]))
                 }
+                return (404, HTTPJSON.error("no capabilities for display"))
+            }
+        case .displayAction(let id, let action):
+            guard let display = displayController.display(withID: id) else {
+                return (404, HTTPJSON.error("display not found"))
+            }
+            switch action {
+            case .contrast(let value):
+                guard displayController.setContrast(value, on: display) else { return (500, HTTPJSON.error("write not accepted")) }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .brightness(let value):
+                guard displayController.setBrightness(value, on: display) else { return (500, HTTPJSON.error("no control path for display")) }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .volume(let value):
+                guard displayController.setVolume(value, on: display) else { return (500, HTTPJSON.error("write not accepted")) }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .mute(let muted):
+                guard displayController.setMuted(muted, on: display) else { return (500, HTTPJSON.error("write not accepted")) }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .input(let source):
+                guard displayController.setInputSource(source, on: display) else { return (500, HTTPJSON.error("write not accepted")) }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .mode(let width, let height, let hz):
+                guard let mode = HTTPJSON.bestMode(matchingWidth: width, height: height, hz: hz, in: display) else {
+                    return (404, HTTPJSON.error("no matching mode"))
+                }
+                displayController.applyMode(mode, to: display)
+                return (200, HTTPJSON.encode(["ok": true, "mode": mode.key]))
+            case .xdr(let nits):
+                guard displayController.setXDRUpscaleTarget(nits, on: display) else { return (500, HTTPJSON.error("XDR upscaling failed")) }
                 return (200, HTTPJSON.encode(["ok": true, "nits": nits]))
-            }
-            if let enabled = object["enabled"] as? Bool, !enabled {
-                guard displayController.disableXDRUpscaling(on: display) else {
-                    return (500, HTTPJSON.error("failed to disable XDR upscaling"))
-                }
+            case .xdrDisable:
+                guard displayController.disableXDRUpscaling(on: display) else { return (500, HTTPJSON.error("failed to disable XDR upscaling")) }
                 return (200, HTTPJSON.encode(["ok": true]))
             }
-            return (400, HTTPJSON.error("expected {\"nits\": n} or {\"enabled\": false}"))
-        default:
-            return (404, HTTPJSON.error("unknown action '\(action)'"))
-        }
-    }
-
-    /// POST /api/virtual/create, POST /api/virtual/destroy.
-    @MainActor private func routeVirtual(method: String, components: [String], body: String?) -> (Int, String) {
-        if components.count == 2, method == "GET" {
+        case .virtualList:
             let controller = VirtualScreenController.shared
             let screens = controller.screens.map { ["id": $0.id, "name": $0.config.name, "displayID": $0.displayID] }
             let configs = controller.configs.map { ["id": $0.id, "name": $0.name] }
             return (200, HTTPJSON.encode(["screens": screens, "configs": configs]))
-        }
-        guard components.count == 3, method == "POST" else {
-            return (404, HTTPJSON.error("not found"))
-        }
-        guard let body, let object = HTTPJSON.parse(body) else {
-            return (400, HTTPJSON.error("invalid JSON body"))
-        }
-        let controller = VirtualScreenController.shared
-        switch components[2] {
-        case "create":
-            guard let name = object["name"] as? String, !name.isEmpty,
-                  let width = (object["width"] as? NSNumber).flatMap({ UInt32(exactly: $0.uint32Value) }), width > 0,
-                  let height = (object["height"] as? NSNumber).flatMap({ UInt32(exactly: $0.uint32Value) }), height > 0 else {
-                return (400, HTTPJSON.error("name, width, and height are required"))
-            }
+        case .virtualCreate(let request):
+            let controller = VirtualScreenController.shared
             guard controller.isAvailable else {
                 return (500, HTTPJSON.error("virtual displays unavailable on this macOS"))
             }
-            let hz = (object["hz"] as? NSNumber)?.doubleValue ?? 60
             let config = VirtualScreenConfig(
-                name: name,
-                width: width,
-                height: height,
-                refreshRate: hz,
-                isHDR: false,
+                name: request.name,
+                width: request.width,
+                height: request.height,
+                refreshRate: request.hz,
+                isHDR: request.isHDR,
                 autoConnect: true
             )
             guard controller.create(config) else {
@@ -414,121 +323,13 @@ final class AppCore {
             }
             let displayID = controller.displayID(for: config.id) ?? 0
             return (201, HTTPJSON.encode(["ok": true, "id": config.id, "displayID": displayID]))
-        case "destroy":
-            guard let id = object["id"] as? String, !id.isEmpty else {
-                return (400, HTTPJSON.error("id is required"))
-            }
+        case .virtualDestroy(let id):
+            let controller = VirtualScreenController.shared
             guard controller.destroy(id: id) else {
                 return (404, HTTPJSON.error("no virtual display '\(id)'"))
             }
             return (200, HTTPJSON.encode(["ok": true]))
-        default:
-            return (404, HTTPJSON.error("unknown action '\(components[2])'"))
         }
-    }
-}
-
-// MARK: - HTTP JSON helpers
-
-/// JSON encoding + display serialization for the HTTP control API. A plain
-/// (non-isolated) enum so the HTTPServer's off-main queue can use it directly.
-private enum HTTPJSON {
-    /// Compact JSON string for an HTTP response.
-    static func encode(_ object: Any) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else {
-            return #"{"error":"encoding failed"}"#
-        }
-        return String(data: data, encoding: .utf8) ?? #"{"error":"encoding failed"}"#
-    }
-
-    static func error(_ message: String) -> String {
-        encode(["error": message])
-    }
-
-    static func parse(_ body: String) -> [String: Any]? {
-        guard let data = body.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        return object
-    }
-
-    /// Parse a display id: plain decimal, or 0x-prefixed hex.
-    static func parseDisplayID(_ string: String) -> CGDirectDisplayID? {
-        if string.hasPrefix("0x") || string.hasPrefix("0X") {
-            return CGDirectDisplayID(string.dropFirst(2), radix: 16)
-        }
-        return CGDirectDisplayID(string)
-    }
-
-    /// JSON object for one display (list + info endpoints).
-    static func display(_ display: Display) -> [String: Any] {
-        var info: [String: Any] = [
-            "id": display.id,
-            "name": display.name,
-            "builtin": display.isBuiltin,
-            "virtual": display.isVirtual,
-            "online": display.isOnline,
-            "active": display.isActive,
-            "ddc": display.ddcAvailable,
-            "appleBrightness": display.appleBrightnessAvailable,
-            "bounds": [
-                "x": display.bounds.origin.x,
-                "y": display.bounds.origin.y,
-                "width": display.bounds.width,
-                "height": display.bounds.height,
-            ],
-        ]
-        if let brightness = display.brightness {
-            info["brightness"] = brightness
-        }
-        if let mode = display.currentMode {
-            info["currentMode"] = mode.key
-        }
-        info["xdrCapable"] = display.isXDRCapable
-        info["xdrUpscaled"] = display.isXDRUpscaled
-        if let target = display.xdrUpscaleTargetNits {
-            info["xdrTargetNits"] = target
-        }
-        return info
-    }
-
-    static func mode(_ mode: DisplayMode) -> [String: Any] {
-        [
-            "key": mode.key,
-            "width": mode.pixelsWide,
-            "height": mode.pixelsHigh,
-            "hz": mode.refreshRate,
-            "hidpi": mode.isHiDPI,
-            "safe": mode.isSafe,
-        ]
-    }
-
-    /// Best matching mode for (width, height, hz): same physical pixels,
-    /// nearest refresh rate, HiDPI preferred, then safe. `hz` nil keeps the
-    /// display's current refresh rate when possible.
-    static func bestMode(matchingWidth width: Int32, height: Int32, hz: Double?, in display: Display) -> DisplayMode? {
-        let candidates = display.modes.filter { $0.pixelsWide == width && $0.pixelsHigh == height }
-        guard !candidates.isEmpty else { return nil }
-        if let hz {
-            return candidates.sorted { a, b in
-                let distanceA = abs(a.refreshRate - hz)
-                let distanceB = abs(b.refreshRate - hz)
-                if distanceA != distanceB { return distanceA < distanceB }
-                if a.isHiDPI != b.isHiDPI { return a.isHiDPI }
-                if a.refreshRate != b.refreshRate { return a.refreshRate > b.refreshRate }
-                return a.isSafe && !b.isSafe
-            }.first
-        }
-        if let current = display.currentMode,
-           let sameRate = candidates.first(where: { $0.refreshRate == current.refreshRate }) {
-            return sameRate
-        }
-        return candidates.sorted { a, b in
-            if a.isHiDPI != b.isHiDPI { return a.isHiDPI }
-            if a.refreshRate != b.refreshRate { return a.refreshRate > b.refreshRate }
-            return a.isSafe && !b.isSafe
-        }.first
     }
 }
 
