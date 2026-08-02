@@ -1,4 +1,5 @@
 import FBDCore
+import FBDCLIParser
 import Foundation
 
 /// Routed command implementations: the command runs against the app's HTTP API

@@ -1,43 +1,7 @@
+import FBDCLIParser
 import FBDCore
 import Foundation
 import os
-
-// MARK: - Command surface
-
-/// Commands accepted by fbdcli. Raw values match the CLI verbatim.
-enum Command: String {
-    case list
-    case info
-    case brightness
-    case contrast
-    case volume
-    case mute
-    case input
-    case caps
-    case modes
-    case setMode = "set-mode"
-    case ddcTest = "ddc-test"
-    case xdr
-    case preset
-    case hdr
-    case virtual
-    case disable
-    case enable
-    case layout
-    case group
-    case edid
-    case profile
-    case underscan
-    case protect
-    case http
-    case authToken = "auth-token"
-    case pip
-    case osd
-    case nightshift
-    case truetone
-    case tv
-    case help
-}
 
 /// Standalone DDC probe used for read-only VCP/capabilities access that
 /// DisplayController does not expose (contrast/volume/mute/input reads,
@@ -128,39 +92,31 @@ Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
 /// Parse arguments and dispatch to the requested command.
 @MainActor
 func run(arguments: [String]) -> Int32 {
-    var args = Array(arguments.dropFirst())
-
-    // `--direct` forces direct-controller execution even when the app is up
-    // (diagnostics); strip it anywhere before parsing the command.
-    let direct = args.contains("--direct")
-    args.removeAll { $0 == "--direct" }
-
-    // No arguments / bare help → usage, success.
-    guard let rawCommand = args.first else {
+    // Parse and dispatch. Parsing lives in FBDCLI (unit-tested); dispatch
+    // and command bodies stay here.
+    switch CLICommandLine.parse(Array(arguments.dropFirst())) {
+    case .usage:
         print(usageText)
         return 0
-    }
-    guard let command = Command(rawValue: rawCommand) else {
+    case .help:
+        print(usageText)
+        return 0
+    case .unknown(let rawCommand):
         print("fbdcli: unknown command '\(rawCommand)'\n")
         print(usageText)
         return 1
-    }
-    if command == .help {
-        print(usageText)
-        return 0
-    }
-
-    // Route over the app's HTTP API when it is running (single-driver I2C).
-    if !direct, HTTPRouting.routable.contains(command) {
-        if let exitCode = HTTPRouting.route(command, args: args) {
-            return exitCode
+    case .command(let command, let args, let direct):
+        // Route over the app's HTTP API when it is running (single-driver I2C).
+        if !direct, HTTPRouting.routable.contains(command) {
+            if let exitCode = HTTPRouting.route(command, args: args) {
+                return exitCode
+            }
+            print("fbdcli: app HTTP API not available — using direct controllers")
         }
-        print("fbdcli: app HTTP API not available — using direct controllers")
-    }
 
-    let controller = DisplayController.shared
-    controller.start()
-    let rest = Array(args.dropFirst())
+        let controller = DisplayController.shared
+        controller.start()
+        let rest = Array(args.dropFirst())
 
     switch command {
     case .list:
@@ -240,8 +196,9 @@ func run(arguments: [String]) -> Int32 {
     case .tv:
         return cmdTV(args: rest)
     case .help:
-        print(usageText)
-        return 0
+            print(usageText)
+            return 0
+        }
     }
 }
 

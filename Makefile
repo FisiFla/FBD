@@ -35,6 +35,7 @@ app:
 	if [ -z "$$BIN" ] || [ ! -f "$$BIN" ]; then echo "error: built binary not found"; exit 1; fi; \
 	cp "$$BIN" $(APP_BUNDLE)/Contents/MacOS/FBD
 	@cp Sources/FBD/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
+	@cp Sources/FBD/Resources/FBD.icns $(APP_BUNDLE)/Contents/Resources/FBD.icns
 	# Sparkle: copy the framework (SPM binary distribution) into the bundle.
 	@if [ -d .build/apple/Products/Release/Sparkle.framework ]; then \
 		mkdir -p $(APP_BUNDLE)/Contents/Frameworks; \

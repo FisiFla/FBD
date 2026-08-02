@@ -44,7 +44,12 @@ let package = Package(
             ]
         ),
         // Command-line interface.
-        .executableTarget(name: "fbdcli", dependencies: ["FBDCore"]),
+        .executableTarget(name: "fbdcli", dependencies: ["FBDCore", "FBDCLIParser"]),
+        // CLI command surface + argument parser (library so it is testable).
+        // Directory is `fbdcli-parser`: a case-variant of `fbdcli` would
+        // alias on case-insensitive filesystems (macOS/APFS).
+        .target(name: "FBDCLIParser", dependencies: ["FBDCore"], path: "Sources/fbdcli-parser"),
+        .testTarget(name: "FBDCLIParserTests", dependencies: ["FBDCLIParser"]),
         // App Intents / Shortcuts (Tier 5).
         .target(name: "FBDIntents", dependencies: ["FBDCore"]),
         .testTarget(name: "FBDCoreTests", dependencies: ["FBDCore"]),
