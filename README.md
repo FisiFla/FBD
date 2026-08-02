@@ -11,7 +11,8 @@ Updates via Sparkle (optional).**
 
 > ⚠️ Early development. Tier 1 (core display control + DDC) is in progress.
 > Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-> Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md)
+> Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
+> Releasing: [RELEASING.md](RELEASING.md)
 
 ## Feature matrix by macOS version
 
