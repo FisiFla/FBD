@@ -5,9 +5,14 @@
 ```
 FBDCore        library — all logic (models, controllers, private-API wrappers, DDC protocol)
 FBD            executable — LSUIElement menu-bar app (AppKit + SwiftUI)
-fbdcli         executable — zero-dependency CLI
+fbdcli         executable — CLI (command bodies + HTTP routing)
+FBDCLIParser   library — CLI command vocabulary + all argument/spec parsers
+               (unit-tested; fbdcli delegates to it)
+FBDIntents     library — Shortcuts actions (AppIntents; exposed via the app's
+               FBDAppIntentsBridge)
 CPrivateAPI    C target — private-framework declarations + CGS struct layout (single header)
-FBDCoreTests   unit tests
+FBDCoreTests   unit tests (FBDCore)
+FBDCLIParserTests  unit tests (parsers)
 ```
 
 `make app` assembles `build/FBD.app` (universal binary, Info.plist with LSUIElement + `fbd://` scheme, ad-hoc signed).
