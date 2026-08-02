@@ -11,12 +11,15 @@ final class AppCore {
 
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
     private var observers: [NSObjectProtocol] = []
+    /// Keeps the SIGTERM dispatch source alive for the app's lifetime.
+    private var sigtermSource: DispatchSourceSignal?
 
     init() {
         statusItemController = StatusItemController()
     }
 
     func start() {
+        installSigtermHandler()
         // Register first: displayController.start() posts .fbdDisplaysChanged
         // during its initial refresh — the status item must catch it so the
         // first popover shows the populated display list.
@@ -95,6 +98,19 @@ final class AppCore {
     private var osdDebounceWorkItem: DispatchWorkItem?
     /// Display that changed last (from .fbdDisplayUpdated userInfo).
     private var pendingOSDDisplayID: CGDirectDisplayID?
+
+    /// Route SIGTERM (`kill`, session end, tools) through NSApp.terminate so
+    /// AppKit cleanup runs — most importantly the willTerminate observers
+    /// (EDID factory restore on quit when enabled).
+    private func installSigtermHandler() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler {
+            NSApp.terminate(nil)
+        }
+        source.resume()
+        sigtermSource = source
+    }
 
     // MARK: - URL scheme (fbd://)
 
