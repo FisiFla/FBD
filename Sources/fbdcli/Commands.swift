@@ -1387,7 +1387,7 @@ private let cliPip = PipStreamController()
 @MainActor
 func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
     if args.first == "stop" {
-        PipStreamController().stop()
+        cliPip.stop()
         print("pip stopped")
         return 0
     }
@@ -1398,25 +1398,26 @@ func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
         print("fbdcli: pip: \(failure.message)")
         return 1
     case .success(let values):
-        let pip = PipStreamController()
+        // One shared controller instance for start and stop — a local
+        // throwaway instance could never be stopped by `pip stop`.
         let filter = VideoFilter(brightness: values[0], contrast: values[1], saturation: values[2])
-    guard pip.startPiP(displayID: display.id, filter: filter) else {
-        print("fbdcli: pip: failed to start PiP for display \(display.id) (grant Screen Recording to FBD if prompted)")
-        return 2
-    }
-    // isActive flips true asynchronously once the capture stream starts; give
-    // it a few seconds before declaring failure.
-    let startDeadline = Date().addingTimeInterval(3)
-    while !pip.isActive, Date() < startDeadline {
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-    }
-    guard pip.isActive else {
-        print("fbdcli: pip: stream failed to start for display \(display.id) (screen-recording permission?)")
-        return 2
-    }
-    print("pip streaming display \(display.id) (brightness \(values[0]), contrast \(values[1]), saturation \(values[2]))")
-    print("press any key to stop")
-        while pip.isActive, !stdinHasInput() {
+        guard cliPip.startPiP(displayID: display.id, filter: filter) else {
+            print("fbdcli: pip: failed to start PiP for display \(display.id) (grant Screen Recording to FBD if prompted)")
+            return 2
+        }
+        // isActive flips true asynchronously once the capture stream starts;
+        // give it a few seconds before declaring failure.
+        let startDeadline = Date().addingTimeInterval(3)
+        while !cliPip.isActive, Date() < startDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        guard cliPip.isActive else {
+            print("fbdcli: pip: stream failed to start for display \(display.id) (screen-recording permission?)")
+            return 2
+        }
+        print("pip streaming display \(display.id) (brightness \(values[0]), contrast \(values[1]), saturation \(values[2]))")
+        print("press any key to stop")
+        while cliPip.isActive, !stdinHasInput() {
             RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         }
         cliPip.stop()
