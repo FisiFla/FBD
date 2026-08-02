@@ -70,6 +70,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         button.target = self
         button.action = #selector(togglePanel(_:))
         button.toolTip = "FBD"
+        button.setAccessibilityLabel("FBD — display control")
     }
 
     /// The SwiftUI root refreshes itself from @Published/notification-driven

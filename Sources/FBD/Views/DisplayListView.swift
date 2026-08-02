@@ -45,6 +45,7 @@ struct DisplayListView: View {
                         } label: {
                             Image(systemName: "gearshape")
                         }
+                        .accessibilityLabel("Settings")
                         .help("Settings")
                     }
                 }
@@ -120,6 +121,7 @@ struct DisplayListView: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Close FBD panel")
             .help("Close")
         }
         .padding(.horizontal, 12)
