@@ -22,6 +22,13 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   - Settings regrouped into icon-labeled sections; HTTP note updated
     (applies immediately, no restart); About section with app tile.
   - Reduced Motion respected throughout.
+  - **Top-bar overlap fixes** (feedback pass): a reserved 28pt frosted
+    titlebar strip so content never slides under the traffic lights; the
+    main header is now a fixed elevated bar (material + hairline divider,
+    gear moved in from the toolbar) instead of floating; Settings got its
+    own fixed header bar with a **Back** button (there was no way back
+    before) and the panel grows to 460×860 on settings open (top-anchored)
+    and shrinks back on Back.
 
 ## [1.0.0] — 2026-08-02
 

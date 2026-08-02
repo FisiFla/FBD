@@ -62,6 +62,39 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             name: .fbdPanelCloseRequested,
             object: nil
         )
+        // Settings page is taller than the default panel; grow the window
+        // when it opens and restore the default size on back.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsOpened(_:)),
+            name: .fbdOpenSettings,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsClosed(_:)),
+            name: .fbdSettingsClosed,
+            object: nil
+        )
+    }
+
+    /// The settings page needs more vertical room than the main page.
+    private static let settingsHeight: CGFloat = 860
+
+    @objc private func settingsOpened(_ sender: Any?) {
+        resizePanel(to: NSSize(width: panel.frame.width, height: max(Self.settingsHeight, panel.frame.height)))
+    }
+
+    @objc private func settingsClosed(_ sender: Any?) {
+        resizePanel(to: NSSize(width: panel.frame.width, height: 650))
+    }
+
+    private func resizePanel(to size: NSSize) {
+        // Keep the top edge anchored: capture it first, then grow, then
+        // restore — otherwise the panel grows upward off-screen.
+        let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
+        panel.setContentSize(size)
+        panel.setFrameTopLeftPoint(topLeft)
     }
 
     /// Configure the status item (called once from AppCore.start()).

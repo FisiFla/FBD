@@ -397,6 +397,8 @@ final class AppCore {
 extension Notification.Name {
     /// Posted when the settings panel should be shown (fbd://open).
     static let fbdOpenSettings = Notification.Name("FBDOpenSettings")
+    /// Posted by the Settings back button when leaving the settings page.
+    static let fbdSettingsClosed = Notification.Name("FBDSettingsClosed")
     static let fbdPanelCloseRequested = Notification.Name("FBDPanelCloseRequested")
     /// Posted once at startup when DDC is unavailable under Rosetta.
     static let fbdRosettaWarningActive = Notification.Name("FBDRosettaWarningActive")

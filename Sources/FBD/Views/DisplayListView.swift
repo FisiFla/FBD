@@ -31,26 +31,28 @@ struct DisplayListView: View {
     // Display group creation form.
     @State private var newGroupName = ""
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        // NavigationStack provides the Settings push with a natural back
-        // button; the window (NSPanel) owns sizing, so no fixed frame here.
-        NavigationStack {
-            mainContent
-                .navigationTitle("FBD")
-                .navigationDestination(isPresented: $showingSettings) {
-                    SettingsView()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            showingSettings = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                        .accessibilityLabel("Settings")
-                        .help("Settings")
+        ZStack(alignment: .top) {
+            // Reserved titlebar strip: with .fullSizeContentView the traffic
+            // lights float over the top 28pt — content must start below it.
+            Color.clear
+                .frame(height: FBDTheme.titlebarHeight)
+
+            VStack(spacing: 0) {
+                headerBar
+                Group {
+                    if showingSettings {
+                        SettingsView()
+                            .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                    } else {
+                        mainContent
+                            .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
                     }
                 }
+            }
+            .padding(.top, FBDTheme.titlebarHeight)
         }
         // Frosted glass behind the content — the panel window is transparent
         // (see StatusItemController) so this NSVisualEffectView provides the
@@ -65,7 +67,14 @@ struct DisplayListView: View {
             virtualScreensTick += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .fbdOpenSettings)) { _ in
-            showingSettings = true
+            withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
+                showingSettings = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .fbdSettingsClosed)) { _ in
+            withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
+                showingSettings = false
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .fbdRosettaWarningActive)) { _ in
             rosettaWarningVisible = true
@@ -75,6 +84,12 @@ struct DisplayListView: View {
         }
     }
 
+    /// Open settings: the window resize is driven by StatusItemController,
+    /// which observes .fbdOpenSettings.
+    private func openSettings() {
+        NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
+    }
+
     // MARK: - Content
 
     /// The whole popover scrolls vertically; display rows are plain VStack
@@ -82,7 +97,6 @@ struct DisplayListView: View {
     private var mainContent: some View {
         ScrollView {
             VStack(spacing: 8) {
-                header
                 if rosettaWarningVisible {
                     RosettaWarningView()
                         .padding(.horizontal, 12)
@@ -110,15 +124,17 @@ struct DisplayListView: View {
         .scrollIndicators(.hidden)
     }
 
-    private var header: some View {
+    /// Fixed top bar (does not scroll): brand + actions, elevated material
+    /// background and a hairline divider — anchored, not floating.
+    private var headerBar: some View {
         HStack(spacing: 10) {
             // Brand tile.
             RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
                 .fill(Color.accentColor.gradient)
-                .frame(width: 30, height: 30)
+                .frame(width: 26, height: 26)
                 .overlay(
                     Image(systemName: "display")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                 )
                 .accessibilityHidden(true)
@@ -132,6 +148,17 @@ struct DisplayListView: View {
             }
 
             Spacer()
+
+            Button {
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Settings")
+            .help("Settings")
 
             // In-content close for users who expect a button in the window
             // body; the title bar also has the standard close (×).
@@ -147,7 +174,12 @@ struct DisplayListView: View {
             .help("Close")
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.5)
+        }
     }
 
     private var emptyState: some View {

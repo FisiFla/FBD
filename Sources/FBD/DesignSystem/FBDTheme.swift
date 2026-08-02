@@ -22,6 +22,11 @@ enum FBDTheme {
     /// Inset panels inside a card (DDC controls).
     static let radiusInset: CGFloat = 9
 
+    /// Reserved height for the transparent titlebar strip (traffic lights).
+    /// The panel uses .fullSizeContentView, so SwiftUI must reserve this
+    /// itself or content slides under the titlebar.
+    static let titlebarHeight: CGFloat = 28
+
     // MARK: Motion
 
     static let animationFast = Animation.easeOut(duration: 0.12)

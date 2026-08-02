@@ -17,7 +17,9 @@ struct SettingsView: View {
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
 
     var body: some View {
-        Form {
+        VStack(spacing: 0) {
+            settingsHeaderBar
+            Form {
             Section {
                 Toggle("Launch at Login", isOn: launchAtLoginBinding)
                 Toggle("Show Rosetta warning", isOn: rosettaWarningBinding)
@@ -195,6 +197,35 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .fbdHotkeysUnavailable)) { _ in
             hotkeysUnavailable = true
+        }
+        }
+    }
+
+    /// Fixed settings header: back button + title, matching the main page's
+    /// top bar (material + hairline divider).
+    private var settingsHeaderBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                NotificationCenter.default.post(name: .fbdSettingsClosed, object: nil)
+            } label: {
+                Label("FBD", systemImage: "chevron.left")
+                    .font(.callout)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Back to FBD")
+            .help("Back")
+
+            Text("Settings")
+                .font(.headline)
+
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.5)
         }
     }
 
