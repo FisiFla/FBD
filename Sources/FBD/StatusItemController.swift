@@ -12,6 +12,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private let panel: NSPanel
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "StatusItem")
     private var escapeMonitor: Any?
+    /// Right-click context menu (left-click toggles the panel).
+    private var contextMenu: NSMenu?
     /// Whether the panel has been shown at least once this session.
     private var hasShownPanel = false
     /// Whether an autosaved frame existed at launch (restored by
@@ -71,6 +73,20 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         button.action = #selector(togglePanel(_:))
         button.toolTip = "FBD"
         button.setAccessibilityLabel("FBD — display control")
+        // Right-click opens a context menu; left-click toggles the panel.
+        let menu = NSMenu()
+        let showItem = NSMenuItem(title: "Show FBD", action: #selector(togglePanel(_:)), keyEquivalent: "")
+        showItem.target = self
+        menu.addItem(showItem)
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        menu.addItem(.separator())
+        let quitItem = NSMenuItem(title: "Quit FBD", action: #selector(quitApp(_:)), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        contextMenu = menu
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     /// The SwiftUI root refreshes itself from @Published/notification-driven
@@ -119,11 +135,34 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func togglePanel(_ sender: Any?) {
+        // Right-click: show the context menu instead of toggling.
+        if let event = NSApp.currentEvent, event.type == .rightMouseUp {
+            showContextMenu()
+            return
+        }
         if panel.isVisible {
             closePanel()
         } else {
             showPanel()
         }
+    }
+
+    @objc private func openSettings(_ sender: Any?) {
+        showPanel()
+        NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
+    }
+
+    @objc private func quitApp(_ sender: Any?) {
+        NSApp.terminate(nil)
+    }
+
+    private func showContextMenu() {
+        guard let button = statusItem.button, let contextMenu else { return }
+        contextMenu.popUp(
+            positioning: nil,
+            at: NSPoint(x: 0, y: button.bounds.height + 4),
+            in: button
+        )
     }
 
     /// Escape closes the panel. A local monitor is used because the panel is
