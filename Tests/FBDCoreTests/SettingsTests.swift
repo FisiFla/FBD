@@ -114,7 +114,12 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(summary.contains("ddcCooldownMilliseconds ="), "expected settings keys in the dump")
         XCTAssertTrue(summary.contains("httpAPIToken = "), "token key must be present")
         XCTAssertFalse(summary.contains(token), "full token must never appear")
-        XCTAssertFalse(summary.contains("tvLGClientKey = \(Settings.tvLGClientKey)"), "LG key must be masked")
+        // The LG pairing key must be masked; guard the empty case (an empty
+        // value is a prefix of the masked entry, so only check non-empty).
+        if !Settings.tvLGClientKey.isEmpty {
+            XCTAssertFalse(summary.contains("tvLGClientKey = \(Settings.tvLGClientKey)"), "LG key must be masked")
+        }
+        XCTAssertTrue(summary.contains("tvLGClientKey = "), "LG key entry must be present")
         XCTAssertTrue(summary.contains("ddcReadRetries = \(Settings.ddcReadRetries)"))
     }
 
