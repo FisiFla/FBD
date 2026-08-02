@@ -1,9 +1,9 @@
 # Changelog
 
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versioning: semver; 0.x until the first signed/notarized release.
+Versioning: semver from 1.0.0 (the first release with an update feed).
 
-## [Unreleased]
+## [1.0.0] — 2026-08-02
 
 ### Added
 - AppIntents bridge (`FBDAppIntentsBridge`) so the Shortcuts actions from the

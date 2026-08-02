@@ -52,7 +52,7 @@ run: app
 # Bump the release version (RELEASING.md step 1). Updates
 # CFBundleShortVersionString (and CFBundleVersion unless BUILD is given, in
 # which case it is incremented). Usage:
-#   make bump-version VERSION=0.2.0        # build +1
+#   make bump-version VERSION=1.0.0        # build +1
 #   make bump-version VERSION=0.2.0 BUILD=2
 bump-version:
 	@if [ -z "$(VERSION)" ]; then echo "usage: make bump-version VERSION=x.y.z [BUILD=n]"; exit 1; fi; \

@@ -1,0 +1,28 @@
+<?xml version="1.0" standalone="yes"?>
+<!--
+  FBD update feed. The 1.0.0 entry was generated from an unsigned archive
+  (generate_appcast refuses ad-hoc-signed apps). The sparkle:edSignature is
+  computed over the archive, so REGENERATE this feed from the final
+  Developer-ID-signed FBD.zip after the v1.0.0 release publishes:
+
+    ./.sparkle/generate_appcast \
+      --ed-key-file .sparkle/sparkle_private_key \
+      --download-url-prefix https://github.com/FisiFla/FBD/releases/download/v1.0.0/ \
+      <dir-with-signed-FBD.zip>
+  then commit the updated appcast.xml. Until then the feed is valid XML but
+  the signature will not match the released archive.
+-->
+
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>FBD</title>
+        <item>
+            <title>1.0.0</title>
+            <pubDate>Sun, 02 Aug 2026 14:04:18 +0200</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.2</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/FisiFla/FBD/releases/download/v1.0.0/FBD.zip" length="2812030" type="application/octet-stream" sparkle:edSignature="kKB6eIMHzw2z7W2xzKdWeoR9twg6kEbVTB2P2SlORrXj0WYFC9FDrqbb9i7qje9SO7UZIaq9wYxjo6OuCF+bAA=="/>
+        </item>
+    </channel>
+</rss>

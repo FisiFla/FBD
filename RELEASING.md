@@ -8,30 +8,38 @@ external secrets needed.
 
 1. **Apple Developer ID Application certificate** in your keychain
    (`security find-identity -p codesigning` should list it).
-2. **Sparkle signing keys** (EdDSA) — generate once, keep private key safe:
-   ```sh
-   # From the Sparkle tools directory (or the Sparkle.xcframework's bin):
-   #   https://github.com/sparkle-project/Sparkle/tree/master/bin
-   ./generate_keys  # prints Ed25519 private key + public key
-   ```
-   - Public key → `SUPublicEDKey` in Info.plist.
-   - Private key → used by `sign_update` when publishing an appcast.
-3. **Appcast host** — any static host (GitHub Pages, S3, your NAS).
-   `SUFeedURL` in `Sources/FBD/Resources/Info.plist` currently empty = updates
-   off. Set it to the appcast URL when the first release is out.
+2. **Sparkle signing keys** (EdDSA) — already generated for this project
+   (1.0.0):
+   - Public key → `SUPublicEDKey` in `Sources/FBD/Resources/Info.plist`.
+   - Private key → `.sparkle/sparkle_private_key` (gitignored, chmod 600).
+     **Keep it safe** — every future appcast must be signed with it. Back it
+     up off-machine. If you ever need to regenerate: Sparkle's
+     `generate_keys` (Keychain-based) or `openssl genpkey -algorithm ED25519`
+     → base64 of the raw 32-byte seed (see `.sparkle/` for the format).
+   - The Sparkle tools live in `.sparkle/` (generate_appcast, generate_keys,
+     sign_update — from the official Sparkle 2.9.4 release).
+3. **Appcast host** — the appcast is committed to the repo root and the feed
+   URL in `Sources/FBD/Resources/Info.plist` points at
+   `https://raw.githubusercontent.com/FisiFla/FBD/main/appcast.xml`.
 
 ## Release checklist
 
 ### 1. Version bump
 
 ```sh
-# Info.plist: CFBundleShortVersionString (e.g. 0.2.0), CFBundleVersion (build)
-# Update CHANGELOG.md: move [Unreleased] -> [0.2.0] - YYYY-MM-DD
-# Commit: "Release 0.2.0"
-git tag 0.2.0 && git push origin 0.2.0
+make bump-version VERSION=1.1.0        # Info.plist: version + build+1
+# Update CHANGELOG.md: move [Unreleased] -> [1.1.0] - YYYY-MM-DD
+# Commit: "Release 1.1.0"
+git tag v1.1.0 && git push origin v1.1.0   # triggers .github/workflows/release.yml
 ```
 
 ### 2. Build + sign + notarize (local or CI)
+
+The release workflow does this automatically **if the five secrets are set**
+(APPLE_CERT_BASE64, APPLE_CERT_PASSWORD, APPLE_ID,
+APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID). Without them it uploads an
+unsigned artifact instead — Gatekeeper will block that download, so add the
+secrets before tagging a real release. Manual equivalent:
 
 ```sh
 make app                                  # universal build/FBD.app (ad-hoc)
@@ -50,25 +58,34 @@ spctl --assess --type execute build/FBD.app   # "accepted" after notarization
 Notarization (Apple ID with app-specific password in `~/.netrc` or env):
 
 ```sh
-ditto -c -k --keepParent build/FBD.app FBD-0.2.0.zip
-xcrun notarytool submit FBD-0.2.0.zip \
+ditto -c -k --keepParent build/FBD.app build/FBD.zip   # name MUST be FBD.zip (release.yml asset)
+xcrun notarytool submit build/FBD.zip \
   --keychain-profile "notarytool" --wait
 xcrun stapler staple build/FBD.app
 ```
 
 ### 3. Create the GitHub Release
 
-- Upload `FBD-0.2.0.zip` (stapled) + `FBD.dmg` if you make one.
-- Paste the CHANGELOG entry.
+`release.yml` creates it from the CHANGELOG section (tag = `v1.0.0` →
+`## [1.0.0]`). It uploads `build/FBD.zip` (stapled). Add a `.dmg` too if you
+make one.
 
 ### 4. Publish the Sparkle appcast
 
 ```sh
-# From Sparkle bin/: generate_appcast <dir-with-zips>
-./generate_appcast --account "Your Name" \
-  --ed-key-file sparkle_private_key.pem ~/path/to/releases/
-# Point SUFeedURL at the generated appcast.xml; commit + push.
+# After the release exists (asset URL must be live), regenerate the feed:
+./.sparkle/generate_appcast \
+  --ed-key-file .sparkle/sparkle_private_key \
+  --download-url-prefix https://github.com/FisiFla/FBD/releases/download/<TAG>/ \
+  <dir-with-FBD.zip>
+cp <dir>/appcast.xml .   # feed URL points at the repo-root appcast.xml
+git add appcast.xml && git commit -m "appcast: add <VERSION>" && git push
 ```
+The initial 1.0.0 appcast is already generated and committed (from an
+unsigned archive — generate_appcast refuses ad-hoc-signed apps by design).
+**It must be regenerated from the final signed FBD.zip after the release
+publishes** — the `sparkle:edSignature` is computed over the exact archive,
+so a feed signed from a different zip will fail Sparkle's verification.
 
 ## CI note
 

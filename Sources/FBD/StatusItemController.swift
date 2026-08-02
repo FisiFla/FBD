@@ -1,4 +1,5 @@
 import AppKit
+import FBDCore
 import os
 import SwiftUI
 
@@ -81,6 +82,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates(_:)), keyEquivalent: "u")
+        updateItem.target = self
+        menu.addItem(updateItem)
         menu.addItem(.separator())
         let quitItem = NSMenuItem(title: "Quit FBD", action: #selector(quitApp(_:)), keyEquivalent: "q")
         quitItem.target = self
@@ -150,6 +154,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func openSettings(_ sender: Any?) {
         showPanel()
         NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
+    }
+
+    @objc private func checkForUpdates(_ sender: Any?) {
+        UpdaterController.shared.checkForUpdates()
     }
 
     @objc private func quitApp(_ sender: Any?) {
