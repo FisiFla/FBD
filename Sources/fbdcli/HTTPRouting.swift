@@ -391,11 +391,15 @@ enum HTTPRouting {
                 print("fbdcli: virtual destroy: expected <id-or-name>")
                 return 1
             }
-            guard postOK("/api/virtual/destroy", ["id": args[1]]) else {
-                print("fbdcli: virtual destroy: no virtual display '\(args[1])' via app")
+            // The app matches by persisted config id only — resolve a name
+            // through the shared controller's configs, like the direct path.
+            let idOrName = args[1]
+            let id = resolveVirtualConfig(VirtualScreenController.shared, idOrName)?.id ?? idOrName
+            guard postOK("/api/virtual/destroy", ["id": id]) else {
+                print("fbdcli: virtual destroy: no virtual display '\(idOrName)' via app")
                 return 2
             }
-            print("virtual screen '\(args[1])' destroyed (via app)")
+            print("virtual screen '\(idOrName)' destroyed (via app)")
             return 0
         default:
             print("fbdcli: virtual: unknown action '\(action)' (list|create|destroy)")

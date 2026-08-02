@@ -112,7 +112,14 @@ public final class Display: ObservableObject, Identifiable {
         appleBrightnessAvailable = available
     }
 
-    public var isVirtual: Bool { id == 0xF0F0 || id == 0x896 || vendorNumber == 0x0100 && modelNumber == 0x0000 }
+    /// True for displays FBD created as virtual screens (authoritative
+    /// registry) or displays matching the legacy magic-ID fingerprints
+    /// (Sidecar/AirPlay/other tools: 0xF0F0 / 0x896 / vendor 0x0100+model 0).
+    public var isVirtual: Bool {
+        VirtualDisplayRegistry.shared.contains(id)
+            || id == 0xF0F0 || id == 0x896
+            || (vendorNumber == 0x0100 && modelNumber == 0x0000)
+    }
 
     /// Stable identity used for per-display persisted settings (DDC features, brightness).
     public var identityKey: String { "\(vendorNumber)-\(modelNumber)-\(serialNumber)" }

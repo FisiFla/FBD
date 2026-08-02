@@ -112,6 +112,11 @@ public enum Settings {
     // MARK: Integrations (Tier 5)
 
     /// Enable the local HTTP control API.
+    /// Display IDs currently registered as FBD-created virtual screens
+    /// (persisted so the CLI and other processes see them too).
+    @Storage(key: "virtualDisplayIDs", defaultValue: [])
+    public static var virtualDisplayIDs: [UInt32]
+
     @Storage(key: "httpServerEnabled", defaultValue: false)
     public static var httpServerEnabled: Bool
 

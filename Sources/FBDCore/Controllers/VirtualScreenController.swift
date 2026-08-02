@@ -120,6 +120,7 @@ public final class VirtualScreenController {
         screens.removeAll { $0.id == config.id }
         screens.append(instance)
         handles[config.id] = handle
+        VirtualDisplayRegistry.shared.register(handle.displayID)
         configs.removeAll { $0.id == config.id }
         configs.append(config)
         Settings.saveVirtualScreens(configs)
@@ -176,6 +177,7 @@ public final class VirtualScreenController {
         screens.removeAll { $0.id == config.id }
         screens.append(instance)
         cgHandles[config.id] = handle
+        VirtualDisplayRegistry.shared.register(displayID)
         configs.removeAll { $0.id == config.id }
         configs.append(config)
         Settings.saveVirtualScreens(configs)
@@ -207,6 +209,7 @@ public final class VirtualScreenController {
             handles[id]?.destroy()
             handles[id] = nil
             screens.remove(at: index)
+            VirtualDisplayRegistry.shared.unregister(screen.displayID)
             log.debug("virtual screen destroyed: \(screen.config.name) (display \(screen.displayID))")
             destroyed = true
         } else {
@@ -235,6 +238,7 @@ public final class VirtualScreenController {
             cgHandles[screen.id] = nil
             handles[screen.id]?.destroy()
             handles[screen.id] = nil
+            VirtualDisplayRegistry.shared.unregister(screen.displayID)
         }
         SkyLightAPI.detectDisplays()
         screens.removeAll()

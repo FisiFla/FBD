@@ -136,6 +136,7 @@ public final class DisplayController {
 
         // Drop bookkeeping for displays that vanished.
         let liveIDs = Set(ids)
+        VirtualDisplayRegistry.shared.prune(keeping: liveIDs)
         autoConfigureAttempted = autoConfigureAttempted.intersection(liveIDs)
         let vanished = brightnessDebounceWorkItems.keys.filter { !liveIDs.contains($0) }
         for id in vanished {
