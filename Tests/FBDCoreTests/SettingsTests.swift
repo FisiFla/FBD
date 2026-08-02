@@ -105,6 +105,64 @@ final class SettingsTests: XCTestCase {
     }
 
 
+    // MARK: - Persisted model round-trips
+
+    func testVirtualScreenConfigsRoundtrip() {
+        let configs = [
+            VirtualScreenConfig(
+                id: "A", name: "Alpha", width: 1920, height: 1080,
+                refreshRate: 60, isHDR: true, autoConnect: true
+            ),
+            VirtualScreenConfig(
+                id: "B", name: "Beta", width: 1280, height: 720,
+                refreshRate: 120, isHDR: false, autoConnect: false
+            ),
+        ]
+        defer { Settings.saveVirtualScreens([]) }
+
+        Settings.saveVirtualScreens(configs)
+        XCTAssertEqual(Settings.loadVirtualScreens(), configs)
+
+        Settings.saveVirtualScreens([])
+        XCTAssertTrue(Settings.loadVirtualScreens().isEmpty)
+    }
+
+    func testLayoutAnchorsRoundtrip() {
+        let anchors = [
+            LayoutAnchor(displayID: 1, x: 0, y: 0),
+            LayoutAnchor(displayID: 2, x: 1920, y: 0),
+        ]
+        defer { Settings.saveLayoutAnchors([]) }
+
+        Settings.saveLayoutAnchors(anchors)
+        XCTAssertEqual(Settings.loadLayoutAnchors(), anchors)
+
+        Settings.saveLayoutAnchors([])
+        XCTAssertTrue(Settings.loadLayoutAnchors().isEmpty)
+    }
+
+    func testVirtualScreenConfigCodableFormatStability() {
+        // Locks the on-disk JSON format: saved data must decode across app
+        // versions, so adding/renaming fields is a deliberate change.
+        let config = VirtualScreenConfig(
+            id: "FIXED-ID", name: "Format Lock", width: 1920, height: 1080,
+            refreshRate: 60, isHDR: true, autoConnect: true
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try! encoder.encode(config)
+        let json = String(data: data, encoding: .utf8)!
+
+        XCTAssertEqual(
+            json,
+            #"{"autoConnect":true,"height":1080,"id":"FIXED-ID","isHDR":true,"name":"Format Lock","refreshRate":60,"width":1920}"#
+        )
+
+        // Hand-written JSON (e.g. saved by an older build) must decode.
+        let legacy = #"{"autoConnect":true,"height":1080,"id":"FIXED-ID","isHDR":true,"name":"Format Lock","refreshRate":60,"width":1920}"#
+        XCTAssertEqual(try? JSONDecoder().decode(VirtualScreenConfig.self, from: Data(legacy.utf8)), config)
+    }
+
     // MARK: - Debug summary
 
     func testDebugSummaryMasksSecrets() {
