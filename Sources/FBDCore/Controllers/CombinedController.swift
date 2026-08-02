@@ -87,28 +87,32 @@ public final class CombinedController {
 
         let top = maxNits(for: display)
         let hardwareMax = hardwareMaxNits(for: display)
-        guard top > 0, hardwareMax > 0 else { return false }
-        let nits = clamped * Double(top)
 
-        if nits <= Double(hardwareMax) {
+        // Shared pure decision logic (also used by the explicit `xdr`
+        // command) — see XDRBoostPlanner.
+        switch XDRBoostPlanner.plan(
+            value: clamped,
+            maxNits: top,
+            hardwareMaxNits: hardwareMax,
+            nativeAvailable: xdr.isAvailable(for: display),
+            softwareEnabled: Settings.softwareUpscalingEnabled
+        ) {
+        case .hardware(let fraction):
             if display.isXDRUpscaled {
                 _ = xdr.disableUpscaling(for: display)
             }
             // Stop any software boost overlay: the overlay does not set
             // isXDRUpscaled, so it must be cleared explicitly here.
             withOverlay { $0.setSoftwareBoost(1, displayID: display.id) }
-            return setHardwareBrightness(nits / Double(hardwareMax), on: display)
-        }
-
-        if xdr.setUpscaleTarget(Int(nits.rounded()), for: display) {
-            return true
-        }
-        log.warning("setBrightness: native XDR upscaling failed for \(display.id); trying software boost")
-        if Settings.softwareUpscalingEnabled {
-            let factor = nits / Double(hardwareMax)
+            return setHardwareBrightness(fraction, on: display)
+        case .nativeUpscale(let nits):
+            return xdr.setUpscaleTarget(nits, for: display)
+        case .softwareBoost(let factor):
+            log.warning("setBrightness: native XDR upscaling unavailable for \(display.id); using software boost")
             return withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
+        case .fail:
+            return false
         }
-        return false
     }
 
     /// Drive the dim-to-black overlay: enabled → fully black (factor 1),

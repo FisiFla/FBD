@@ -197,18 +197,20 @@ public final class DisplayController {
     /// Raise the native XDR upscale target (nits) for the display.
     @discardableResult
     public func setXDRUpscaleTarget(_ nits: Int, on display: Display) -> Bool {
-        if xdr.setUpscaleTarget(nits, for: display) {
-            return true
+        switch XDRBoostPlanner.plan(
+            nits: nits,
+            hardwareMaxNits: combined.hardwareMaxNits(for: display),
+            nativeAvailable: xdr.isAvailable(for: display),
+            softwareEnabled: Settings.softwareUpscalingEnabled
+        ) {
+        case .nativeUpscale(let target):
+            return xdr.setUpscaleTarget(target, for: display)
+        case .softwareBoost(let factor):
+            // Requires Screen Recording permission (logged by the overlay).
+            return overlay.setSoftwareBoost(factor, displayID: display.id)
+        case .hardware, .fail:
+            return false
         }
-        // Native path unavailable (preset writes are write-protected on
-        // macOS 27): fall back to the software boost overlay, mirroring the
-        // combined slider path. Requires Screen Recording permission.
-        guard Settings.softwareUpscalingEnabled else { return false }
-        let hardwareMax = combined.hardwareMaxNits(for: display)
-        guard hardwareMax > 0 else { return false }
-        let factor = Double(nits) / Double(hardwareMax)
-        guard factor > 1 else { return false }
-        return overlay.setSoftwareBoost(factor, displayID: display.id)
     }
 
     /// Remove native XDR upscaling (restore the factory preset) and stop any
