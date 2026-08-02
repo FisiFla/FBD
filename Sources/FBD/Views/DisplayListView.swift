@@ -34,25 +34,28 @@ struct DisplayListView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Reserved titlebar strip: with .fullSizeContentView the traffic
-            // lights float over the top 28pt — content must start below it.
-            Color.clear
-                .frame(height: FBDTheme.titlebarHeight)
+        VStack(spacing: 0) {
+            // One continuous top bar per page: the traffic-light zone (the
+            // first 28pt, where the window server draws the buttons) shares
+            // the same material as the header content, so the buttons sit ON
+            // the bar instead of floating above it.
+            if showingSettings {
+                settingsTopBar
+                    .transition(reduceMotion ? .opacity : .opacity)
+            } else {
+                mainTopBar
+                    .transition(reduceMotion ? .opacity : .opacity)
+            }
 
-            VStack(spacing: 0) {
-                headerBar
-                Group {
-                    if showingSettings {
-                        SettingsView()
-                            .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
-                    } else {
-                        mainContent
-                            .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
-                    }
+            Group {
+                if showingSettings {
+                    SettingsView()
+                        .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                } else {
+                    mainContent
+                        .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
                 }
             }
-            .padding(.top, FBDTheme.titlebarHeight)
         }
         // Frosted glass behind the content — the panel window is transparent
         // (see StatusItemController) so this NSVisualEffectView provides the
@@ -124,9 +127,40 @@ struct DisplayListView: View {
         .scrollIndicators(.hidden)
     }
 
-    /// Fixed top bar (does not scroll): brand + actions, elevated material
-    /// background and a hairline divider — anchored, not floating.
-    private var headerBar: some View {
+    /// Main-page top bar: traffic-light zone + brand + actions on one
+    /// material surface with a hairline divider.
+    private var mainTopBar: some View {
+        VStack(spacing: 0) {
+            trafficLightZone
+            mainTopBarContent
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.5)
+        }
+    }
+
+    /// Settings top bar: traffic-light zone + back + title + close.
+    private var settingsTopBar: some View {
+        VStack(spacing: 0) {
+            trafficLightZone
+            settingsTopBarContent
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.5)
+        }
+    }
+
+    /// The window server draws the traffic lights over the top 28pt; this
+    /// zone must be part of the bar's material so they don't float.
+    private var trafficLightZone: some View {
+        Color.clear
+            .frame(height: FBDTheme.titlebarHeight)
+            .accessibilityHidden(true)
+    }
+
+    private var mainTopBarContent: some View {
         HStack(spacing: 10) {
             // Brand tile.
             RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
@@ -176,10 +210,39 @@ struct DisplayListView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Divider().opacity(0.5)
+    }
+
+    private var settingsTopBarContent: some View {
+        HStack(spacing: 8) {
+            Button {
+                NotificationCenter.default.post(name: .fbdSettingsClosed, object: nil)
+            } label: {
+                Label("FBD", systemImage: "chevron.left")
+                    .font(.callout)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Back to FBD")
+            .help("Back")
+
+            Text("Settings")
+                .font(.headline)
+
+            Spacer()
+
+            Button {
+                NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Close FBD panel")
+            .help("Close")
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 
     private var emptyState: some View {
