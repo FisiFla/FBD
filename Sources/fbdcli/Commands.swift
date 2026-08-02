@@ -388,7 +388,10 @@ func cmdSetMode(_ controller: DisplayController, display: Display, args: [String
         }.first!
     }
 
-    controller.applyMode(best, to: display)
+    guard controller.applyMode(best, to: display) else {
+        print("fbdcli: set-mode: failed to apply \(best.key) to display \(display.id)")
+        return 2
+    }
     print("applied \(best.key) (\(best.isHiDPI ? "hidpi" : "sdr"), \(best.isSafe ? "safe" : "unsafe"))")
     return 0
 }

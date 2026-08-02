@@ -312,7 +312,9 @@ final class AppCore {
                 guard let mode = HTTPJSON.bestMode(matchingWidth: width, height: height, hz: hz, in: display) else {
                     return (404, HTTPJSON.error("no matching mode"))
                 }
-                displayController.applyMode(mode, to: display)
+                guard displayController.applyMode(mode, to: display) else {
+                    return (500, HTTPJSON.error("mode switch failed"))
+                }
                 return (200, HTTPJSON.encode(["ok": true, "mode": mode.key]))
             case .xdr(let nits):
                 guard displayController.setXDRUpscaleTarget(nits, on: display) else { return (500, HTTPJSON.error("XDR upscaling failed")) }

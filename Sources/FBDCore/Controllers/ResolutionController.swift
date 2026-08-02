@@ -51,12 +51,14 @@ public final class ResolutionController {
 
     /// Apply a mode: configure via CGS, ask the WindowServer to re-detect
     /// displays, refresh the display's mode list, and broadcast the change.
-    public func applyMode(_ mode: DisplayMode, to display: Display) {
+    /// Returns false when the CGS configuration failed (logged).
+    @discardableResult
+    public func applyMode(_ mode: DisplayMode, to display: Display) -> Bool {
         do {
             try CGSAPI.configureMode(mode.modeNumber, on: display.id)
         } catch {
             log.error("applyMode \(mode.modeNumber) failed for \(display.id): \(error.localizedDescription)")
-            return
+            return false
         }
         SkyLightAPI.detectDisplays()
         display.updateModes(modes(for: display), current: currentMode(for: display))
@@ -65,6 +67,7 @@ public final class ResolutionController {
             object: nil,
             userInfo: ["displayID": display.id]
         )
+        return true
     }
 
     /// Switch refresh rate while keeping the current physical resolution:

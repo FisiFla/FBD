@@ -291,8 +291,9 @@ public final class DisplayController {
     // MARK: - Modes
 
     /// Apply a resolution/refresh-rate mode.
-    public func applyMode(_ mode: DisplayMode, to display: Display) {
-        resolution.applyMode(mode, to: display)
+    @discardableResult
+    public func applyMode(_ mode: DisplayMode, to display: Display) -> Bool {
+        return resolution.applyMode(mode, to: display)
     }
 
     // MARK: - Environment
