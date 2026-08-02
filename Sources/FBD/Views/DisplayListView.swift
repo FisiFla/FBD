@@ -13,7 +13,9 @@ struct DisplayListView: View {
     // Tier 3: virtual screens & display groups. Controllers are held in @State
     // so their state survives across body evaluations (instantiating per
     // render would lose it); re-renders are driven by the ticks below.
-    @State private var virtualScreens = VirtualScreenController()
+    // Shared with AppCore and the HTTP API: one source of truth for
+    // virtual screens (configs + active instances).
+    @State private var virtualScreens = VirtualScreenController.shared
     @State private var groupsController = DisplayGroupsController()
     @State private var virtualScreensTick = 0
     @State private var groupItems: [DisplayGroup] = []

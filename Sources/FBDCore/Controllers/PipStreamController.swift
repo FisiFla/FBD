@@ -299,17 +299,15 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             let config = makeConfiguration(for: scDisplay)
             let newStream = SCStream(filter: filter, configuration: config, delegate: self)
             try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
-            stateLock.lock()
-            stream = newStream
-            stateLock.unlock()
-            newStream.startCapture { [weak self] error in
+            stateLock.withLock { stream = newStream }
+            // Async startCapture (the completion variant is deprecated).
+            Task { @MainActor [weak self, newStream] in
                 guard let self else { return }
-                if let error {
+                do {
+                    try await newStream.startCapture()
+                    self.stateLock.withLock { self._isCapturing = true }
+                } catch {
                     self.fail("startCapture failed: \(error.localizedDescription)")
-                } else {
-                    self.stateLock.lock()
-                    self._isCapturing = true
-                    self.stateLock.unlock()
                 }
             }
         } catch {

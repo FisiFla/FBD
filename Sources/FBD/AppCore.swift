@@ -75,7 +75,9 @@ final class AppCore {
     }
 
     // Tier 3/4 controller instances (owned here; UI/CLI create their own for one-shot use).
-    let virtualScreens = VirtualScreenController()
+    // Single shared instance (the UI and HTTP paths use the same one) so
+    // screens/configs never diverge between callers.
+    let virtualScreens = VirtualScreenController.shared
     let disconnect = DisconnectController()
     let layoutProtection = LayoutProtectionController()
     let edid = EDIDController()

@@ -263,6 +263,12 @@ public final class VirtualScreenController {
         return create(config)
     }
 
+    /// Re-read persisted configs from Settings (called on change
+    /// notifications so multi-instance callers stay in sync).
+    func reloadConfigs() {
+        configs = Settings.loadVirtualScreens()
+    }
+
     /// Reconnect all configs with autoConnect == true (used on wake/app start).
     public func reconnectAuto() {
         var reconnected = 0
@@ -322,6 +328,18 @@ public final class VirtualScreenController {
             }
         })
 
+        // Any instance may have persisted configs (HTTP create/destroy from
+        // another caller): re-read them so this instance never shows stale
+        // configs. Active screens are per-instance by design; with the app
+        // converged on .shared the active set stays consistent too.
+        observers.append(NotificationCenter.default.addObserver(
+            forName: .fbdVirtualScreensChanged, object: nil, queue: nil
+        ) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.reloadConfigs()
+            }
+        })
+
         // Session notifications (macOS 14+). Lock-disconnect is best-effort:
         // sessionDidResignActive also fires on logout, but disconnectAll keeps
         // persistence, so the screens simply reconnect on the next session.
@@ -344,4 +362,10 @@ public final class VirtualScreenController {
             })
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted whenever virtual screen configs or active screens change
+    /// (FBDCore-owned; the app target also declares it for SwiftUI onReceive).
+    static let fbdVirtualScreensChanged = Notification.Name("FBDVirtualScreensChanged")
 }
