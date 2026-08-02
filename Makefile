@@ -29,7 +29,7 @@ app:
 		BIN="$$(ls -d .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD 2>/dev/null | head -1)"; \
 	else \
 		echo "Universal build failed (see /tmp/fbd-universal.log); building native arch only."; \
-		swift build $(SWIFT_FLAGS) -c $(CONFIG); \
+		swift build $(SWIFT_FLAGS) -c $(CONFIG) || exit 1; \
 		BIN="$$(ls -d .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD 2>/dev/null | head -1)"; \
 	fi; \
 	if [ -z "$$BIN" ] || [ ! -f "$$BIN" ]; then echo "error: built binary not found"; exit 1; fi; \

@@ -30,14 +30,25 @@ struct DisplayListView: View {
     @State private var newGroupName = ""
 
     var body: some View {
-        Group {
-            if showingSettings {
-                SettingsView(onDone: { showingSettings = false })
-            } else {
-                mainContent
-            }
+        // NavigationStack provides the Settings push with a natural back
+        // button; the window (NSPanel) owns sizing, so no fixed frame here.
+        NavigationStack {
+            mainContent
+                .navigationTitle("FBD")
+                .navigationDestination(isPresented: $showingSettings) {
+                    SettingsView()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .help("Settings")
+                    }
+                }
         }
-        .frame(minWidth: 360, idealWidth: 380, maxWidth: 460)
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplaysChanged)) { _ in
             displays = DisplayController.shared.displays
             virtualScreensTick += 1
@@ -101,13 +112,15 @@ struct DisplayListView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+            // In-content close for users who expect a button in the window
+            // body; the title bar also has the standard close (×).
             Button {
-                showingSettings = true
+                NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
             } label: {
-                Image(systemName: "gearshape")
+                Image(systemName: "xmark")
             }
             .buttonStyle(.borderless)
-            .help("Settings")
+            .help("Close")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

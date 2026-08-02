@@ -112,7 +112,7 @@ final class AppCore {
     }
 
     private func openSettingsPanel() {
-        statusItemController.showPopover()
+        statusItemController.showPanel()
         NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
     }
 
@@ -537,6 +537,7 @@ private enum HTTPJSON {
 extension Notification.Name {
     /// Posted when the settings panel should be shown (fbd://open).
     static let fbdOpenSettings = Notification.Name("FBDOpenSettings")
+    static let fbdPanelCloseRequested = Notification.Name("FBDPanelCloseRequested")
     /// Posted once at startup when DDC is unavailable under Rosetta.
     static let fbdRosettaWarningActive = Notification.Name("FBDRosettaWarningActive")
 }

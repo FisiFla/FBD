@@ -8,8 +8,6 @@ import SwiftUI
 /// About section.
 @MainActor
 struct SettingsView: View {
-    var onDone: () -> Void = {}
-
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var layoutProtection = LayoutProtectionController()
     @State private var hasSavedArrangement = false
@@ -150,13 +148,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    onDone()
-                }
-            }
-        }
+        .navigationTitle("Settings")
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             hasSavedArrangement = layoutProtection.hasSavedArrangement
