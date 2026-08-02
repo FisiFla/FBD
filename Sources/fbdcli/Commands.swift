@@ -969,33 +969,12 @@ func cmdGroupMirror(args: [String], mirror: Bool) -> Int32 {
 /// Parse a hex string (whitespace/newlines allowed) into raw bytes. Returns
 /// nil when the cleaned string is empty, odd-length, or contains non-hex chars.
 func parseHexData(_ string: String) -> Data? {
-    let cleaned = string.filter { !$0.isWhitespace }
-    guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
-    var bytes = [UInt8]()
-    bytes.reserveCapacity(cleaned.count / 2)
-    var index = cleaned.startIndex
-    while index < cleaned.endIndex {
-        let next = cleaned.index(index, offsetBy: 2)
-        guard let byte = UInt8(cleaned[index..<next], radix: 16) else { return nil }
-        bytes.append(byte)
-        index = next
-    }
-    return Data(bytes)
+    EDIDHex.parse(string)
 }
 
 /// Classic hex dump: 16 bytes per line, 4-digit offset prefix.
 func hexDump(_ data: Data) -> String {
-    let bytes = [UInt8](data)
-    var lines: [String] = []
-    lines.reserveCapacity(bytes.count / 16 + 1)
-    var offset = 0
-    while offset < bytes.count {
-        let chunk = bytes[offset..<min(offset + 16, bytes.count)]
-        let hex = chunk.map { String(format: "%02X", $0) }.joined(separator: " ")
-        lines.append(String(format: "%04X: %@", UInt32(offset), hex))
-        offset += 16
-    }
-    return lines.joined(separator: "\n")
+    EDIDHex.dump(data)
 }
 
 /// Print a human-readable summary of a parsed EDID block (2-space indented).

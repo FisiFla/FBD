@@ -154,3 +154,38 @@ public struct ModeSpec: Equatable {
         return ModeSpec(width: width, height: height, hz: hz)
     }
 }
+
+/// Strict hex-string parsing for `edid apply` (whitespace tolerated, even
+/// length required, hex digits only).
+public enum EDIDHex {
+    public static func parse(_ string: String) -> Data? {
+        let cleaned = string.filter { !$0.isWhitespace }
+        guard !cleaned.isEmpty, cleaned.count % 2 == 0 else { return nil }
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(cleaned.count / 2)
+        var index = cleaned.startIndex
+        while index < cleaned.endIndex {
+            let next = cleaned.index(index, offsetBy: 2)
+            guard let byte = UInt8(cleaned[index..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            index = next
+        }
+        return Data(bytes)
+    }
+
+    /// 16-bytes-per-line hex dump ("%04X: xx xx ...") as used by
+    /// `fbdcli edid export`.
+    public static func dump(_ data: Data) -> String {
+        let bytes = [UInt8](data)
+        var lines: [String] = []
+        lines.reserveCapacity(bytes.count / 16 + 1)
+        var offset = 0
+        while offset < bytes.count {
+            let chunk = bytes[offset..<min(offset + 16, bytes.count)]
+            let hex = chunk.map { String(format: "%02X", $0) }.joined(separator: " ")
+            lines.append(String(format: "%04X: %@", UInt32(offset), hex))
+            offset += 16
+        }
+        return lines.joined(separator: "\n")
+    }
+}
