@@ -125,3 +125,32 @@ public enum TVCommandValidation {
         }
     }
 }
+
+/// Parsed `WxH[@Hz]` display-mode spec (used by `set-mode` and
+/// `virtual create`). Width/height must be positive; the refresh rate is
+/// optional and must be positive when present.
+public struct ModeSpec: Equatable {
+    public let width: Int32
+    public let height: Int32
+    public let hz: Double?
+
+    public static func parse(_ spec: String) -> ModeSpec? {
+        // omittingEmptySubsequences: false so "1920x1080@" and "1920x"
+        // are rejected instead of silently dropping the trailing part.
+        let parts = spec.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
+        let hz: Double?
+        if parts.count > 1 {
+            guard let parsed = Double(parts[1]), parsed > 0 else { return nil }
+            hz = parsed
+        } else {
+            hz = nil
+        }
+        let dimensions = parts[0].split(separator: "x", maxSplits: 1, omittingEmptySubsequences: false)
+        guard dimensions.count == 2,
+              let width = Int32(dimensions[0]), width > 0,
+              let height = Int32(dimensions[1]), height > 0 else {
+            return nil
+        }
+        return ModeSpec(width: width, height: height, hz: hz)
+    }
+}

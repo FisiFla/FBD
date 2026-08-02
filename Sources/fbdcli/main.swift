@@ -259,21 +259,8 @@ func parsePercent(_ string: String, command: String) -> Double? {
 
 /// Parse "WxH[@hz]" for set-mode, e.g. "1920x1080" or "1920x1080@59.95".
 func parseModeSpec(_ spec: String) -> (width: Int32, height: Int32, hz: Double?)? {
-    let parts = spec.split(separator: "@", maxSplits: 1)
-    let hz: Double?
-    if parts.count > 1 {
-        guard let parsed = Double(parts[1]), parsed > 0 else { return nil }
-        hz = parsed
-    } else {
-        hz = nil
-    }
-    let dimensions = parts[0].split(separator: "x", maxSplits: 1)
-    guard dimensions.count == 2,
-          let width = Int32(dimensions[0]), width > 0,
-          let height = Int32(dimensions[1]), height > 0 else {
-        return nil
-    }
-    return (width, height, hz)
+    guard let parsed = ModeSpec.parse(spec) else { return nil }
+    return (parsed.width, parsed.height, parsed.hz)
 }
 
 // MARK: - DDC helpers
