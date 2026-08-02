@@ -20,7 +20,7 @@ fbdcli — Free Better Display command-line interface
 Usage: fbdcli <command> [args]
 
 Commands:
-  list                          List displays (one line per display)
+  list [--json]                 List displays (one line per display, or JSON)
   info <id>                     Show full detail for a display
   brightness <id> [0-100]       Get or set brightness (Apple or DDC path)
   contrast <id> [0-100]         Get or set contrast (DDC)
@@ -107,7 +107,7 @@ func run(arguments: [String]) -> Int32 {
         return 1
     case .command(let command, let args, let direct):
         // Route over the app's HTTP API when it is running (single-driver I2C).
-        if !direct, HTTPRouting.routable.contains(command) {
+        if !direct, HTTPRouting.routable.contains(command), !args.contains("--json") {
             if let exitCode = HTTPRouting.route(command, args: args) {
                 return exitCode
             }
@@ -120,7 +120,7 @@ func run(arguments: [String]) -> Int32 {
 
     switch command {
     case .list:
-        return cmdList(controller)
+        return cmdList(controller, args: rest)
     case .info:
         guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
         return cmdInfo(display)

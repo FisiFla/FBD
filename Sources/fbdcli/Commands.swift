@@ -7,7 +7,12 @@ import Foundation
 /// `fbdcli list` — one line per display: id, name, type, current mode, HiDPI,
 /// DDC availability, Apple-brightness availability.
 @MainActor
-func cmdList(_ controller: DisplayController) -> Int32 {
+func cmdList(_ controller: DisplayController, args: [String]) -> Int32 {
+    if args.contains("--json") {
+        // Machine-readable output (same serializer the app's HTTP API uses).
+        print(HTTPJSON.encode(["displays": controller.displays.map { HTTPJSON.display($0) }]))
+        return 0
+    }
     for display in controller.displays {
         let type = display.isBuiltin ? "builtin" : (display.isVirtual ? "virtual" : "external")
         let mode: String

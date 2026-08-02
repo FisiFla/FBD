@@ -348,6 +348,9 @@ public extension Notification.Name {
     /// Posted after a full display enumeration (displays added/removed/changed).
     /// No userInfo.
     static let fbdDisplaysChanged = Notification.Name("FBDDisplaysChanged")
+    /// Posted when global media-key interception is unavailable (permission
+    /// missing/revoked or the event tap failed to enable).
+    static let fbdHotkeysUnavailable = Notification.Name("FBDHotkeysUnavailable")
     /// Posted after an individual display's mode changed.
     /// userInfo: ["displayID": CGDirectDisplayID].
     static let fbdDisplayUpdated = Notification.Name("FBDDisplayUpdated")

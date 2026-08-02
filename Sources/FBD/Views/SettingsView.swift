@@ -9,6 +9,7 @@ import SwiftUI
 @MainActor
 struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var hotkeysUnavailable = false
     @State private var layoutProtection = LayoutProtectionController()
     @State private var hasSavedArrangement = false
     @State private var nightShift = NightShiftController()
@@ -20,6 +21,11 @@ struct SettingsView: View {
             Section("General") {
                 Toggle("Launch at Login", isOn: launchAtLoginBinding)
                 Toggle("Show Rosetta warning", isOn: rosettaWarningBinding)
+                if hotkeysUnavailable {
+                    Label("Media keys unavailable — allow Accessibility for FBD in System Settings", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Section("DDC") {
@@ -152,6 +158,9 @@ struct SettingsView: View {
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             hasSavedArrangement = layoutProtection.hasSavedArrangement
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .fbdHotkeysUnavailable)) { _ in
+            hotkeysUnavailable = true
         }
     }
 
