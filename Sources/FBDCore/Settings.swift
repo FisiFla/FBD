@@ -99,7 +99,11 @@ public enum Settings {
     public static var xdrUpscaleMaxFactor: Double
 
     /// Use the Metal software upscaling overlay when native upscaling is unavailable.
-    @Storage(key: "softwareUpscalingEnabled", defaultValue: false)
+    /// Software boost overlay fallback for XDR upscaling when the native
+    /// preset path is unavailable (write-protected on macOS 27). Defaults ON
+    /// so the documented fallback actually works out of the box; users can
+    /// disable the overlay explicitly.
+    @Storage(key: "softwareUpscalingEnabled", defaultValue: true)
     public static var softwareUpscalingEnabled: Bool
 
     /// Combine hardware + software + XDR upscaling into one brightness slider.

@@ -24,7 +24,11 @@ gracefully (feature off, UI notes it) when a path is unavailable.
 | Apple brightness / resolution / rotation | ✅ | ✅ | ✅ |
 | DDC/CI (external displays, Apple Silicon) | ✅ | ✅ | ✅ |
 | Virtual displays | ✅ `CGVirtualDisplay` (dlopen) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
-| XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost; preset switching ✅ |
+| XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
+
+*The software boost overlay needs **Screen Recording** permission (grant in
+System Settings → Privacy & Security → Screen Recording) and combined
+brightness mode enabled. With both in place, XDR upscaling works on macOS 27.
 | XDR direct (IOMobileFramebuffer) | ✅ | ⚠️ | ❌ entitlement-gated (probe only) |
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |

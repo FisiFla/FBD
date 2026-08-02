@@ -24,6 +24,15 @@ Versioning: semver; 0.x until the first signed/notarized release.
   Swift-6-readiness fixes (NSLock → `withLock` in async contexts).
 
 ### Fixed
+- XDR upscaling on macOS 27: the software boost fallback now defaults ON and
+  is reachable from the explicit `xdr <id> <nits>` command (previously only
+  the combined slider path fell back, and the default disabled it — the
+  documented macOS 27 path was dead out of the box). The combined slider's
+  below-ceiling path now stops an active overlay boost (the overlay does not
+  set `isXDRUpscaled`, so the screen could previously stay brightened after
+  dragging below the ceiling), and `isCombinedCapable` accepts the software
+  fallback when the native path self-tests as write-protected. The overlay
+  itself requires **Screen Recording** permission (documented in README).
 - Routed `virtual destroy <name>` sent the raw name as the config id; names
   are now resolved to persisted ids before calling the app.
 - Routed `virtual create` ignored the `isHDR` flag from the request body

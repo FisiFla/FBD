@@ -94,6 +94,9 @@ public final class CombinedController {
             if display.isXDRUpscaled {
                 _ = xdr.disableUpscaling(for: display)
             }
+            // Stop any software boost overlay: the overlay does not set
+            // isXDRUpscaled, so it must be cleared explicitly here.
+            withOverlay { $0.setSoftwareBoost(1, displayID: display.id) }
             return setHardwareBrightness(nits / Double(hardwareMax), on: display)
         }
 
@@ -119,7 +122,11 @@ public final class CombinedController {
     /// Combined mode requires the setting plus an XDR-capable display
     /// (mirrors the getBrightness contract).
     private func isCombinedCapable(for display: Display) -> Bool {
-        Settings.combinedBrightnessEnabled && xdr.isAvailable(for: display)
+        guard Settings.combinedBrightnessEnabled, display.isXDRCapable else { return false }
+        // Native preset upscaling OR the software overlay fallback (the
+        // native path self-tests as unavailable when preset writes are
+        // write-protected, e.g. macOS 27 — the overlay must still engage).
+        return xdr.isAvailable(for: display) || Settings.softwareUpscalingEnabled
     }
 
     /// Tier 1 hardware read: Apple path when available, DDC otherwise.
