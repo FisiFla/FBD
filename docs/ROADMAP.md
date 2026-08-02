@@ -1,11 +1,22 @@
 # FBD — Roadmap
 
-Status: **Tier 1 complete** (shipped), **Tier 2 shipped** (52 unit tests green).
-Tier 1 stop condition ("DDC brightness works on an external monitor") still
-requires real hardware. Tier 2 caveats for macOS 27 are documented in
-docs/PRIVATE_APIS.md — notably: `SLSDisplaySetPresetData` is write-protected on
-macOS 27 (native XDR upscaling self-tests and falls back to the software method),
-and the direct IOMobileFramebuffer color-table method is entitlement-gated.
+Status: **All five tiers shipped** (162 unit tests green; CI green on every
+push). 17+ hardening cycles applied since the tiers: HTTP API auth +
+router extraction, EDID validation, virtual-display registry, DDC retries,
+parser fuzz, a11y, NSPanel UI, release docs. See CHANGELOG.md for the
+per-cycle record.
+
+Remaining open items (all external/hardware-bound — see
+.ai_infinite_backlog.md Pending):
+- Tier 1 stop condition ("DDC brightness works on an external monitor")
+  still requires real hardware.
+- macOS 27 caveats (docs/PRIVATE_APIS.md): `SLSDisplaySetPresetData` is
+  write-protected (native XDR upscaling self-tests and falls back to the
+  software method — preset SWITCHING works, verified live); the direct
+  IOMobileFramebuffer color-table method is entitlement-gated; the CG
+  virtual-display path (macOS 13-15) awaits hardware verification.
+- Distribution: signing + notarization + appcast host (user resources;
+  RELEASING.md has the full path).
 
 ## Tier 1 — Core ✅ (this milestone)
 

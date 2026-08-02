@@ -526,6 +526,9 @@ func cmdHDR(_ controller: DisplayController, display: Display, args: [String]) -
         return 0
     }
     print("hdr \(display.id): capable=\(display.isHDRModeCapable ? "yes" : "no") enabled=\(display.isHDRModeEnabled ? "yes" : "no")")
+    if !display.isHDRModeCapable {
+        print("note: HDR framebuffer mode unsupported here; brightness upscaling is available via 'xdr <id>'")
+    }
     return 0
 }
 
