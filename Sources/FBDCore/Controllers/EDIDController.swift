@@ -125,6 +125,10 @@ public final class EDIDController {
     /// a log (best-effort; requires an IOAVService).
     @discardableResult
     public func applyOverride(_ edid: Data, for display: Display) -> Bool {
+        if let reason = EDIDValidation.validate(edid) {
+            log.error("applyOverride: invalid EDID rejected for display \(display.id): \(reason)")
+            return false
+        }
         guard isAvailable else {
             log.warning("Intel EDID write requires the IOAVService I2C bus — unsupported on this build")
             return false
@@ -168,6 +172,10 @@ public final class EDIDController {
             log.warning("restoreFactory: no factory EDID available for display \(display.id)")
             return false
         }
+        if let reason = EDIDValidation.validate(factory) {
+            log.error("restoreFactory: captured EDID is invalid for display \(display.id): \(reason)")
+            return false
+        }
         guard isAvailable else {
             log.warning("Intel EDID write requires the IOAVService I2C bus — unsupported on this build")
             return false
@@ -185,7 +193,13 @@ public final class EDIDController {
     }
 
     /// Persist an override per display identity (Settings.setEDIDOverride).
+    /// Structurally invalid EDIDs are rejected (and logged) so garbage never
+    /// lands in the auto-apply store; nil clears the override.
     public func saveOverride(_ edid: Data?, for display: Display) {
+        if let edid, let reason = EDIDValidation.validate(edid) {
+            log.error("saveOverride: invalid EDID not persisted for display \(display.id): \(reason)")
+            return
+        }
         Settings.setEDIDOverride(edid, for: display.identityKey)
     }
 

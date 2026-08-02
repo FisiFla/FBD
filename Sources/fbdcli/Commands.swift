@@ -1087,8 +1087,8 @@ func cmdEDIDApply(_ controller: DisplayController, args: [String]) -> Int32 {
         print("fbdcli: edid apply: cannot read '\(source)' (no such file or invalid hex)")
         return 1
     }
-    guard data.count >= 128 else {
-        print("fbdcli: edid apply: EDID must be at least 128 bytes (got \(data.count))")
+    if let reason = EDIDValidation.validate(data) {
+        print("fbdcli: edid apply: invalid EDID: \(reason)")
         return 1
     }
     guard edidController.applyOverride(data, for: display) else {
