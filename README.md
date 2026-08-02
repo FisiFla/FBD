@@ -23,7 +23,7 @@ gracefully (feature off, UI notes it) when a path is unavailable.
 |---|---|---|---|
 | Apple brightness / resolution / rotation | ✅ | ✅ | ✅ |
 | DDC/CI (external displays, Apple Silicon) | ✅ | ✅ | ✅ |
-| Virtual displays | ✅ `CGVirtualDisplay` (dlopen) | ✅ `SLVirtualDisplay` | ⚠️ SidecarCore path |
+| Virtual displays | ✅ `CGVirtualDisplay` (dlopen) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
 | XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ write-protected → software boost |
 | XDR direct (IOMobileFramebuffer) | ✅ | ⚠️ | ❌ entitlement-gated (probe only) |
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
@@ -43,6 +43,7 @@ curl -H "X-FBD-Token: $TOKEN" http://127.0.0.1:8765/api/displays
 `fbdcli` sends the token automatically when the app is running (single
 driver — writes go through the app so the CLI never races the DDC bus).
 CORS is enabled (`*`) for web clients; `OPTIONS` preflight returns 204.
+`GET /api/health` is the one unauthenticated endpoint (uptime checks).
 
 ## Requirements
 

@@ -233,6 +233,9 @@ final class AppCore {
     /// rejected by HTTPRouter; failures here are runtime/controller-level.
     @MainActor private func execute(_ route: HTTPRoute) -> (Int, String) {
         switch route {
+        case .health:
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+            return (200, HTTPJSON.encode(["ok": true, "version": version, "displays": displayController.displays.count]))
         case .listDisplays:
             let list = displayController.displays.map { HTTPJSON.display($0) }
             return (200, HTTPJSON.encode(["displays": list]))

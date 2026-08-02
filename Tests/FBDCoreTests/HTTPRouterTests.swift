@@ -45,6 +45,32 @@ final class HTTPRouterTests: XCTestCase {
         XCTAssertEqual(result, .route(.listDisplays))
     }
 
+    // MARK: - Health (unauthenticated)
+
+    func testHealthNeedsNoToken() {
+        let result = HTTPRouter.route(
+            method: "GET", path: "/api/health", body: nil,
+            headers: [:], expectedToken: token
+        )
+        XCTAssertEqual(result, .route(.health))
+    }
+
+    func testHealthWorksWithWrongToken() {
+        let result = HTTPRouter.route(
+            method: "GET", path: "/api/health", body: nil,
+            headers: ["x-fbd-token": "wrong"], expectedToken: token
+        )
+        XCTAssertEqual(result, .route(.health))
+    }
+
+    func testHealthIsGetOnly() {
+        let result = HTTPRouter.route(
+            method: "POST", path: "/api/health", body: nil,
+            headers: [:], expectedToken: token
+        )
+        XCTAssertEqual(result, .error(status: 405, message: "method not allowed"))
+    }
+
     // MARK: - Method gate
 
     func testUnsupportedMethodsAre405() {

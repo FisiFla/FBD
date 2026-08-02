@@ -5,6 +5,7 @@ import Foundation
 /// (controller access) stays in the app target; everything parseable and
 /// checkable lives here so the whole surface is unit-testable.
 public enum HTTPRoute: Equatable {
+    case health
     case listDisplays
     case displayInfo(id: CGDirectDisplayID)
     case displayControls(id: CGDirectDisplayID, what: String)
@@ -61,6 +62,15 @@ public enum HTTPRouter {
         headers: [String: String],
         expectedToken: String
     ) -> HTTPRouteResult {
+        // /api/health is the one unauthenticated endpoint (uptime/monitoring
+        // checks from local tools that may not know the token).
+        if path == "/api/health" {
+            guard method == "GET" else {
+                return .error(status: 405, message: "method not allowed")
+            }
+            return .route(.health)
+        }
+
         // Local API token auth (fail closed).
         let provided = headers["x-fbd-token"] ?? headers["authorization"]
             .flatMap { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : nil }
