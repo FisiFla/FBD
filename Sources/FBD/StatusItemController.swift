@@ -42,6 +42,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // Remembers position/size across launches and shows.
         panel.setFrameAutosaveName("FBDMainPanel")
         hasRestoredFrame = UserDefaults.standard.string(forKey: "NSWindow Frame FBDMainPanel") != nil
+        // Transparent window + FrostedBackground (NSVisualEffectView) inside
+        // DisplayListView = the Control Center-style floating glass panel.
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
         let hosting = NSHostingController(rootView: DisplayListView())
         panel.contentViewController = hosting
         // Assigning a contentViewController resizes the window to the view's

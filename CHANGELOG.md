@@ -3,6 +3,26 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Changed
+- **UI overhaul** — premium floating-glass panel (Control Center-style):
+  - Design system (`FBDTheme`, `FBDTag`, `DisplayKind`) — semantic system
+    colors, shared spacing/radii/motion tokens, full dark/light adaptation.
+  - Frosted-glass panel background (`NSVisualEffectView` behind transparent
+    window) with rounded cards for display rows, virtual screens and groups.
+  - Custom slider (`FDBSlider`) — gradient fill, floating thumb, hover/active
+    micro-animations, XDR "boost zone" divider; keyboard arrows and VoiceOver
+    adjustable-action support.
+  - Brightness control now shows a live nits estimate on XDR displays and a
+    hardware→XDR zone marker; badges distinguish Built-in / External (DDC) /
+    Virtual / XDR displays.
+  - Display cards: kind icon tile, capability tags, redesigned DDC panel,
+    icon-labeled disclosure sections.
+  - Settings regrouped into icon-labeled sections; HTTP note updated
+    (applies immediately, no restart); About section with app tile.
+  - Reduced Motion respected throughout.
+
 ## [1.0.0] — 2026-08-02
 
 ### Added

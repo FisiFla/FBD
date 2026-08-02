@@ -18,7 +18,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("General") {
+            Section {
                 Toggle("Launch at Login", isOn: launchAtLoginBinding)
                 Toggle("Show Rosetta warning", isOn: rosettaWarningBinding)
                 if hotkeysUnavailable {
@@ -26,9 +26,11 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+            } header: {
+                Label("General", systemImage: "gearshape")
             }
 
-            Section("DDC") {
+            Section {
                 HStack(spacing: 8) {
                     Text("Cooldown between writes")
                     Spacer()
@@ -40,9 +42,11 @@ struct SettingsView: View {
                 Text("Minimum delay between consecutive DDC/CI writes per display.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } header: {
+                Label("DDC / CI", systemImage: "cable.connector")
             }
 
-            Section("XDR / HDR") {
+            Section {
                 Toggle("Combined brightness (hardware + XDR)", isOn: combinedBrightnessEnabled)
                 Toggle("Software upscaling (Metal overlay)", isOn: softwareUpscalingEnabled)
                 Text("Used when native XDR upscaling is unavailable. Requires Screen Recording permission.")
@@ -64,16 +68,20 @@ struct SettingsView: View {
                             .monospacedDigit()
                     }
                 }
+            } header: {
+                Label("XDR / HDR", systemImage: "sun.max.trianglebadge.exclamationmark")
             }
 
-            Section("Experimental") {
+            Section {
                 Toggle("Allow unsafe modes", isOn: unsafeModesBinding)
                 Text("Allows applying modes outside the safe-mode flag set — experimental.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } header: {
+                Label("Experimental", systemImage: "flask")
             }
 
-            Section("Virtual Displays & Layout") {
+            Section {
                 Toggle("Reconnect virtual screens after wake", isOn: reconnectOnWakeBinding)
                 Toggle("Disconnect virtual screens while locked", isOn: disconnectOnLockBinding)
                 Toggle("Auto-disconnect built-in when external connects", isOn: autoDisconnectBuiltInBinding)
@@ -96,9 +104,11 @@ struct SettingsView: View {
                     .controlSize(.small)
                     .disabled(!hasSavedArrangement)
                 }
+            } header: {
+                Label("Virtual Displays & Layout", systemImage: "rectangle.3.group")
             }
 
-            Section("EDID & Protection") {
+            Section {
                 Toggle("Auto-apply saved EDID on connect", isOn: autoApplyEDIDOverrideBinding)
                 Text("Re-applies a saved custom EDID whenever the display connects.")
                     .font(.caption)
@@ -111,9 +121,11 @@ struct SettingsView: View {
                 Text("Re-applies the saved resolution, preset and brightness when a display reconnects.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } header: {
+                Label("EDID & Protection", systemImage: "lock.shield")
             }
 
-            Section("Integrations") {
+            Section {
                 Toggle("HTTP API", isOn: httpAPIEnabledBinding)
                 HStack(spacing: 8) {
                     Text("Port")
@@ -123,7 +135,7 @@ struct SettingsView: View {
                             .monospacedDigit()
                     }
                 }
-                Text("Serves the control API on 127.0.0.1. Restart the app to apply.")
+                Text("Serves the control API on 127.0.0.1. Applies immediately.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Custom OSD", isOn: customOSDBinding)
@@ -146,11 +158,33 @@ struct SettingsView: View {
                 if trueTone.isAvailable {
                     Toggle("True Tone", isOn: trueToneBinding)
                 }
+            } header: {
+                Label("Integrations", systemImage: "network")
             }
 
-            Section("About") {
-                LabeledContent("Version", value: versionString)
+            Section {
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
+                        .fill(Color.accentColor.gradient)
+                        .frame(width: 34, height: 34)
+                        .overlay(
+                            Image(systemName: "display")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                        )
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("FBD — Free Better Display")
+                            .font(.callout.weight(.medium))
+                        Text("Version \(versionString)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
                 Link("GitHub — FisiFla/FBD", destination: URL(string: "https://github.com/FisiFla/FBD")!)
+            } header: {
+                Label("About", systemImage: "info.circle")
             }
         }
         .formStyle(.grouped)

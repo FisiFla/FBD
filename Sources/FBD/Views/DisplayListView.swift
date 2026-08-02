@@ -52,6 +52,10 @@ struct DisplayListView: View {
                     }
                 }
         }
+        // Frosted glass behind the content — the panel window is transparent
+        // (see StatusItemController) so this NSVisualEffectView provides the
+        // Control Center-style blur and rounded corners.
+        .background(FrostedBackground())
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplaysChanged)) { _ in
             displays = DisplayController.shared.displays
             virtualScreensTick += 1
@@ -77,57 +81,73 @@ struct DisplayListView: View {
     /// entries (not a nested List) so nothing clips and row heights adapt.
     private var mainContent: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 header
                 if rosettaWarningVisible {
                     RosettaWarningView()
                         .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
                 }
                 Divider()
+                    .opacity(0.5)
                 if displays.isEmpty {
                     emptyState
                 } else {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 8) {
                         ForEach(displays) { display in
                             DisplayRowView(display: display)
                                 .padding(.horizontal, 12)
-                            Divider()
                         }
                     }
                 }
                 if virtualScreens.isAvailable {
-                    Divider()
                     virtualScreensSection
                 }
-                Divider()
                 displayGroupsSection
             }
             .frame(maxWidth: .infinity)
+            .padding(.bottom, 10)
         }
+        .scrollIndicators(.hidden)
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text("FBD")
-                .font(.headline)
-            Text("Free Better Display")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            // Brand tile.
+            RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
+                .fill(Color.accentColor.gradient)
+                .frame(width: 30, height: 30)
+                .overlay(
+                    Image(systemName: "display")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("FBD")
+                    .font(.headline)
+                Text("Free Better Display")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
+
             // In-content close for users who expect a button in the window
             // body; the title bar also has the standard close (×).
             Button {
                 NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
             } label: {
                 Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
             }
             .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
             .accessibilityLabel("Close FBD panel")
             .help("Close")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private var emptyState: some View {
@@ -190,11 +210,20 @@ struct DisplayListView: View {
             }
             .padding(.top, 2)
         } label: {
-            Text("Virtual Screens")
-                .font(.caption)
+            Label("Virtual Screens", systemImage: "rectangle.3.group")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
     }
 
     private var createVirtualScreenRow: some View {
@@ -319,11 +348,20 @@ struct DisplayListView: View {
             }
             .padding(.top, 2)
         } label: {
-            Text("Display Groups")
-                .font(.caption)
+            Label("Display Groups", systemImage: "square.grid.2x2")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
     }
 
     private func groupRow(_ group: DisplayGroup) -> some View {

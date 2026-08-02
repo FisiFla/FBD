@@ -5,9 +5,9 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Per-display row: name + badge, current resolution, brightness slider, and
-/// DDC/CI controls (contrast, volume, mute, input source) plus a
-/// "Resolutions…" disclosure and a capabilities read button.
+/// Per-display card: icon tile + name + capability tags, a nits-aware
+/// brightness slider, and DDC/CI controls, XDR, EDID, resolutions and
+/// color-profile sections — each a labeled disclosure row.
 @MainActor
 struct DisplayRowView: View {
     @ObservedObject var display: Display
@@ -45,66 +45,39 @@ struct DisplayRowView: View {
     @State private var colorProfilesLoaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(display.name)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    ForEach(badges, id: \.self) { badge in
-                        Text(badge)
-                            .font(.caption2)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                            .layoutPriority(1)
-                    }
-                    Spacer(minLength: 4)
-                }
-                if !resolutionLabel.isEmpty {
-                    Text(resolutionLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            }
-
+        VStack(alignment: .leading, spacing: 10) {
+            header
             BrightnessSliderView(display: display)
-
-            DisclosureGroup("Resolutions…") {
-                resolutionsList
-            }
-            .font(.caption)
-
             if display.ddcAvailable {
-                ddcControls
+                ddcPanel
             }
-
+            if !display.modes.isEmpty {
+                disclosureSection(icon: "list.bullet.rectangle", title: "Resolutions") {
+                    resolutionsList
+                }
+            }
             if display.isXDRCapable {
-                DisclosureGroup {
+                disclosureSection(icon: "sun.max.trianglebadge.exclamationmark", title: "XDR / HDR") {
                     xdrControls
-                } label: {
-                    Text("XDR / HDR")
-                        .font(.caption)
                 }
             }
-
             if !display.isBuiltin {
-                DisclosureGroup {
+                disclosureSection(icon: "rectangle.dashed", title: "EDID") {
                     edidControls
-                } label: {
-                    Text("EDID")
-                        .font(.caption)
                 }
             }
-
             colorProfileControls
-
             disableRow
         }
-        .padding(.vertical, 6)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
         .onAppear {
             syncUpscaleTarget()
             loadColorProfilesIfNeeded()
@@ -120,15 +93,104 @@ struct DisplayRowView: View {
         }
     }
 
-    // MARK: - Derived state
+    // MARK: - Header
 
-    private var badges: [String] {
-        var result: [String] = []
-        if display.isBuiltin { result.append("Built-in") }
-        if display.ddcAvailable { result.append("DDC") }
-        if display.isVirtual { result.append("Virtual") }
-        return result
+    private var header: some View {
+        HStack(alignment: .top, spacing: 10) {
+            // Display-kind tile.
+            RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
+                .fill(kind.tint.opacity(0.16))
+                .frame(width: 34, height: 34)
+                .overlay(
+                    Image(systemName: kind.icon)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(kind.tint)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(display.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    capabilityTags
+                }
+                if !resolutionLabel.isEmpty {
+                    Text(resolutionLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            // Soft-disconnect power button.
+            Button {
+                confirmingDisable = true
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(display.isOnline ? .red : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(display.isOnline ? "Disable display" : "Display offline")
+            .accessibilityLabel(display.isOnline ? "Disable display" : "Re-enable display")
+            .accessibilityHint("Display will go dark until re-enabled")
+            .confirmationDialog(
+                "Disable display?",
+                isPresented: $confirmingDisable,
+                titleVisibility: .visible
+            ) {
+                Button("Disable", role: .destructive) {
+                    _ = DisconnectController().setEnabled(false, displayID: display.id)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Display will go dark until re-enabled.")
+            }
+        }
     }
+
+    private var kind: DisplayKind { DisplayKind(display: display) }
+
+    @ViewBuilder
+    private var capabilityTags: some View {
+        HStack(spacing: 4) {
+            FBDTag(text: kind.label, tint: kind.tint)
+            if display.ddcAvailable {
+                FBDTag(text: "DDC", tint: .teal)
+            }
+            if display.isXDRCapable {
+                FBDTag(text: "XDR", tint: .orange)
+            } else if display.isHDRModeCapable {
+                FBDTag(text: "HDR", tint: .orange)
+            }
+        }
+        .layoutPriority(1)
+    }
+
+    // MARK: - Disclosure sections
+
+    /// Consistent disclosure-row style: small icon + title + chevron.
+    private func disclosureSection(
+        icon: String,
+        title: String,
+        @ViewBuilder content: @escaping () -> some View
+    ) -> some View {
+        DisclosureGroup {
+            content()
+                .padding(.top, 4)
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Resolutions
 
     private var resolutionLabel: String {
         guard let mode = display.currentMode else { return "" }
@@ -138,8 +200,6 @@ struct DisplayRowView: View {
         }
         return label
     }
-
-    // MARK: - Resolutions
 
     private var resolutionsList: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -177,24 +237,26 @@ struct DisplayRowView: View {
                 }
             }
         }
-        .padding(.top, 2)
     }
 
     // MARK: - DDC/CI controls
 
-    private var ddcControls: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Divider()
-            sliderRow(
-                label: "Contrast",
-                value: Binding(get: { contrast }, set: { contrast = $0 }),
-                send: { DisplayController.shared.setContrast($0, on: display) }
-            )
-            sliderRow(
-                label: "Volume",
-                value: Binding(get: { volume }, set: { volume = $0 }),
-                send: { DisplayController.shared.setVolume($0, on: display) }
-            )
+    private var ddcPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("DDC / CI", systemImage: "cable.connector")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.teal)
+
+            sliderRow(label: "Contrast", value: Binding(
+                get: { contrast },
+                set: { contrast = $0 }
+            )) { DisplayController.shared.setContrast($0, on: display) }
+
+            sliderRow(label: "Volume", value: Binding(
+                get: { volume },
+                set: { volume = $0 }
+            )) { DisplayController.shared.setVolume($0, on: display) }
+
             HStack(spacing: 8) {
                 Toggle("Mute", isOn: Binding(
                     get: { muted },
@@ -202,35 +264,59 @@ struct DisplayRowView: View {
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .accessibilityLabel("Mute \(display.name)")
                 Spacer()
-                TextField("Input source", text: $inputSource)
+                TextField("Input", text: $inputSource)
                     .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 60, idealWidth: 90, maxWidth: 110)
+                    .frame(minWidth: 50, idealWidth: 70, maxWidth: 90)
                     .help("DDC input source (VCP 0x60), 1–15")
+                    .accessibilityLabel("Input source for \(display.name)")
                 Button("Apply") {
                     applyInputSource()
                 }
                 .controlSize(.small)
             }
-            Button("Read DDC capabilities") {
+
+            Button {
                 DisplayController.shared.readCapabilities(for: display)
+            } label: {
+                Label("Read capabilities", systemImage: "doc.text.magnifyingglass")
             }
-            .controlSize(.small)
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusInset, style: .continuous)
+                .fill(Color(nsColor: .underPageBackgroundColor))
+        )
     }
 
-    private func sliderRow(label: String, value: Binding<Double>, send: @escaping (Double) -> Void) -> some View {
+    private func sliderRow(
+        label: String,
+        value: Binding<Double>,
+        send: @escaping (Double) -> Void
+    ) -> some View {
         HStack(spacing: 8) {
             Text(label)
                 .font(.caption)
-                .frame(width: 56, alignment: .leading)
-            Slider(
+                .foregroundStyle(.secondary)
+                .frame(width: 54, alignment: .leading)
+            FDBSlider(
                 value: Binding(
                     get: { value.wrappedValue },
                     set: { value.wrappedValue = $0; send($0) }
                 ),
-                in: 0...1
+                in: 0...1,
+                accessibilityLabel: "\(label) for \(display.name)",
+                valueText: { "\(Int(($0 * 100).rounded()))%" }
             )
+            Text("\(Int((value.wrappedValue * 100).rounded()))%")
+                .font(.caption)
+                .monospacedDigit()
+                .frame(width: 36, alignment: .trailing)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -242,37 +328,17 @@ struct DisplayRowView: View {
 
     // MARK: - Disable / re-enable
 
-    /// Soft-disconnect (CGSConfigureDisplayEnabled): the display goes dark
-    /// until re-enabled. Only offered while online; an offline display gets a
-    /// "Re-enable" button instead.
     private var disableRow: some View {
         Group {
-            if display.isOnline {
-                Button(role: .destructive) {
-                    confirmingDisable = true
+            if !display.isOnline {
+                Button {
+                    _ = DisconnectController().setEnabled(true, displayID: display.id)
                 } label: {
-                    Label("Disable display", systemImage: "power")
+                    Label("Re-enable display", systemImage: "power")
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .foregroundStyle(.red)
-                .controlSize(.small)
-                .confirmationDialog(
-                    "Disable display?",
-                    isPresented: $confirmingDisable,
-                    titleVisibility: .visible
-                ) {
-                    Button("Disable", role: .destructive) {
-                        _ = DisconnectController().setEnabled(false, displayID: display.id)
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Display will go dark until re-enabled.")
-                }
-            } else {
-                Button("Re-enable display") {
-                    _ = DisconnectController().setEnabled(true, displayID: display.id)
-                }
+                .foregroundStyle(.blue)
                 .controlSize(.small)
             }
         }
@@ -346,7 +412,6 @@ struct DisplayRowView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.top, 2)
     }
 
     private func summaryRow(_ label: String, _ value: String) -> some View {
@@ -463,7 +528,6 @@ struct DisplayRowView: View {
     private var colorProfileControls: some View {
         Group {
             if !colorProfiles.isEmpty {
-                Divider()
                 VStack(alignment: .leading, spacing: 4) {
                     Picker("Color Profile", selection: colorProfileBinding) {
                         ForEach(colorProfiles) { profile in
@@ -558,8 +622,9 @@ struct DisplayRowView: View {
                 HStack(spacing: 8) {
                     Text("Target")
                         .font(.caption)
-                        .frame(width: 56, alignment: .leading)
-                    Slider(
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .leading)
+                    FDBSlider(
                         value: Binding(
                             get: { upscaleTargetNits },
                             set: { newValue in
@@ -567,12 +632,14 @@ struct DisplayRowView: View {
                                 scheduleUpscaleTargetWrite(Int(newValue))
                             }
                         ),
-                        in: range
+                        in: range,
+                        accessibilityLabel: "XDR upscale target for \(display.name)",
+                        valueText: { "\(Int($0.rounded())) nits" }
                     )
                     Text("\(Int(upscaleTargetNits)) nits")
                         .font(.caption)
                         .monospacedDigit()
-                        .frame(width: 70, alignment: .trailing)
+                        .frame(width: 64, alignment: .trailing)
                 }
             }
         }

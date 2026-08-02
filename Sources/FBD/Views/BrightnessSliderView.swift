@@ -1,8 +1,12 @@
 import FBDCore
 import SwiftUI
 
-/// Brightness slider bound to `display.brightness`, routed through
+/// Brightness control bound to `display.brightness`, routed through
 /// DisplayController (which owns debouncing — never debounce here).
+///
+/// On XDR-capable displays the slider shows a live nits estimate and a
+/// zone divider at the hardware maximum — everything past it is the
+/// software/XDR boost region.
 @MainActor
 struct BrightnessSliderView: View {
     @ObservedObject var display: Display
@@ -14,34 +18,68 @@ struct BrightnessSliderView: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "sun.min")
-                .foregroundStyle(.secondary)
-            if let brightness = display.brightness {
-                Text("0%")
-                    .font(.caption2)
+        if let brightness = display.brightness {
+            HStack(spacing: 10) {
+                Image(systemName: "sun.max")
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
-                Slider(
+                    .frame(width: 18)
+
+                FDBSlider(
                     value: Binding(
                         get: { display.brightness ?? 0 },
                         set: { DisplayController.shared.setBrightness($0, on: display) }
                     ),
-                    in: 0...1
+                    in: 0...1,
+                    zoneFraction: xdrZoneFraction,
+                    accessibilityLabel: "Brightness for \(display.name)",
+                    valueText: { _ in "\(Self.percentText(display.brightness ?? 0)) percent" }
                 )
-                .accessibilityLabel("Brightness for \(display.name)")
                 .accessibilityValue("\(Self.percentText(display.brightness ?? 0)) percent")
-                Text("100%")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("\(Int((brightness * 100).rounded()))%")
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 38, alignment: .trailing)
-            } else {
-                Text("Brightness unavailable")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text("\(Self.percentText(brightness))%")
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                    if let nits = nitsEstimate {
+                        Text("\(nits) nits")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .frame(width: 52, alignment: .trailing)
             }
+        } else {
+            Label("Brightness unavailable", systemImage: "sun.max.trianglebadge.exclamationmark")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
+    }
+
+    // MARK: XDR zone + nits estimate
+
+    /// Fraction of the slider occupied by the hardware range, based on the
+    /// display's first valid preset (nil for non-XDR displays).
+    private var xdrZoneFraction: Double? {
+        guard let preset = validPreset,
+              preset.maxHDRLuminance > preset.maxSliderBrightness,
+              preset.maxHDRLuminance > 0 else { return nil }
+        return Double(preset.maxSliderBrightness) / Double(preset.maxHDRLuminance)
+    }
+
+    /// Estimated nits for the current slider position (hardware max +
+    /// HDR headroom mapping). Shows on XDR displays with a valid preset.
+    private var nitsEstimate: Int? {
+        guard let preset = validPreset,
+              preset.maxHDRLuminance > preset.minSliderBrightness else { return nil }
+        let brightness = display.brightness ?? 0
+        let nits = Double(preset.minSliderBrightness)
+            + brightness * Double(preset.maxHDRLuminance - preset.minSliderBrightness)
+        return Int(nits.rounded())
+    }
+
+    private var validPreset: XDRPreset? {
+        display.presets.first { $0.isValid }
     }
 }
