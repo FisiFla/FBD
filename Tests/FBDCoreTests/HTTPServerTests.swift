@@ -392,4 +392,30 @@ final class HTTPServerTests: XCTestCase {
         let result = get(port, "/api/displays")
         XCTAssertEqual(result?.status, 200)
     }
+
+
+    // MARK: - Restart safety
+
+    func testStartIsRestartSafeAndTracksRunningState() throws {
+        let server = HTTPServer()
+        let ready = expectation(description: "listener ready")
+        var boundPort: UInt16 = 0
+        XCTAssertTrue(server.start(port: 0, handler: { _, _, _, _ in (200, #"{"ok":true}"#) },
+                                   onReady: { boundPort = $0; ready.fulfill() }))
+        XCTAssertTrue(server.isRunning)
+        wait(for: [ready], timeout: 5)
+
+        // Restart on the same instance (port change scenario): must keep
+        // serving, not leak listeners.
+        let ready2 = expectation(description: "listener ready after restart")
+        var boundPort2: UInt16 = 0
+        XCTAssertTrue(server.start(port: 0, handler: { _, _, _, _ in (200, #"{"ok":true}"#) },
+                                   onReady: { boundPort2 = $0; ready2.fulfill() }))
+        XCTAssertTrue(server.isRunning)
+        wait(for: [ready2], timeout: 5)
+        XCTAssertNotEqual(boundPort2, 0)
+
+        server.stop()
+        XCTAssertFalse(server.isRunning)
+    }
 }

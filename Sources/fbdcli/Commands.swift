@@ -1356,6 +1356,7 @@ func cmdHTTP(args: [String]) -> Int32 {
             Settings.httpServerPort = port
         }
         Settings.httpServerEnabled = true
+        // The app watches UserDefaults and reconciles the server live.
         print("HTTP API enabled on port \(httpPortLabel(Settings.httpServerPort))")
     case "off":
         Settings.httpServerEnabled = false
@@ -1367,7 +1368,7 @@ func cmdHTTP(args: [String]) -> Int32 {
         print("fbdcli: http: unknown subcommand '\(sub)' (expected on, off, or status)")
         return 1
     }
-    print("Note: the HTTP API is served by the app; enable it in Settings or via this command, then restart the app.")
+    print("Note: the app applies HTTP settings live — no restart needed.")
     return 0
 }
 

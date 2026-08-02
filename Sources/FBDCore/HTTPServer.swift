@@ -28,6 +28,10 @@ public final class HTTPServer {
     /// forever).
     public var idleTimeout: TimeInterval = 10
 
+    /// True while a listener is active. start() is restart-safe: calling it
+    /// while running stops the previous listener first.
+    public private(set) var isRunning = false
+
     /// Per-connection bookkeeping (thread-confined to `queue`).
     private final class ConnectionState {
         var sentContinue = false
@@ -49,6 +53,10 @@ public final class HTTPServer {
     ) -> Bool {
         self.handler = handler
         requestedPort = port
+        // Restart-safe: replace any existing listener (port changes).
+        if isRunning {
+            stop()
+        }
         do {
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
@@ -69,6 +77,7 @@ public final class HTTPServer {
             }
             listener.start(queue: queue)
             self.listener = listener
+            isRunning = true
             log.info("HTTP server listening on 127.0.0.1:\(listener.port?.rawValue ?? 0)")
             return true
         } catch {
@@ -80,6 +89,7 @@ public final class HTTPServer {
     public func stop() {
         listener?.cancel()
         listener = nil
+        isRunning = false
     }
 
     // MARK: - Connection handling

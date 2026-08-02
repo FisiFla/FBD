@@ -46,25 +46,20 @@ final class AppCore {
             virtualScreens.reconnectAuto()
         }
 
-        // Tier 5: HTTP control API (app-owned server; Settings read at launch).
-        if Settings.httpServerEnabled {
-            let handler: (String, String, String?, [String: String]) -> (Int, String) = { [weak self] method, path, body, headers in
-                guard let self else { return (500, HTTPJSON.error("app unavailable")) }
-                return self.handleHTTP(method: method, path: path, body: body, headers: headers)
-            }
-            if httpServer.start(port: UInt16(clamping: Settings.httpServerPort), handler: handler) {
-                // Prefer the configured port (listener.port may not be
-                // populated synchronously); ephemeral ports fall back to it.
-                let published = Settings.httpServerPort != 0
-                    ? Settings.httpServerPort
-                    : Int(self.httpServer.port)
-                Settings.httpServerActivePort = published
-                log.info("HTTP API listening on 127.0.0.1:\(self.httpServer.port)")
-            } else {
-                Settings.httpServerActivePort = 0
-                log.error("HTTP API failed to start on port \(Settings.httpServerPort)")
-            }
+        // Tier 5: HTTP control API. The server reconciles live against
+        // Settings, so `fbdcli http on/off` applies without an app restart.
+        reconcileHTTPServer()
+        // Same-process writes arrive instantly via the notification;
+        // cross-process writes (the CLI) are covered by a light poll.
+        observers.append(NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reconcileHTTPServer() }
+        })
+        let pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reconcileHTTPServer() }
         }
+        httpReconcileTimer = pollTimer
 
         // Tier 5: custom OSD follows display updates (brightness changes from
         // the UI/CLI flow through DisplayController, which posts
@@ -88,6 +83,11 @@ final class AppCore {
 
     // Tier 5 controller instances (owned here; UI/CLI create their own for one-shot use).
     let httpServer = HTTPServer()
+    /// Last reconciled HTTP state (avoids redundant restarts on unrelated
+    /// defaults changes).
+    private var httpLastEnabled = false
+    private var httpLastPort = 0
+    private var httpReconcileTimer: Timer?
     let customOSD = CustomOSD()
     let pip = PipStreamController()
     let nightShift = NightShiftController()
@@ -98,6 +98,42 @@ final class AppCore {
     private var osdDebounceWorkItem: DispatchWorkItem?
     /// Display that changed last (from .fbdDisplayUpdated userInfo).
     private var pendingOSDDisplayID: CGDirectDisplayID?
+
+    /// Start/stop/restart the HTTP server to match Settings. A no-op unless
+    /// the enabled flag or the port actually changed.
+    @MainActor private func reconcileHTTPServer() {
+        let enabled = Settings.httpServerEnabled
+        let port = Settings.httpServerPort
+        guard enabled != httpLastEnabled || port != httpLastPort else { return }
+        httpLastEnabled = enabled
+        httpLastPort = port
+
+        if !enabled {
+            if httpServer.isRunning {
+                httpServer.stop()
+                Settings.httpServerActivePort = 0
+                log.info("HTTP API stopped")
+            }
+            return
+        }
+
+        // Enabled: (re)start — a port change while running restarts the
+        // listener on the new port.
+        let handler: (String, String, String?, [String: String]) -> (Int, String) = { [weak self] method, path, body, headers in
+            guard let self else { return (500, HTTPJSON.error("app unavailable")) }
+            return self.handleHTTP(method: method, path: path, body: body, headers: headers)
+        }
+        if httpServer.start(port: UInt16(clamping: port), handler: handler) {
+            // Prefer the configured port (listener.port may not be
+            // populated synchronously); ephemeral ports fall back to it.
+            let published = port != 0 ? port : Int(self.httpServer.port)
+            Settings.httpServerActivePort = published
+            log.info("HTTP API listening on 127.0.0.1:\(self.httpServer.port)")
+        } else {
+            Settings.httpServerActivePort = 0
+            log.error("HTTP API failed to start on port \(port)")
+        }
+    }
 
     /// Route SIGTERM (`kill`, session end, tools) through NSApp.terminate so
     /// AppKit cleanup runs — most importantly the willTerminate observers
