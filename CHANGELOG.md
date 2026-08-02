@@ -17,6 +17,11 @@ Versioning: semver; 0.x until the first signed/notarized release.
   installation when the app is re-activated after granting permission.
 - Accessibility labels: status-bar button, panel close/settings buttons,
   per-display brightness sliders (label + percent value).
+- Right-click status-item menu (Show FBD / Settings… / Quit FBD);
+  `fbdcli settings` masked settings dump for bug reports; `GET /api/health`
+  unauthenticated endpoint.
+- Parser fuzz sweeps (EDID/VCP/capabilities, 1,200 seeded iterations) and
+  Swift-6-readiness fixes (NSLock → `withLock` in async contexts).
 
 ### Fixed
 - Routed `virtual destroy <name>` sent the raw name as the config id; names

@@ -223,9 +223,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
     private var stream: SCStream?
 
     var isCapturing: Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return _isCapturing
+        stateLock.withLock { _isCapturing }
     }
 
     init(
@@ -263,14 +261,10 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Stop the stream and hide the window. Serialized with any in-flight
     /// frame on `queue`, so the renderer is never torn down mid-draw.
     func stop() {
-        stateLock.lock()
-        _isStopping = true
-        stateLock.unlock()
+        stateLock.withLock { _isStopping = true }
         queue.async { [weak self] in
             guard let self else { return }
-            stateLock.lock()
-            let current = self.stream
-            stateLock.unlock()
+            let current = stateLock.withLock { self.stream }
             if let stream = current {
                 try? stream.removeStreamOutput(self, type: .screen)
                 stream.stopCapture(completionHandler: nil)
