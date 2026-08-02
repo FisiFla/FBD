@@ -52,6 +52,37 @@ Versioning: semver; 0.x until the first signed/notarized release.
 - Release builds no longer silently copy a stale binary when the build fails
   (Makefile fails loudly now).
 
+### Added (cycles 22-29)
+- `XDRBoostPlanner`: the XDR fallback decision chain is a pure, tested layer
+  shared by the slider and the `xdr` command.
+- `completions/_fbdcli`: zsh tab-completion for all 32 commands and
+  subcommands.
+- Release workflow (`.github/workflows/release.yml`): tag-triggered
+  sign/notarize/publish when the five secrets are configured; graceful
+  unsigned-artifact fallback otherwise.
+- `make bump-version VERSION=x.y.z [BUILD=n]` release helper.
+- Shell/observability: `fbdcli settings` (masked dump), `GET /api/health`.
+
+### Fixed (cycles 22-29)
+- XDR upscaling on macOS 27: the software boost fallback now defaults ON and
+  is reachable from the explicit `xdr` command; the below-ceiling slider
+  path stops an active overlay boost; `isCombinedCapable` accepts the
+  fallback when native preset writes are write-protected. The overlay needs
+  **Screen Recording** permission (documented).
+- SIGTERM now routes through `NSApp.terminate` so AppKit cleanup
+  (willTerminate observers, e.g. the EDID factory restore on quit) runs on
+  `kill`/session end.
+- Mode-spec leniency: `1920x1080@` / `1920x` are rejected instead of
+  silently dropping the trailing part.
+- `fbdcli tv` brands match case-insensitively (`LG` now works).
+
+### Verified (cycles 22-29)
+- Memory-leak audit: no application-code leaks (framework-internal XPC
+  allocations only).
+- `fbd://` URL scheme end-to-end (brightness URL + malformed-input
+  robustness); startup latency 0.57 s; help covers all 32 commands;
+  full 23-command live regression matrix clean.
+
 ### Changed
 - UI: the status-item popover is now a floating `NSPanel` (title bar + close
   button, resizable 420×500–600×900, frame autosave, Escape/⌘W close,
