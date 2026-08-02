@@ -103,7 +103,7 @@ final class SettingsTests: XCTestCase {
         // Assert
         XCTAssertTrue(Settings.ddcFeatures(for: ddcIdentity).isEmpty)
     }
-}
+
 
     // MARK: - Debug summary
 
@@ -122,3 +122,4 @@ final class SettingsTests: XCTestCase {
         let lines = Settings.debugSummary.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines, lines.sorted())
     }
+}
