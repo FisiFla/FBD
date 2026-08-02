@@ -31,6 +31,12 @@ Commands:
   modes <id>                    List all modes for a display
   set-mode <id> <W>x<H>[@<hz>]  Apply a matching mode
   ddc-test <id>                 DDC diagnostics (arch, AVService, VCP reads)
+  xdr <id> [nits|off]           Get or set XDR brightness upscaling (nits
+                                target on XDR-capable displays)
+  preset <id> [index]           List factory display presets (SDR/HDR nits,
+                                * = active) or activate one by index
+  hdr <id> [on|off]             Show or set HDR framebuffer mode (displays
+                                that expose the mode)
   virtual list                  List persisted virtual screen configs
   virtual create <name> <W>x<H>[@<hz>] [--hdr] [--no-auto]
                                 Create and connect a virtual screen

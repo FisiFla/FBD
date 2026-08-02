@@ -44,3 +44,15 @@ Swift 5 mode. `@MainActor` on: `DisplayController`, app/UI types. Plain classes:
 ## Settings
 
 `Settings` enum in FBDCore — UserDefaults-backed (`Storage` property wrapper), domain `dev.fisifla.fbd`. Per-display state (DDC feature sets) keyed by `Display.identityKey` (`vendor-model-serial`).
+
+## HTTP API design decisions
+
+- **`Connection: close` (no keep-alive) is deliberate.** The control API is
+  local, low-rate and per-request authenticated; the hand-rolled server
+  keeps one request per connection for simplicity and bounded memory.
+  Clients (fbdcli, curl) reconnect per call — measured overhead is
+  negligible on loopback.
+- **`Expect: 100-continue` is honored** (interim response before the body);
+  declared `Content-Length` above 1 MB is rejected with 413 before
+  buffering; idle connections are dropped after 10 s.
+- **`/api/health` is the only unauthenticated endpoint** (uptime checks).
