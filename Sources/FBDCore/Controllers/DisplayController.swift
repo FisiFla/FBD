@@ -16,8 +16,8 @@ public final class DisplayController {
     public private(set) var displays: [Display] = []
 
     private let apple = AppleController()
-    public let external = ExternalController()
-    public let ddc: DDCController
+    private let external = ExternalController()
+    private let ddc: DDCController
     private let resolution = ResolutionController()
     private let xdr = XDRNativeController()
     private let overlay = OverlayController()
@@ -35,6 +35,40 @@ public final class DisplayController {
     public init() {
         ddc = DDCController(external: external)
         combined = CombinedController(apple: apple, ddc: ddc, xdr: xdr, overlay: overlay)
+    }
+
+    // MARK: - DDC surface (typed, no controller exposure)
+
+    /// DDC controls for a display (contrast/volume/mute/input). Each value is
+    /// nil when the display has no AVService or the feature read failed.
+    public struct DDCControls: Equatable {
+        public let contrast: Double?
+        public let volume: Double?
+        public let muted: Bool?
+        public let inputSource: Double?
+    }
+
+    /// Read the DDC controls for a display through the shared DDC controller
+    /// (single AVService cache, per-display serial queue and cooldown).
+    public func readDDCControls(for display: Display) -> DDCControls {
+        DDCControls(
+            contrast: ddc.getFeature(.contrast, for: display),
+            volume: ddc.getFeature(.volume, for: display),
+            muted: ddc.getFeature(.mute, for: display).map { $0 > 0 },
+            inputSource: ddc.getFeature(.inputSource, for: display)
+        )
+    }
+
+    /// Read + parse the display's DDC capabilities reply (nil when DDC is
+    /// unavailable or the reply could not be parsed).
+    public func readDDCCapabilities(for display: Display) -> DDC.DDCCapabilities? {
+        ddc.readCapabilities(for: display)
+    }
+
+    /// Whether a DDC feature is supported by the display (persisted feature
+    /// set, falling back to one live capabilities read per display).
+    public func isDDCFeatureAvailable(_ feature: DDCFeature, for display: Display) -> Bool {
+        ddc.isFeatureAvailable(feature, for: display)
     }
 
     // MARK: - Lifecycle

@@ -135,12 +135,18 @@ public enum DDC {
             mccsVersion = match.replacingOccurrences(of: #"mccs_ver\("#, with: "", options: .regularExpression)
                 .replacingOccurrences(of: ")", with: "")
         }
-        if let range = nsText.range(of: #"vcp\(([0-9A-Fa-f ]+)\)"#, options: .regularExpression) as NSRange?,
+        // The vcp group ends at the first ')' that is not part of a
+        // single-level sub-value group: vcp(10 12(01 02) 60).
+        if let range = nsText.range(of: #"vcp\((?:[0-9A-Fa-f ]|\([0-9A-Fa-f ]*\))*\)"#, options: .regularExpression) as NSRange?,
            range.location != NSNotFound {
             let match = nsText.substring(with: range)
-            let body = match.replacingOccurrences(of: #"vcp\("#, with: "", options: .regularExpression)
-                .replacingOccurrences(of: ")", with: "")
-            for token in body.split(separator: " ") {
+            // Strip sub-values first ("10 12(01 02) 60)" -> "10 12  60)"),
+            // then the group's own closing paren, then tokenize.
+            let stripped = match
+                .replacingOccurrences(of: #"vcp\("#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\([0-9A-Fa-f ]*\)"#, with: " ", options: .regularExpression)
+                .replacingOccurrences(of: ")", with: " ")
+            for token in stripped.split(separator: " ") {
                 // VCP codes in the capabilities reply are hex (e.g. "8D" = mute).
                 if let code = UInt8(token, radix: 16) { codes.insert(code) }
             }

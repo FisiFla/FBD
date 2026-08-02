@@ -1324,6 +1324,14 @@ func cmdProtectRestore(_ controller: DisplayController, args: [String]) -> Int32
 
 // MARK: - HTTP API settings (Tier 5)
 
+/// `fbdcli auth-token` — print the local HTTP API token (generated on first
+/// access, shared with the app via the defaults domain).
+@MainActor
+func cmdAuthToken() -> Int32 {
+    print(Settings.httpAPIToken)
+    return 0
+}
+
 /// `fbdcli http on [port]` / `http off` / `http status` — manage the app's
 /// HTTP control API setting. The server itself is owned by the app process
 /// (it reads these settings at launch), so changes apply after a restart.

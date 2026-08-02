@@ -1,3 +1,4 @@
+import Network
 import XCTest
 import FBDCore
 
@@ -6,6 +7,7 @@ import FBDCore
 final class HTTPServerTests: XCTestCase {
     private var server: HTTPServer!
     private var received: [(method: String, path: String, body: String?)] = []
+    private var lastHeaders: [String: String] = [:]
     private var queue = DispatchQueue(label: "test.http")
 
     override func setUp() {
@@ -26,9 +28,10 @@ final class HTTPServerTests: XCTestCase {
         let server = HTTPServer()
         let ready = expectation(description: "listener ready")
         var boundPort: UInt16 = 0
-        let started = server.start(port: port) { [weak self] method, path, body in
+        let started = server.start(port: port) { [weak self] method, path, body, headers in
             self?.queue.sync {
                 self?.received.append((method, path, body))
+                self?.lastHeaders = headers
             }
             let body = body ?? "null"
             return (200, #"{"ok":true,"echo":\#(body)}"#)
@@ -119,7 +122,7 @@ final class HTTPServerTests: XCTestCase {
         let server = HTTPServer()
         let ready = expectation(description: "listener ready")
         var boundPort: UInt16 = 0
-        XCTAssertTrue(server.start(port: 0, handler: { _, _, _ in
+        XCTAssertTrue(server.start(port: 0, handler: { _, _, _, _ in
             (405, #"{"error":"method not allowed"}"#)
         }, onReady: { boundPort = $0; ready.fulfill() }))
         self.server = server
@@ -129,6 +132,52 @@ final class HTTPServerTests: XCTestCase {
 
         XCTAssertEqual(result.status, 405)
         XCTAssertTrue(String(data: result.body, encoding: .utf8)?.contains("method not allowed") == true)
+    }
+
+    func testRequestHeadersAreDeliveredToHandler() throws {
+        let port = startServer()
+        let expectation = expectation(description: "POST with header")
+        let url = URL(string: "http://127.0.0.1:\(port)/api/displays")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("s3cret", forHTTPHeaderField: "X-FBD-Token")
+        request.httpBody = Data(#"{"value":0.5}"#.utf8)
+        URLSession.shared.dataTask(with: request) { _, _, _ in expectation.fulfill() }.resume()
+        wait(for: [expectation], timeout: 5)
+
+        XCTAssertEqual(lastHeaders["x-fbd-token"], "s3cret")
+    }
+
+    func testOPTIONSGetsCORSHeadersWithoutHandlerInvocation() throws {
+        let port = startServer()
+        // Raw socket: URLSession handles OPTIONS specially on some OS
+        // versions, so speak HTTP directly to verify the preflight path.
+        let connection = NWConnection(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port)!,
+            using: .tcp
+        )
+        let expectation = expectation(description: "OPTIONS response")
+        var responseText = ""
+        connection.stateUpdateHandler = { state in
+            if state == .ready {
+                let request = "OPTIONS /api/displays HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                connection.send(content: Data(request.utf8), completion: .contentProcessed { _ in })
+            }
+        }
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, _ in
+            if let data {
+                responseText = String(data: data, encoding: .utf8) ?? ""
+            }
+            connection.cancel()
+            expectation.fulfill()
+        }
+        connection.start(queue: .global())
+
+        wait(for: [expectation], timeout: 5)
+        XCTAssertTrue(responseText.hasPrefix("HTTP/1.1 204 No Content"), "got: \(responseText)")
+        XCTAssertTrue(responseText.lowercased().contains("access-control-allow-origin: *"))
+        XCTAssertTrue(received.isEmpty, "preflight must not reach the handler")
     }
 
     func testServerSurvivesMalformedRequest() throws {

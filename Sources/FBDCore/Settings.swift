@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 /// Centralized UserDefaults-backed settings. Keys mirror the semantics of the
 /// BetterDisplay settings surface (see betterdisplay-reverse-engineering.md).
@@ -123,6 +124,25 @@ public enum Settings {
     /// ephemeral port; never read by the app itself.
     @Storage(key: "httpServerActivePort", defaultValue: 0)
     public static var httpServerActivePort: Int
+
+    /// Bearer token for the HTTP control API, generated on first access and
+    /// persisted. The CLI reads the same defaults domain, so routing works
+    /// without any user setup.
+    public static var httpAPIToken: String {
+        if let token = defaults.string(forKey: "httpAPIToken"), !token.isEmpty {
+            return token
+        }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            // Extremely unlikely; fall back to a time-seeded token rather
+            // than failing closed on a localhost-only API.
+            let seed = "\(Date().timeIntervalSince1970)-\(ProcessInfo.processInfo.processIdentifier)"
+            return Data(seed.utf8).base64EncodedString()
+        }
+        let token = bytes.map { String(format: "%02x", $0) }.joined()
+        defaults.set(token, forKey: "httpAPIToken")
+        return token
+    }
 
     /// Show the custom brightness/volume OSD overlay.
     @Storage(key: "customOSDEnabled", defaultValue: true)

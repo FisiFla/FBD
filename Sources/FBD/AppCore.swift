@@ -45,9 +45,9 @@ final class AppCore {
 
         // Tier 5: HTTP control API (app-owned server; Settings read at launch).
         if Settings.httpServerEnabled {
-            let handler: (String, String, String?) -> (Int, String) = { [weak self] method, path, body in
+            let handler: (String, String, String?, [String: String]) -> (Int, String) = { [weak self] method, path, body, headers in
                 guard let self else { return (500, HTTPJSON.error("app unavailable")) }
-                return self.handleHTTP(method: method, path: path, body: body)
+                return self.handleHTTP(method: method, path: path, body: body, headers: headers)
             }
             if httpServer.start(port: UInt16(clamping: Settings.httpServerPort), handler: handler) {
                 // Prefer the configured port (listener.port may not be
@@ -193,7 +193,15 @@ final class AppCore {
     /// HTTPServer handler entry point. Runs on the HTTP server's private queue
     /// (off the main actor): parsing is pure, then the main-actor routing is
     /// awaited with a semaphore so the synchronous handler API still replies.
-    nonisolated private func handleHTTP(method: String, path: String, body: String?) -> (Int, String) {
+    nonisolated private func handleHTTP(method: String, path: String, body: String?, headers: [String: String]) -> (Int, String) {
+        // Local API token auth (fail closed). The token is generated on first
+        // access and shared with the CLI via the same defaults domain.
+        let expected = Settings.httpAPIToken
+        let provided = headers["x-fbd-token"] ?? headers["authorization"]
+            .flatMap { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : nil }
+        guard provided == expected else {
+            return (401, HTTPJSON.error("unauthorized"))
+        }
         let semaphore = DispatchSemaphore(value: 0)
         var response: (Int, String) = (500, HTTPJSON.error("internal error"))
         Task { @MainActor [weak self] in
@@ -271,19 +279,18 @@ final class AppCore {
     /// GET /api/displays/<id>/controls — live DDC reads (contrast/volume/mute/input).
     /// GET /api/displays/<id>/caps — capabilities string.
     @MainActor private func readDisplayInfo(_ what: String, for display: Display) -> (Int, String) {
-        // Share DisplayController's DDC instance (single AVService cache and
-        // cooldown across CLI/hotkey/UI paths).
-        let ddc = DisplayController.shared.ddc
         switch what {
         case "controls":
-            var controls: [String: Any] = [:]
-            if let value = ddc.getFeature(.contrast, for: display) { controls["contrast"] = value }
-            if let value = ddc.getFeature(.volume, for: display) { controls["volume"] = value }
-            if let value = ddc.getFeature(.mute, for: display) { controls["muted"] = value > 0 }
-            if let value = ddc.getFeature(.inputSource, for: display) { controls["inputSource"] = value }
-            return (200, HTTPJSON.encode(["displayID": display.id, "controls": controls]))
+            let controls = DisplayController.shared.readDDCControls(for: display)
+            let json: [String: Any] = [
+                "contrast": controls.contrast as Any? ?? NSNull(),
+                "volume": controls.volume as Any? ?? NSNull(),
+                "muted": controls.muted as Any? ?? NSNull(),
+                "inputSource": controls.inputSource as Any? ?? NSNull(),
+            ]
+            return (200, HTTPJSON.encode(["displayID": display.id, "controls": json]))
         case "caps":
-            if let caps = ddc.readCapabilities(for: display) {
+            if let caps = DisplayController.shared.readDDCCapabilities(for: display) {
                 return (200, HTTPJSON.encode(["displayID": display.id, "raw": caps.raw, "mccsVersion": caps.mccsVersion, "vcp": caps.vcpCodes.sorted().map { String(format: "0x%02X", $0) }]))
             }
             return (404, HTTPJSON.error("no capabilities for display"))

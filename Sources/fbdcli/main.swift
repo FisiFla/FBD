@@ -30,6 +30,7 @@ enum Command: String {
     case underscan
     case protect
     case http
+    case authToken = "auth-token"
     case pip
     case osd
     case nightshift
@@ -102,6 +103,8 @@ Commands:
                                 served by the app — restart the app to apply
   http off                      Disable the HTTP control API
   http status                   Show HTTP API state and port
+  auth-token                    Print the local HTTP API token (needed for
+                                curl and other HTTP clients)
   pip <id> [b] [c] [s]          Stream a display in a picture-in-picture window
                                 (optional brightness/contrast/saturation, 1 =
                                 none). Streams until the window closes or a
@@ -224,6 +227,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdProtect(controller, args: rest)
     case .http:
         return cmdHTTP(args: rest)
+    case .authToken:
+        return cmdAuthToken()
     case .pip:
         return cmdPip(controller, args: rest)
     case .osd:

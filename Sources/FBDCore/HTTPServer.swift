@@ -19,7 +19,7 @@ private let log = Logger(subsystem: "dev.fisifla.fbd", category: "HTTPServer")
 public final class HTTPServer {
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "dev.fisifla.fbd.http")
-    private var handler: ((String, String, String?) -> (Int, String))?
+    private var handler: ((String, String, String?, [String: String]) -> (Int, String))?
     /// Requested port (0 = ephemeral); used until the listener reports its port.
     private var requestedPort: UInt16 = 0
 
@@ -27,13 +27,13 @@ public final class HTTPServer {
 
     public init() {}
 
-    /// Start listening on 127.0.0.1. `handler(requestMethod, requestPath, requestBody) -> (statusCode, responseBody)`.
+    /// Start listening on 127.0.0.1. `handler(requestMethod, requestPath, requestBody, requestHeaders) -> (statusCode, responseBody)`.
     /// `onReady` is invoked once the listener is ready (immediately for fixed
     /// ports; after binding for ephemeral port 0) with the actual port.
     @discardableResult
     public func start(
         port: UInt16 = 0,
-        handler: @escaping (String, String, String?) -> (Int, String),
+        handler: @escaping (String, String, String?, [String: String]) -> (Int, String),
         onReady: ((UInt16) -> Void)? = nil
     ) -> Bool {
         self.handler = handler
@@ -141,17 +141,35 @@ public final class HTTPServer {
         let method = String(parts[0])
         var path = String(parts[1])
         var body: String?
-        if let bodyRange = requestText.range(of: "\r\n\r\n") {
-            let bodyText = requestText[bodyRange.upperBound...]
+        var headers: [String: String] = [:]
+        if let headerEnd = requestText.range(of: "\r\n\r\n") {
+            let bodyText = requestText[headerEnd.upperBound...]
             if !bodyText.isEmpty { body = String(bodyText) }
+            // Header lines: "Name: value" (lowercased names).
+            for line in requestText[..<headerEnd.lowerBound].split(separator: "\r\n").dropFirst() {
+                let pair = line.split(separator: ":", maxSplits: 1)
+                if pair.count == 2 {
+                    headers[String(pair[0]).trimmingCharacters(in: .whitespaces).lowercased()] =
+                        String(pair[1]).trimmingCharacters(in: .whitespaces)
+                }
+            }
         }
         // Strip query string.
         if let q = path.firstIndex(of: "?") {
             path = String(path[..<q])
         }
 
+        // CORS preflight for web-based clients (local API; the token header
+        // is still required on all real requests).
+        if method == "OPTIONS" {
+            connection.send(content: Data(Self.corsResponse().utf8), completion: .contentProcessed { _ in
+                connection.cancel()
+            })
+            return
+        }
+
         let started = Date()
-        let (status, responseBody) = handler?(method, path, body) ?? (404, #"{"error":"not found"}"#)
+        let (status, responseBody) = handler?(method, path, body, headers) ?? (404, #"{"error":"not found"}"#)
         let latencyMs = Int(Date().timeIntervalSince(started) * 1000)
         log.debug("\(method) \(path) -> \(status) (\(latencyMs) ms)")
         let statusText: String
@@ -167,6 +185,9 @@ public final class HTTPServer {
         let response = """
         HTTP/1.1 \(status) \(statusText)\r
         Content-Type: application/json\r
+        Access-Control-Allow-Origin: *\r
+        Access-Control-Allow-Headers: X-FBD-Token, Content-Type\r
+        Access-Control-Allow-Methods: GET, POST, OPTIONS\r
         Content-Length: \(responseBody.utf8.count)\r
         Connection: close\r
         \r
@@ -175,5 +196,18 @@ public final class HTTPServer {
         connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in
             connection.cancel()
         })
+    }
+
+    /// 204 response for CORS preflight (no handler invocation).
+    private static func corsResponse() -> String {
+        """
+        HTTP/1.1 204 No Content\r
+        Access-Control-Allow-Origin: *\r
+        Access-Control-Allow-Headers: X-FBD-Token, Content-Type\r
+        Access-Control-Allow-Methods: GET, POST, OPTIONS\r
+        Content-Length: 0\r
+        Connection: close\r
+        \r
+        """
     }
 }

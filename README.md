@@ -13,6 +13,36 @@ Updates via Sparkle (optional).**
 > Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 > Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md)
 
+## Feature matrix by macOS version
+
+Apple locks down private display APIs differently per release; FBD degrades
+gracefully (feature off, UI notes it) when a path is unavailable.
+
+| Feature | macOS 13–15 | macOS 26 | macOS 27 (beta) |
+|---|---|---|---|
+| Apple brightness / resolution / rotation | ✅ | ✅ | ✅ |
+| DDC/CI (external displays, Apple Silicon) | ✅ | ✅ | ✅ |
+| Virtual displays | ✅ `CGVirtualDisplay` (dlopen) | ✅ `SLVirtualDisplay` | ⚠️ SidecarCore path |
+| XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ write-protected → software boost |
+| XDR direct (IOMobileFramebuffer) | ✅ | ⚠️ | ❌ entitlement-gated (probe only) |
+| True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
+| Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
+
+## HTTP control API
+
+The app exposes a JSON API on `127.0.0.1` only (port from `fbdcli http on
+<port>`, default 8765). All requests must send the local API token:
+
+```sh
+fbdcli auth-token          # print the token
+curl -H "X-FBD-Token: $TOKEN" http://127.0.0.1:8765/api/displays
+# or: curl -H "Authorization: Bearer $TOKEN" ...
+```
+
+`fbdcli` sends the token automatically when the app is running (single
+driver — writes go through the app so the CLI never races the DDC bus).
+CORS is enabled (`*`) for web clients; `OPTIONS` preflight returns 204.
+
 ## Requirements
 
 - macOS 13.2+ (Apple Silicon preferred; DDC requires native arm64, see below)

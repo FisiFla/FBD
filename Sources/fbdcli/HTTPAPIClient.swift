@@ -46,6 +46,9 @@ enum HTTPAPIClient {
             urlRequest.httpBody = try? JSONSerialization.data(withJSONObject: body)
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
+        // The app's HTTP API requires the shared local token (same defaults
+        // domain, so both sides read the same value).
+        urlRequest.setValue(Settings.httpAPIToken, forHTTPHeaderField: "X-FBD-Token")
         let semaphore = DispatchSemaphore(value: 0)
         var result: (Int, Data)?
         let task = URLSession.shared.dataTask(with: urlRequest) { data, response, _ in

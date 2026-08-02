@@ -12,10 +12,6 @@ import os
 public final class HotkeyController {
     public static let shared = HotkeyController()
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "HotkeyController")
-    /// Shares the DisplayController's DDC controller so AVService caches,
-    /// per-display serial queues and cooldowns are single-instance.
-    private var ddc: DDCController { DisplayController.shared.ddc }
-
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isStarted = false
@@ -109,7 +105,7 @@ public final class HotkeyController {
 
         case 0: // NX_KEYTYPE_SOUND_UP
             if targetDisplay.ddcAvailable {
-                let current = ddc.getFeature(.volume, for: targetDisplay) ?? 0.5
+                let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
                 displayController.setVolume(min(current + step, 1.0), on: targetDisplay)
                 NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
                 return true
@@ -118,7 +114,7 @@ public final class HotkeyController {
 
         case 1: // NX_KEYTYPE_SOUND_DOWN
             if targetDisplay.ddcAvailable {
-                let current = ddc.getFeature(.volume, for: targetDisplay) ?? 0.5
+                let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
                 displayController.setVolume(max(current - step, 0.0), on: targetDisplay)
                 NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
                 return true
@@ -127,8 +123,8 @@ public final class HotkeyController {
 
         case 7: // NX_KEYTYPE_MUTE
             if targetDisplay.ddcAvailable {
-                let current = ddc.getFeature(.mute, for: targetDisplay) ?? 2
-                let newMuted = current != 1
+                let muted = displayController.readDDCControls(for: targetDisplay).muted
+                let newMuted = muted == false
                 displayController.setMuted(newMuted, on: targetDisplay)
                 NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
                 return true

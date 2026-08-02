@@ -17,6 +17,9 @@ import os
 /// Never throws: failures degrade to nil/false with a logged warning.
 public final class DDCController {
     private let external: ExternalControlling
+    /// Whether the DDC transport is supported on this host (Apple Silicon).
+    /// Injectable so mock-based tests can run on any architecture.
+    private let isPlatformSupported: () -> Bool
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DDCController")
 
     /// Per-display serial queues keyed by display identity.
@@ -29,8 +32,12 @@ public final class DDCController {
     private var liveCapabilitiesChecked: Set<String> = []
     private let lock = NSLock()
 
-    public init(external: ExternalControlling) {
+    public init(
+        external: ExternalControlling,
+        isPlatformSupported: @escaping () -> Bool = { IOAVServiceAPI.isAppleSilicon }
+    ) {
         self.external = external
+        self.isPlatformSupported = isPlatformSupported
     }
 
     // MARK: - Availability
@@ -38,7 +45,7 @@ public final class DDCController {
     /// DDC is usable when running natively on Apple Silicon and an AVService
     /// exists for the display.
     public func isAvailable(for display: Display) -> Bool {
-        guard IOAVServiceAPI.isAppleSilicon else { return false }
+        guard isPlatformSupported() else { return false }
         return external.avService(for: display) != nil
     }
 
@@ -179,7 +186,8 @@ public final class DDCController {
                    // Only accept a *complete* reply: a truncated first chunk
                    // can already contain "vcp(" — require the group to be
                    // closed so we keep collecting until the full blob arrives.
-                   text.range(of: #"vcp\([0-9A-Fa-f ]*\)"#, options: .regularExpression) != nil {
+                   // Sub-values are single-level parens: vcp(10 12(01 02) 60).
+                   text.range(of: #"vcp\((?:[0-9A-Fa-f ]|\([0-9A-Fa-f ]*\))*\)"#, options: .regularExpression) != nil {
                     let caps = DDC.parseCapabilities(text)
                     lock.lock()
                     liveCapabilitiesChecked.remove(display.identityKey)
