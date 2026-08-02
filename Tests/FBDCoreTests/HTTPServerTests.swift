@@ -180,6 +180,77 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertTrue(received.isEmpty, "preflight must not reach the handler")
     }
 
+    func testOversizedDeclaredContentLengthGets413() throws {
+        let port = startServer()
+        let connection = NWConnection(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port)!,
+            using: .tcp
+        )
+        let expectation = expectation(description: "413 response")
+        var responseText = ""
+        connection.stateUpdateHandler = { state in
+            if state == .ready {
+                let request = "POST /api/displays HTTP/1.1\r\nHost: localhost\r\nContent-Length: 999999999\r\n\r\n"
+                connection.send(content: Data(request.utf8), completion: .contentProcessed { _ in })
+            }
+        }
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, _ in
+            if let data { responseText = String(data: data, encoding: .utf8) ?? "" }
+            connection.cancel()
+            expectation.fulfill()
+        }
+        connection.start(queue: .global())
+
+        wait(for: [expectation], timeout: 5)
+        XCTAssertTrue(responseText.hasPrefix("HTTP/1.1 413"), "got: \(responseText)")
+        XCTAssertTrue(received.isEmpty, "handler must not run for rejected requests")
+    }
+
+    func testExpect100ContinueGetsInterimThenFinalResponse() throws {
+        let port = startServer()
+        let connection = NWConnection(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port)!,
+            using: .tcp
+        )
+        let interim = expectation(description: "100 Continue")
+        let final = expectation(description: "final response")
+        var finalText = ""
+        connection.stateUpdateHandler = { state in
+            if state == .ready {
+                let request = "POST /api/displays HTTP/1.1\r\nHost: localhost\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n"
+                connection.send(content: Data(request.utf8), completion: .contentProcessed { _ in })
+            }
+        }
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak connection] data, _, _, _ in
+            guard let connection else { return }
+            let text = data.map { String(data: $0, encoding: .utf8) ?? "" } ?? ""
+            if text.contains("100 Continue") {
+                interim.fulfill()
+                // Body arrives only after the interim response.
+                connection.send(content: Data("data".utf8), completion: .contentProcessed { _ in
+                    connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, _ in
+                        if let data { finalText = String(data: data, encoding: .utf8) ?? "" }
+                        connection.cancel()
+                        final.fulfill()
+                    }
+                })
+            } else {
+                finalText = text
+                connection.cancel()
+                final.fulfill()
+            }
+        }
+        connection.start(queue: .global())
+
+        wait(for: [interim], timeout: 5)
+        wait(for: [final], timeout: 5)
+        XCTAssertTrue(finalText.hasPrefix("HTTP/1.1 200"), "got: \(finalText)")
+        XCTAssertTrue(finalText.contains("data"), "echo body missing: \(finalText)")
+        XCTAssertEqual(received.first?.body, "data")
+    }
+
     func testServerSurvivesMalformedRequest() throws {
         // A garbage request must not crash or wedge the server: after it,
         // a well-formed request still gets a response.

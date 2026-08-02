@@ -81,7 +81,7 @@ public final class HTTPServer {
     /// Cap request buffering so a local client cannot grow memory without bound.
     private static let maxRequestBytes = 1_048_576
 
-    private func receive(_ connection: NWConnection, buffer: Data) {
+    private func receive(_ connection: NWConnection, buffer: Data, sentContinue: Bool = false) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
             guard let self else { return }
             var accumulated = buffer
@@ -102,16 +102,32 @@ public final class HTTPServer {
             // respond once the full Content-Length body has been received.
             if let headerRange = accumulated.range(of: Data("\r\n\r\n".utf8)) {
                 let headerText = String(data: accumulated[..<headerRange.lowerBound], encoding: .utf8) ?? ""
-                let contentLength = headerText
-                    .split(separator: "\r\n")
-                    .compactMap { line -> Int? in
-                        let parts = line.split(separator: ":", maxSplits: 1)
-                        guard parts.count == 2, parts[0].lowercased() == "content-length" else { return nil }
-                        return Int(parts[1].trimmingCharacters(in: .whitespaces))
-                    }
-                    .first ?? 0
+                let head = parseHead(headerText)
                 let receivedBody = accumulated.distance(from: headerRange.upperBound, to: accumulated.endIndex)
-                if receivedBody >= contentLength || isComplete {
+                let bodyComplete = receivedBody >= head.contentLength || isComplete
+
+                // Reject declared-oversized bodies immediately instead of
+                // buffering toward the cap (memory + slow-loris hygiene).
+                if head.contentLength > Self.maxRequestBytes {
+                    log.warning("declared Content-Length \(head.contentLength) exceeds limit")
+                    sendResponse(connection, status: 413, body: #"{"error":"payload too large"}"#)
+                    return
+                }
+
+                // Honor Expect: 100-continue so clients send the body (curl
+                // and URLSession otherwise wait for the interim response).
+                if !sentContinue, !bodyComplete,
+                   head.headers["expect"]?.lowercased() == "100-continue" {
+                    connection.send(
+                        content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8),
+                        completion: .contentProcessed { _ in
+                            self.receive(connection, buffer: accumulated, sentContinue: true)
+                        }
+                    )
+                    return
+                }
+
+                if bodyComplete {
                     self.respond(connection, request: accumulated)
                     return
                 }
@@ -119,8 +135,30 @@ public final class HTTPServer {
                 self.respond(connection, request: accumulated)
                 return
             }
-            self.receive(connection, buffer: accumulated)
+            self.receive(connection, buffer: accumulated, sentContinue: sentContinue)
         }
+    }
+
+    /// Parsed request head: lowercased header names + declared body length.
+    private struct RequestHead {
+        let headers: [String: String]
+        let contentLength: Int
+    }
+
+    private func parseHead(_ headerText: String) -> RequestHead {
+        var headers: [String: String] = [:]
+        var contentLength = 0
+        for line in headerText.split(separator: "\r\n").dropFirst() {
+            let pair = line.split(separator: ":", maxSplits: 1)
+            guard pair.count == 2 else { continue }
+            let name = String(pair[0]).trimmingCharacters(in: .whitespaces).lowercased()
+            let value = String(pair[1]).trimmingCharacters(in: .whitespaces)
+            headers[name] = value
+            if name == "content-length" {
+                contentLength = Int(value) ?? 0
+            }
+        }
+        return RequestHead(headers: headers, contentLength: contentLength)
     }
 
     private func respond(_ connection: NWConnection, request: Data) {
@@ -172,13 +210,20 @@ public final class HTTPServer {
         let (status, responseBody) = handler?(method, path, body, headers) ?? (404, #"{"error":"not found"}"#)
         let latencyMs = Int(Date().timeIntervalSince(started) * 1000)
         log.debug("\(method) \(path) -> \(status) (\(latencyMs) ms)")
+        sendResponse(connection, status: status, body: responseBody)
+    }
+
+    /// Write a complete JSON response and close the connection.
+    private func sendResponse(_ connection: NWConnection, status: Int, body: String) {
         let statusText: String
         switch status {
         case 200: statusText = "OK"
         case 201: statusText = "Created"
+        case 204: statusText = "No Content"
         case 400: statusText = "Bad Request"
         case 404: statusText = "Not Found"
         case 405: statusText = "Method Not Allowed"
+        case 413: statusText = "Payload Too Large"
         case 503: statusText = "Service Unavailable"
         default: statusText = "Error"
         }
@@ -188,10 +233,10 @@ public final class HTTPServer {
         Access-Control-Allow-Origin: *\r
         Access-Control-Allow-Headers: X-FBD-Token, Content-Type\r
         Access-Control-Allow-Methods: GET, POST, OPTIONS\r
-        Content-Length: \(responseBody.utf8.count)\r
+        Content-Length: \(body.utf8.count)\r
         Connection: close\r
         \r
-        \(responseBody)
+        \(body)
         """
         connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in
             connection.cancel()
