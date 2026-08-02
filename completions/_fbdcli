@@ -1,0 +1,182 @@
+#compdef fbdcli
+# zsh completion for fbdcli.
+#
+# Install: add this file's directory to your fpath and run compinit, e.g.
+#   mkdir -p ~/.zfunc && cp completions/fbdcli.zsh ~/.zfunc/
+#   echo 'fpath=(~/.zfunc $fpath); autoload -Uz compinit && compinit' >> ~/.zshrc
+
+_fbdcli() {
+  local -a commands
+  commands=(
+    'list:List displays (one line per display, --json for JSON)'
+    'info:Show full detail for a display'
+    'brightness:Get or set brightness (0-100)'
+    'contrast:Get or set contrast (DDC, 0-100)'
+    'volume:Get or set speaker volume (DDC, 0-100)'
+    'mute:Get or set mute state (DDC)'
+    'input:Get current input source or switch (DDC)'
+    'caps:Read and print DDC capabilities'
+    'modes:List all modes for a display'
+    'set-mode:Apply a matching mode (WxH[@hz])'
+    'ddc-test:DDC diagnostics'
+    'xdr:Get or set XDR brightness upscaling (nits or off)'
+    'preset:List factory presets or activate one by index'
+    'hdr:Show or set HDR framebuffer mode'
+    'virtual:Virtual screens (list/create/destroy/reconnect/disconnect-all)'
+    'disable:Disable a display (black screen)'
+    'enable:Re-enable a disabled display'
+    'layout:Save/restore/protect the display arrangement'
+    'group:Display groups (create/delete/add/remove/mirror/unmirror)'
+    'edid:Export/apply/restore EDID, auto-apply toggle'
+    'profile:List/apply/restore color profiles'
+    'underscan:Get or set underscan (TVs)'
+    'protect:Config protection (config/save/restore)'
+    'http:HTTP control API (on/off/status)'
+    'auth-token:Print the local HTTP API token'
+    'settings:Print a masked settings dump'
+    'pip:Stream a display in a picture-in-picture window'
+    'osd:Show a transient OSD HUD'
+    'nightshift:Get or set Night Shift strength'
+    'truetone:Get or set True Tone'
+    'tv:Control a TV/AVR over the network'
+    'help:Show help'
+  )
+
+  _arguments -C \
+    '--direct[force direct-controller execution (bypass the app API)]' \
+    '1:command:->command' \
+    '*::arg:->args'
+
+  case $state in
+    command)
+      _describe 'command' commands
+      ;;
+    args)
+      case $words[2] in
+        virtual)
+          _fbdcli_virtual
+          ;;
+        edid)
+          _fbdcli_edid
+          ;;
+        layout)
+          _fbdcli_layout
+          ;;
+        group)
+          _fbdcli_group
+          ;;
+        protect)
+          _fbdcli_protect
+          ;;
+        http)
+          _fbdcli_http
+          ;;
+        tv)
+          _fbdcli_tv
+          ;;
+        brightness|contrast|volume)
+          _fbdcli_percent_command
+          ;;
+        xdr)
+          _values 'xdr action' 'off' 'nits'
+          ;;
+        set-mode)
+          _message 'mode spec (e.g. 1920x1080@60)'
+          ;;
+        preset)
+          _message 'display id [preset index]'
+          ;;
+        *)
+          _fbdcli_display_id
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_fbdcli_virtual() {
+  local -a sub
+  sub=(
+    'list:List persisted virtual screen configs'
+    'create:Create and connect a virtual screen'
+    'destroy:Disconnect and forget a virtual screen'
+    'reconnect:Reconnect a persisted virtual screen'
+    'disconnect-all:Disconnect all virtual screens (keep configs)'
+  )
+  _describe 'virtual subcommand' sub
+}
+
+_fbdcli_edid() {
+  local -a sub
+  sub=(
+    'export:Export the display EDID (hex dump or file)'
+    'apply:Apply an EDID override (file or hex)'
+    'restore:Restore the factory EDID'
+    'auto:Get or set auto-apply of saved EDID overrides'
+  )
+  _describe 'edid subcommand' sub
+}
+
+_fbdcli_layout() {
+  local -a sub
+  sub=(
+    'save:Save the current display arrangement'
+    'restore:Restore the saved arrangement'
+    'protect:Get or set layout protection'
+  )
+  _describe 'layout subcommand' sub
+}
+
+_fbdcli_group() {
+  local -a sub
+  sub=(
+    'list:List display groups'
+    'create:Create a group'
+    'delete:Delete a group'
+    'add:Add a display to a group'
+    'remove:Remove a display from a group'
+    'mirror:Mirror a group'
+    'unmirror:Unmirror a group'
+  )
+  _describe 'group subcommand' sub
+}
+
+_fbdcli_protect() {
+  local -a sub
+  sub=(
+    'config:Get or set config protection'
+    'save:Save current resolution/preset/brightness'
+    'restore:Re-apply saved config'
+  )
+  _describe 'protect subcommand' sub
+}
+
+_fbdcli_http() {
+  local -a sub
+  sub=(
+    'on:Enable the HTTP control API (optional port)'
+    'off:Disable the HTTP control API'
+    'status:Show HTTP API state and port'
+  )
+  _describe 'http subcommand' sub
+}
+
+_fbdcli_tv() {
+  local -a brands
+  brands=(lg samsung philips yamaha)
+  _describe 'tv brand' brands
+}
+
+_fbdcli_percent_command() {
+  if (( CURRENT > 3 )); then
+    _values 'value' '0-100'
+  else
+    _fbdcli_display_id
+  fi
+}
+
+_fbdcli_display_id() {
+  _message 'display id'
+}
+
+_fbdcli "$@"

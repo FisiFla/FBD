@@ -33,6 +33,17 @@ brightness mode enabled. With both in place, XDR upscaling works on macOS 27.
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 
+## Shell completion (zsh)
+
+```sh
+mkdir -p ~/.zfunc
+cp completions/_fbdcli ~/.zfunc/
+echo 'fpath=(~/.zfunc $fpath); autoload -Uz compinit && compinit' >> ~/.zshrc
+```
+
+Covers all 32 commands plus the `virtual`/`edid`/`layout`/`group`/`protect`/
+`http`/`tv` subcommands, `--direct`, and 0-100 value hints.
+
 ## HTTP control API
 
 The app exposes a JSON API on `127.0.0.1` only (port from `fbdcli http on
