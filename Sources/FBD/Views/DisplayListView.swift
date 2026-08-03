@@ -127,48 +127,23 @@ struct DisplayListView: View {
         .scrollIndicators(.hidden)
     }
 
-    /// Main-page top bar: traffic-light zone + brand + actions on one
-    /// material surface with a hairline divider.
+    /// Main-page top bar: one unified row — the traffic lights (drawn by the
+    /// window server in the first ~64pt) and the brand/actions share the same
+    /// band, so there is no empty gap under the buttons.
     private var mainTopBar: some View {
-        VStack(spacing: 0) {
-            trafficLightZone
-            mainTopBarContent
-        }
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Divider().opacity(0.5)
-        }
-    }
-
-    /// Settings top bar: traffic-light zone + back + title + close.
-    private var settingsTopBar: some View {
-        VStack(spacing: 0) {
-            trafficLightZone
-            settingsTopBarContent
-        }
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Divider().opacity(0.5)
-        }
-    }
-
-    /// The window server draws the traffic lights over the top 28pt; this
-    /// zone must be part of the bar's material so they don't float.
-    private var trafficLightZone: some View {
-        Color.clear
-            .frame(height: FBDTheme.titlebarHeight)
-            .accessibilityHidden(true)
-    }
-
-    private var mainTopBarContent: some View {
         HStack(spacing: 10) {
-            // Brand tile.
+            // Horizontal clearance for the traffic lights (drawn over the top
+            // ~28pt; the bar's height keeps them vertically centered).
+            Color.clear
+                .frame(width: 64)
+                .accessibilityHidden(true)
+
             RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
                 .fill(Color.accentColor.gradient)
-                .frame(width: 26, height: 26)
+                .frame(width: 20, height: 20)
                 .overlay(
                     Image(systemName: "display")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.white)
                 )
                 .accessibilityHidden(true)
@@ -194,8 +169,6 @@ struct DisplayListView: View {
             .accessibilityLabel("Settings")
             .help("Settings")
 
-            // In-content close for users who expect a button in the window
-            // body; the title bar also has the standard close (×).
             Button {
                 NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
             } label: {
@@ -207,13 +180,22 @@ struct DisplayListView: View {
             .accessibilityLabel("Close FBD panel")
             .help("Close")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .frame(height: 30)
         .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.5)
+        }
     }
 
-    private var settingsTopBarContent: some View {
+    /// Settings top bar: same unified row — lights + back + title + close.
+    private var settingsTopBar: some View {
         HStack(spacing: 8) {
+            Color.clear
+                .frame(width: 64)
+                .accessibilityHidden(true)
+
             Button {
                 NotificationCenter.default.post(name: .fbdSettingsClosed, object: nil)
             } label: {
@@ -240,9 +222,13 @@ struct DisplayListView: View {
             .accessibilityLabel("Close FBD panel")
             .help("Close")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .frame(height: 30)
         .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.5)
+        }
     }
 
     private var emptyState: some View {
