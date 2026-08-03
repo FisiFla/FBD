@@ -16,11 +16,45 @@ struct SettingsView: View {
     @State private var trueTone = TrueToneController()
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
 
+    /// Settings tabs: the overview form, or per-display settings.
+    private enum SettingsTab: String, CaseIterable, Identifiable {
+        case overview = "Overview"
+        case perDisplay = "Per-Display"
+        var id: String { rawValue }
+    }
+
+    @State private var settingsTab: SettingsTab = .overview
+
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Tab", selection: $settingsTab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 14)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            switch settingsTab {
+            case .overview:
+                overviewForm
+            case .perDisplay:
+                perDisplayList
+            }
+        }
+    }
+
+    /// The main settings form.
+    private var overviewForm: some View {
         Form {
             Section {
                 Toggle("Launch at Login", isOn: launchAtLoginBinding)
                 Toggle("Show Rosetta warning", isOn: rosettaWarningBinding)
+                Toggle("Show offline displays in Settings", isOn: showOfflineDisplaysBinding)
+                Toggle("Enable connect/disconnect for displays", isOn: enableDisconnectOptionBinding)
                 if hotkeysUnavailable {
                     Label("Media keys unavailable — allow Accessibility for FBD in System Settings", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -201,6 +235,77 @@ struct SettingsView: View {
         }
     }
 
+    /// Per-display settings: one section per display (offline displays
+    /// included when Settings.showOfflineDisplays is on).
+    private var perDisplayList: some View {
+        let displays = DisplayController.shared.displays
+        let shown = Settings.showOfflineDisplays
+            ? displays
+            : displays.filter(\.isOnline)
+        return ScrollView {
+            VStack(spacing: 8) {
+                if shown.isEmpty {
+                    Text("No displays")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 24)
+                }
+                ForEach(shown) { display in
+                    perDisplayCard(display)
+                        .padding(.horizontal, 12)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func perDisplayCard(_ display: Display) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(display.name)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                Text(display.isOnline ? "online" : "offline")
+                    .font(.caption2)
+                    .foregroundStyle(display.isOnline ? .green : .secondary)
+                Spacer()
+                if Settings.enableDisconnectOption {
+                    if display.isOnline {
+                        Button("Disable") {
+                            _ = DisconnectController().setEnabled(false, displayID: display.id)
+                        }
+                        .controlSize(.small)
+                    } else {
+                        Button("Re-enable") {
+                            _ = DisconnectController().setEnabled(true, displayID: display.id)
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+            if let mode = display.currentMode {
+                Text("Mode: \(mode.label)\(mode.refreshLabel.isEmpty ? "" : " · \(mode.refreshLabel)")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let brightness = display.brightness {
+                Text(String(format: "Brightness: %.0f%%", brightness * 100))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
     // MARK: - Bindings
 
     private var launchAtLoginBinding: Binding<Bool> {
@@ -220,6 +325,20 @@ struct SettingsView: View {
                     launchAtLogin = !newValue
                 }
             }
+        )
+    }
+
+    private var showOfflineDisplaysBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.showOfflineDisplays },
+            set: { Settings.showOfflineDisplays = $0 }
+        )
+    }
+
+    private var enableDisconnectOptionBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.enableDisconnectOption },
+            set: { Settings.enableDisconnectOption = $0 }
         )
     }
 

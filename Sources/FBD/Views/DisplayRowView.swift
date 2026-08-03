@@ -27,6 +27,8 @@ struct DisplayRowView: View {
     @State private var upscaleDebounceWorkItem: DispatchWorkItem?
     /// Confirmation for the soft-disconnect action.
     @State private var confirmingDisable = false
+    /// PiP / video-filter window controller (per-row; process-wide state).
+    @State private var pipController = PipStreamController()
 
     // MARK: EDID & color profile (Tier 4)
 
@@ -47,6 +49,7 @@ struct DisplayRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            quickControls
             BrightnessSliderView(display: display)
             if display.ddcAvailable {
                 ddcPanel
@@ -127,10 +130,11 @@ struct DisplayRowView: View {
 
             Spacer(minLength: 4)
 
-            // Soft-disconnect power button.
-            Button {
-                confirmingDisable = true
-            } label: {
+            // Soft-disconnect power button (gated by the connect/disconnect setting).
+            if Settings.enableDisconnectOption {
+                Button {
+                    confirmingDisable = true
+                } label: {
                 Image(systemName: "power")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(display.isOnline ? .red : .secondary)
@@ -151,6 +155,7 @@ struct DisplayRowView: View {
             } message: {
                 Text("Display will go dark until re-enabled.")
             }
+            }
         }
     }
 
@@ -170,6 +175,328 @@ struct DisplayRowView: View {
             }
         }
         .layoutPriority(1)
+    }
+
+    // MARK: - Quick controls & options menu
+
+    /// Compact quick-toggles row under the header: HiDPI, Auto Brightness,
+    /// Notch (unsupported), and the full options menu.
+    private var quickControls: some View {
+        HStack(spacing: 10) {
+            Toggle("HiDPI", isOn: hidpiBinding)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .font(.caption)
+                .help("Switch between the HiDPI and standard variant of the current resolution")
+            if autoBrightnessAvailable {
+                Toggle("Auto Brightness", isOn: autoBrightnessBinding)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .font(.caption)
+                    .help("Ambient-light compensation (hardware)")
+            }
+            Toggle("Notch", isOn: .constant(false))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .font(.caption)
+                .disabled(true)
+                .help("Hiding the notch requires custom resolution support — not implemented")
+            Spacer(minLength: 4)
+            Menu {
+                optionsMenuContent
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More options")
+            .accessibilityLabel("More options for \(display.name)")
+        }
+    }
+
+    /// The full per-display options menu (BetterDisplay-style).
+    @ViewBuilder
+    private var optionsMenuContent: some View {
+        // Display Mode
+        Menu("Display Mode") {
+            ForEach(display.modes, id: \.self) { mode in
+                Button {
+                    DisplayController.shared.applyMode(mode, to: display)
+                } label: {
+                    if mode == display.currentMode {
+                        Label(mode.label, systemImage: "checkmark")
+                    } else {
+                        Text(mode.label)
+                    }
+                }
+            }
+        }
+
+        // Refresh Rate
+        if !refreshRates.isEmpty {
+            Menu("Refresh Rate") {
+                ForEach(refreshRates, id: \.self) { hz in
+                    Button {
+                        applyRefreshRate(hz)
+                    } label: {
+                        if hz == display.currentMode?.refreshRate {
+                            Label(String(format: "%.0f Hz", hz), systemImage: "checkmark")
+                        } else {
+                            Text(String(format: "%.0f Hz", hz))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Color Mode (color profiles)
+        if !colorProfiles.isEmpty {
+            Menu("Color Mode") {
+                ForEach(colorProfiles) { profile in
+                    Button {
+                        if colorProfileController.applyProfile(profile.url, for: display) {
+                            refreshTick += 1
+                        }
+                    } label: {
+                        if colorProfileController.defaultProfile(for: display) == profile.url {
+                            Label(profile.name, systemImage: "checkmark")
+                        } else {
+                            Text(profile.name)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apple Display Preset (XDR presets)
+        if !validPresets.isEmpty {
+            Menu("Apple Display Preset") {
+                ForEach(validPresets) { preset in
+                    Button {
+                        DisplayController.shared.selectPreset(preset.index, on: display)
+                    } label: {
+                        if display.activePresetIndex == preset.index {
+                            Label(preset.name, systemImage: "checkmark")
+                        } else {
+                            Text(preset.name)
+                        }
+                    }
+                }
+            }
+        }
+
+        Divider()
+
+        // Mirror Display
+        Menu("Mirror Display") {
+            if CGDisplayIsInMirrorSet(display.id) != 0 {
+                Button("Unmirror") {
+                    unmirrorDisplay()
+                }
+                Divider()
+            }
+            ForEach(mirrorTargets) { target in
+                Button(target.name) {
+                    mirror(to: target)
+                }
+            }
+        }
+
+        // Stream / Picture in Picture
+        Button("Stream Display") {
+            startVideoFilterWindow()
+        }
+        Button("Picture in Picture") {
+            startVideoFilterWindow()
+        }
+
+        // Image Adjustments (video-filter window)
+        Menu("Image Adjustments") {
+            Button("Open Video Filter Window…") {
+                startVideoFilterWindow()
+            }
+            Divider()
+            Text("Contrast / Saturation apply to the filter window")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Slider(value: videoFilterContrast, in: 0.5...2, step: 0.05) {
+                Text("Contrast")
+            } minimumValueLabel: {
+                Text("0.5")
+            } maximumValueLabel: {
+                Text("2")
+            }
+            .font(.caption)
+            Slider(value: videoFilterSaturation, in: 0...2, step: 0.05) {
+                Text("Saturation")
+            } minimumValueLabel: {
+                Text("0")
+            } maximumValueLabel: {
+                Text("2")
+            }
+            .font(.caption)
+        }
+
+        // Move Display
+        Menu("Move Display") {
+            Button("Set as Main Display") {
+                _ = DisplayController.shared.setAsMainDisplay(display)
+            }
+            Text("Arrange displays from the Settings per-display tab")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        // Screen Rotation (not implemented — honest disable)
+        Menu("Screen Rotation") {
+            ForEach(["0°", "90°", "180°", "270°"], id: \.self) { angle in
+                Button(angle) {}
+                    .disabled(true)
+            }
+            Text("Rotation is not supported on this build")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        // Configuration Protection
+        Toggle("Configuration Protection", isOn: configProtectionBinding)
+            .help("Re-apply this display's saved mode/brightness/preset on reconnect")
+
+        // Manage Display
+        Menu("Manage Display") {
+            if Settings.enableDisconnectOption {
+                if display.isOnline {
+                    Button(role: .destructive) {
+                        confirmingDisable = true
+                    } label: {
+                        Label("Disable display", systemImage: "power")
+                    }
+                } else {
+                    Button("Re-enable display") {
+                        _ = DisconnectController().setEnabled(true, displayID: display.id)
+                    }
+                }
+            }
+            Button("Show in Settings") {
+                NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
+            }
+        }
+    }
+
+    // MARK: - Quick control helpers
+
+    private var hidpiBinding: Binding<Bool> {
+        Binding(
+            get: { display.currentMode?.isHiDPI ?? false },
+            set: { wantHiDPI in
+                guard let current = display.currentMode else { return }
+                let candidate = display.modes.first {
+                    $0.width == current.width && $0.height == current.height
+                        && $0.refreshRate == current.refreshRate
+                        && $0.isHiDPI == wantHiDPI
+                }
+                if let candidate {
+                    DisplayController.shared.applyMode(candidate, to: display)
+                }
+            }
+        )
+    }
+
+    private var autoBrightnessAvailable: Bool {
+        DisplayController.shared.isAmbientLightCompensationEnabled(on: display) != nil
+    }
+
+    private var autoBrightnessBinding: Binding<Bool> {
+        Binding(
+            get: { DisplayController.shared.isAmbientLightCompensationEnabled(on: display) ?? false },
+            set: { DisplayController.shared.setAmbientLightCompensation($0, on: display) }
+        )
+    }
+
+    private var configProtectionBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.configProtectionEnabled },
+            set: { on in
+                Settings.configProtectionEnabled = on
+                if on {
+                    ConfigProtectionController().saveCurrentState(
+                        for: display,
+                        resolution: ResolutionController(),
+                        controller: DisplayController.shared
+                    )
+                }
+            }
+        )
+    }
+
+    /// Unique refresh rates from the display's modes, ascending.
+    private var refreshRates: [Double] {
+        let rates = Set(display.modes.map(\.refreshRate))
+        return rates.sorted()
+    }
+
+    private func applyRefreshRate(_ hz: Double) {
+        guard let current = display.currentMode else { return }
+        let candidate = display.modes.first {
+            $0.width == current.width && $0.height == current.height
+                && $0.refreshRate == hz && $0.isHiDPI == current.isHiDPI
+        }
+        if let candidate {
+            DisplayController.shared.applyMode(candidate, to: display)
+        }
+    }
+
+    /// Other online displays available as mirror targets.
+    private var mirrorTargets: [Display] {
+        DisplayController.shared.displays.filter { $0.id != display.id && $0.isOnline }
+    }
+
+    /// Mirror this display onto a target by creating (or reusing) a group
+    /// containing exactly the two displays, then mirroring the group.
+    private func mirror(to target: Display) {
+        let groups = DisplayGroupsController()
+        if let existing = groups.groups.first(where: {
+            $0.displayIDs == [display.id, target.id] || $0.displayIDs == [target.id, display.id]
+        }) {
+            _ = groups.mirror(inGroup: existing.id)
+            return
+        }
+        groups.createGroup(name: "Mirror \(display.name) → \(target.name)", displayIDs: [display.id, target.id])
+        if let group = groups.groups.last {
+            _ = groups.mirror(inGroup: group.id)
+        }
+    }
+
+    private func unmirrorDisplay() {
+        let groups = DisplayGroupsController()
+        for group in groups.groups where group.displayIDs.contains(display.id) {
+            _ = groups.unmirror(inGroup: group.id)
+        }
+    }
+
+    /// Start the floating video-filter (PiP) window for this display.
+    private func startVideoFilterWindow() {
+        _ = pipController.startPiP(displayID: display.id, filter: .identity)
+    }
+
+    private var videoFilterContrast: Binding<Double> {
+        Binding(
+            get: { 1 },
+            set: { value in
+                pipController.setFilter(VideoFilter(brightness: 1, contrast: value, saturation: videoFilterSaturation.wrappedValue))
+            }
+        )
+    }
+
+    private var videoFilterSaturation: Binding<Double> {
+        Binding(
+            get: { 1 },
+            set: { value in
+                pipController.setFilter(VideoFilter(brightness: 1, contrast: videoFilterContrast.wrappedValue, saturation: value))
+            }
+        )
     }
 
     // MARK: - Disclosure sections

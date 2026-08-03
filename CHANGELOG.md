@@ -3,6 +3,34 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Added
+- **Per-display options menu** (ellipsis in each display card): Display Mode
+  (all modes with current marker), Refresh Rate (unique Hz values),
+  Color Mode (profiles), Apple Display Preset (XDR presets), Mirror Display
+  (per-target mirror/unmirror via display groups), Stream Display and
+  Picture in Picture (floating video-filter window), Image Adjustments
+  (video-filter window + live contrast/saturation sliders), Move Display
+  (Set as Main Display via CGConfigureDisplayOrigin), Screen Rotation
+  (honestly disabled — unsupported), Configuration Protection (lock current
+  settings), Manage Display (disable/re-enable gated by the new setting).
+- **Quick-controls row per display**: HiDPI toggle (same-size mode
+  variant), Auto Brightness toggle (hardware ambient-light compensation,
+  hidden when unsupported), Notch toggle (disabled — unsupported).
+- **Tools footer**: Displays And Virtual Screens (scroll-to menu), Groups,
+  Video Filter Window (opens a real PiP stream), System Colors (System
+  Settings → Displays), Check for Updates, Quit FBD.
+- **Settings tabs**: Overview / Per-Display segmented control; the
+  per-display tab lists each display (offline included when enabled) with
+  its mode, brightness and connect/disconnect controls.
+- **New settings**: Show offline displays in Settings; Enable
+  connect/disconnect for displays (gates the power/disable controls).
+
+### Changed
+- `DisplayController`: ambient-light compensation passthroughs and
+  `setAsMainDisplay` (CGConfigureDisplayOrigin to (0,0)).
+
 ## [1.2.1] — 2026-08-03
 
 ### Fixed

@@ -16,7 +16,7 @@ import os
 @MainActor
 public final class ConfigProtectionController {
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "ConfigProtectionController")
-    private static let suite = "dev.fisifla.fbd"
+    nonisolated private static let suite = "dev.fisifla.fbd"
 
     private let resolution = ResolutionController()
 

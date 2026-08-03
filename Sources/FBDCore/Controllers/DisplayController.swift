@@ -241,6 +241,33 @@ public final class DisplayController {
         overlay.activeBoostDisplayIDs()
     }
 
+    // MARK: - Ambient light compensation (Auto Brightness)
+
+    /// Whether the display's ambient-light compensation ("auto brightness")
+    /// is on. Nil when the display does not support it.
+    public func isAmbientLightCompensationEnabled(on display: Display) -> Bool? {
+        apple.isAmbientLightCompensationEnabled(for: display)
+    }
+
+    public func setAmbientLightCompensation(_ enabled: Bool, on display: Display) {
+        apple.setAmbientLightCompensation(enabled, for: display)
+    }
+
+    // MARK: - Main display / arrangement
+
+    /// Make the display the main (menu-bar) display by moving its origin to
+    /// (0, 0) — the arrangement macOS treats as primary. Same mechanism as
+    /// LayoutProtectionController.restoreArrangement.
+    @discardableResult
+    public func setAsMainDisplay(_ display: Display) -> Bool {
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success, let config,
+              CGConfigureDisplayOrigin(config, display.id, 0, 0) == .success else {
+            return false
+        }
+        return CGCompleteDisplayConfiguration(config, .permanently) == .success
+    }
+
     /// Remove native XDR upscaling (restore the factory preset) and stop any
     /// software boost overlay.
     @discardableResult

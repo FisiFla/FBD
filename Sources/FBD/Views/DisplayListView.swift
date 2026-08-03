@@ -20,6 +20,9 @@ struct DisplayListView: View {
     @State private var virtualScreensTick = 0
     @State private var groupItems: [DisplayGroup] = []
 
+    /// PiP / video-filter window for the Tools footer.
+    @State private var footerPipController = PipStreamController()
+
     // Virtual screen creation form.
     @State private var newScreenName = "Virtual Display"
     @State private var newScreenPreset = DisplayListView.resolutionPresets[0]
@@ -109,33 +112,50 @@ struct DisplayListView: View {
     /// The whole popover scrolls vertically; display rows are plain VStack
     /// entries (not a nested List) so nothing clips and row heights adapt.
     private var mainContent: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                if rosettaWarningVisible {
-                    RosettaWarningView()
-                        .padding(.horizontal, 12)
-                }
-                Divider()
-                    .opacity(0.5)
-                if displays.isEmpty {
-                    emptyState
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(displays) { display in
-                            DisplayRowView(display: display)
-                                .padding(.horizontal, 12)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 8) {
+                    if rosettaWarningVisible {
+                        RosettaWarningView()
+                            .padding(.horizontal, 12)
+                    }
+                    Divider()
+                        .opacity(0.5)
+                    if displays.isEmpty {
+                        emptyState
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(displays) { display in
+                                DisplayRowView(display: display)
+                                    .padding(.horizontal, 12)
+                            }
                         }
+                        .id("displays")
+                    }
+                    if virtualScreens.isAvailable {
+                        virtualScreensSection
+                            .id("virtual")
+                    }
+                    displayGroupsSection
+                        .id("groups")
+                    toolsFooter
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 10)
+            }
+            .scrollIndicators(.hidden)
+            .onChange(of: scrollTarget) { target in
+                guard let target else { return }
+                withAnimation(FBDTheme.animationSpring) {
+                    switch target {
+                    case .displays: proxy.scrollTo("displays", anchor: .top)
+                    case .virtual: proxy.scrollTo("virtual", anchor: .top)
+                    case .groups: proxy.scrollTo("groups", anchor: .top)
                     }
                 }
-                if virtualScreens.isAvailable {
-                    virtualScreensSection
-                }
-                displayGroupsSection
+                scrollTarget = nil
             }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 10)
         }
-        .scrollIndicators(.hidden)
     }
 
     /// Main-page top bar: one unified row — the traffic lights (drawn by the
@@ -265,6 +285,96 @@ struct DisplayListView: View {
     /// Whether the Rosetta warning banner applies to this process.
     private static var rosettaWarningActive: Bool {
         IOAVServiceAPI.isAppleSilicon && IOAVServiceAPI.isRunningUnderRosetta && Settings.showRosettaWarning
+    }
+
+    // MARK: - Tools footer
+
+    /// Bottom tools section: quick jumps, video-filter window, system colors,
+    /// updates and quit.
+    private var toolsFooter: some View {
+        HStack(spacing: 12) {
+            Menu("Displays And Virtual Screens") {
+                Button("Scroll to Displays") {
+                    scrollTarget = .displays
+                }
+                Button("Virtual Screens") {
+                    scrollTarget = .virtual
+                }
+                Button("Groups") {
+                    scrollTarget = .groups
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .font(.caption)
+            .fixedSize()
+
+            Button("Groups") {
+                scrollTarget = .groups
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Button("Video Filter Window") {
+                openVideoFilterWindow()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Button("System Colors") {
+                openSystemColors()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Spacer(minLength: 4)
+
+            Button("Check for Updates") {
+                UpdaterController.shared.checkForUpdates()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Button("Quit FBD") {
+                NSApp.terminate(nil)
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Divider().opacity(0.5)
+        }
+    }
+
+    /// Where the footer menu should scroll to.
+    private enum ScrollTarget {
+        case displays, virtual, groups
+    }
+
+    @State private var scrollTarget: ScrollTarget?
+
+    /// Open the floating video-filter (PiP) window for the primary display.
+    private func openVideoFilterWindow() {
+        let primary = DisplayController.shared.displays.first { $0.id == CGMainDisplayID() }
+            ?? DisplayController.shared.displays.first
+        guard let primary else { return }
+        _ = footerPipController.startPiP(displayID: primary.id, filter: .identity)
+    }
+
+    /// Open System Settings → Displays (color profile section).
+    private func openSystemColors() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Display-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     // MARK: - Virtual screens

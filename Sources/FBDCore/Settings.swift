@@ -31,6 +31,8 @@ public enum Settings {
         add("disconnectVirtualScreensOnLock", disconnectVirtualScreensOnLock)
         add("autoDisconnectBuiltInOnExternal", autoDisconnectBuiltInOnExternal)
         add("layoutProtectionEnabled", layoutProtectionEnabled)
+        add("showOfflineDisplays", showOfflineDisplays)
+        add("enableDisconnectOption", enableDisconnectOption)
         add("virtualDisplayIDs", virtualDisplayIDs)
         add("httpServerEnabled", httpServerEnabled)
         add("httpServerPort", httpServerPort)
@@ -137,6 +139,15 @@ public enum Settings {
     /// Re-apply the saved display arrangement when the layout changes.
     @Storage(key: "layoutProtectionEnabled", defaultValue: false)
     public static var layoutProtectionEnabled: Bool
+
+    /// Show currently-offline displays in the Settings per-display tab.
+    @Storage(key: "showOfflineDisplays", defaultValue: true)
+    public static var showOfflineDisplays: Bool
+
+    /// Whether the per-display "Disable/Re-enable" (connect/disconnect)
+    /// controls are offered in the UI.
+    @Storage(key: "enableDisconnectOption", defaultValue: true)
+    public static var enableDisconnectOption: Bool
 
     /// Persisted virtual screen configurations (JSON-encoded).
     private static let virtualScreensKey = "virtualScreens.v1"
