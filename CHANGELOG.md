@@ -3,7 +3,7 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
-## [Unreleased]
+## [1.2.1] — 2026-08-03
 
 ### Fixed
 - **Software XDR boost rendered the screen out of focus**: the ScreenCaptureKit

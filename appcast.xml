@@ -3,12 +3,12 @@
     <channel>
         <title>FBD</title>
         <item>
-            <title>1.2.0</title>
-            <pubDate>Mon, 03 Aug 2026 12:09:12 +0200</pubDate>
-            <sparkle:version>3</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <title>1.2.1</title>
+            <pubDate>Mon, 03 Aug 2026 12:17:38 +0200</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.2</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/FisiFla/FBD/releases/download/v1.2.0/FBD.zip" length="2963443" type="application/octet-stream" sparkle:edSignature="XeR7fMpadpOE+wUzGuj2iH3Ku9Kv5Gqrielt4hrmDg4BjNM/jomXBaFQb3qF6UUpDJIGdrSIV85dKR15twrFBg=="/>
+            <enclosure url="https://github.com/FisiFla/FBD/releases/download/v1.2.1/FBD.zip" length="2964686" type="application/octet-stream" sparkle:edSignature="yhLKIlWeMKwpt2j7XfwzIV+uCMDfuz/PRLEkWjtCA9CdE2jX75IYjXFX8psLNjhm6TolrgwCA6HQRUfpVSlvDA=="/>
         </item>
     </channel>
 </rss>
