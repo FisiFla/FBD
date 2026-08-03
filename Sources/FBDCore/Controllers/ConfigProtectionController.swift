@@ -20,12 +20,18 @@ public final class ConfigProtectionController {
 
     private let resolution = ResolutionController()
 
+    /// Persistence domain. Defaults to the shared FBD suite (app + CLI see
+    /// the same state); injectable so tests use a scratch suite.
+    private let defaults: UserDefaults
+
     private var hasRegistered = false
     private var observer: NSObjectProtocol?
     /// Display IDs that were online at the last `.fbdDisplaysChanged` tick.
     private var knownOnlineIDs: Set<CGDirectDisplayID> = []
 
-    public init() {}
+    public init(defaults: UserDefaults = ConfigProtectionController.defaults) {
+        self.defaults = defaults
+    }
 
     // MARK: - Persistence
 
@@ -41,7 +47,7 @@ public final class ConfigProtectionController {
     /// Same suite selection as Settings: the app bundle's standard domain IS
     /// dev.fisifla.fbd; CLI/tests target the suite explicitly so both read the
     /// same plist.
-    private static var defaults: UserDefaults {
+    nonisolated public static var defaults: UserDefaults {
         if Bundle.main.bundleIdentifier == "dev.fisifla.fbd" {
             return .standard
         }
@@ -64,7 +70,7 @@ public final class ConfigProtectionController {
             log.warning("saveCurrentState: encode failed for \(display.identityKey)")
             return
         }
-        Self.defaults.set(data, forKey: key(for: display.identityKey))
+        defaults.set(data, forKey: key(for: display.identityKey))
         log.debug("saved config state for \(display.identityKey)")
     }
 
@@ -74,7 +80,7 @@ public final class ConfigProtectionController {
     /// No-op unless Settings.configProtectionEnabled and saved state exists.
     public func restoreIfNeeded(for display: Display, resolution: ResolutionController, controller: DisplayController) {
         guard Settings.configProtectionEnabled,
-              let data = Self.defaults.data(forKey: key(for: display.identityKey)),
+              let data = defaults.data(forKey: key(for: display.identityKey)),
               let state = try? JSONDecoder().decode(SavedState.self, from: data) else {
             return
         }
@@ -130,7 +136,7 @@ public final class ConfigProtectionController {
 
         for id in appeared {
             guard let display = controller.display(withID: id),
-                  Self.defaults.data(forKey: key(for: display.identityKey)) != nil else {
+                  defaults.data(forKey: key(for: display.identityKey)) != nil else {
                 continue
             }
             log.info("display \(id) reappeared — restoring saved config")

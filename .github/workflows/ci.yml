@@ -14,10 +14,10 @@ jobs:
     # macos-15-xlarge, which requires a paid spending limit.
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Cache SwiftPM dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             .build
@@ -36,7 +36,7 @@ jobs:
         run: make app
 
       - name: Upload app artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: FBD-app
           path: build/FBD.app
