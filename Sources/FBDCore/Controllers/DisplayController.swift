@@ -204,13 +204,30 @@ public final class DisplayController {
             softwareEnabled: Settings.softwareUpscalingEnabled
         ) {
         case .nativeUpscale(let target):
-            return xdr.setUpscaleTarget(target, for: display)
+            if xdr.setUpscaleTarget(target, for: display) {
+                return true
+            }
+            // Native preset write failed (e.g. write-protected preset slots
+            // on macOS 27). Fall back to the software boost overlay when it
+            // is enabled and the target has headroom above the hardware
+            // ceiling — otherwise the explicit `xdr <id> <nits>` command is
+            // dead on write-protected systems.
+            let hardwareMax = combined.hardwareMaxNits(for: display)
+            guard Settings.softwareUpscalingEnabled, hardwareMax > 0, target > hardwareMax else {
+                return false
+            }
+            return overlay.setSoftwareBoost(Double(target) / Double(hardwareMax), displayID: display.id)
         case .softwareBoost(let factor):
             // Requires Screen Recording permission (logged by the overlay).
             return overlay.setSoftwareBoost(factor, displayID: display.id)
         case .hardware, .fail:
             return false
         }
+    }
+
+    /// Display IDs currently running a software boost overlay.
+    public func activeBoostDisplayIDs() -> [UInt32] {
+        overlay.activeBoostDisplayIDs()
     }
 
     /// Remove native XDR upscaling (restore the factory preset) and stop any

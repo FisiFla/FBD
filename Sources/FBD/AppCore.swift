@@ -289,7 +289,13 @@ final class AppCore {
         switch route {
         case .health:
             let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-            return (200, HTTPJSON.encode(["ok": true, "version": version, "displays": displayController.displays.count]))
+            let boostIDs = displayController.activeBoostDisplayIDs()
+            return (200, HTTPJSON.encode([
+                "ok": true,
+                "version": version,
+                "displays": displayController.displays.count,
+                "boostActive": boostIDs,
+            ]))
         case .listDisplays:
             let list = displayController.displays.map { HTTPJSON.display($0) }
             return (200, HTTPJSON.encode(["displays": list]))

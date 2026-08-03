@@ -86,6 +86,7 @@ public final class OverlayController {
     private func removeDim(for displayID: CGDirectDisplayID) {
         guard let window = dimWindows.removeValue(forKey: displayID) else { return }
         window.orderOut(nil)
+        window.close()
     }
 
     // MARK: - Software brightness boost
@@ -93,6 +94,11 @@ public final class OverlayController {
     /// True when a boost overlay is capturing the display.
     public func isBoosting(displayID: CGDirectDisplayID) -> Bool {
         boostSessions[displayID]?.isCapturing ?? false
+    }
+
+    /// Display IDs with an active boost session (observability).
+    public func activeBoostDisplayIDs() -> [UInt32] {
+        Array(boostSessions.keys)
     }
 
     /// Start (or update) a live-capture brightness boost for a display.
@@ -135,6 +141,7 @@ public final class OverlayController {
                 renderer: renderer,
                 owner: self
             )
+            view.delegate = session
             boostSessions[displayID] = session
             window.orderFrontRegardless()
             session.start(factor: factor)
@@ -149,10 +156,12 @@ public final class OverlayController {
         let view = MTKView(frame: .zero, device: device)
         view.colorPixelFormat = .bgra8Unorm
         view.framebufferOnly = true
-        // Frames are presented manually by the capture pipeline (off-main),
-        // not by MTKView's own draw loop.
+        // Delegate-draw pattern: the SCK output stores the latest frame and
+        // flags needsDisplay; draw(in:) renders on the main thread. Paused +
+        // enableSetNeedsDisplay keeps the loop frame-driven rather than
+        // spinning at vsync.
         view.isPaused = true
-        view.enableSetNeedsDisplay = false
+        view.enableSetNeedsDisplay = true
         view.autoresizingMask = [.width, .height]
         return view
     }
@@ -178,6 +187,11 @@ public final class OverlayController {
     /// Remove only the boost overlay for a display (dim overlay untouched).
     fileprivate func teardownBoost(for displayID: CGDirectDisplayID) {
         guard let session = boostSessions.removeValue(forKey: displayID) else { return }
+        // Hide synchronously (this runs on the main actor): stop()'s async
+        // teardown can race the session's deallocation and leave the last
+        // Metal frame composited on-screen.
+        session.window.alphaValue = 0
+        session.window.orderOut(nil)
         session.stop()
     }
 
@@ -211,7 +225,9 @@ public final class OverlayController {
         window.ignoresMouseEvents = true
         window.hidesOnDeactivate = false
         window.hasShadow = false
-        window.isReleasedWhenClosed = false
+        // Overlays are created per use and never reused — closing destroys
+        // them, so teardown can never leave a stale composited window.
+        window.isReleasedWhenClosed = true
         return window
     }
 
@@ -239,7 +255,7 @@ public final class OverlayController {
 /// Owns one display's capture stream, overlay window and renderer.
 /// All capture/render work happens on `queue` (a per-display serial queue);
 /// window/state mutations hop to the main thread.
-private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate {
+private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MTKViewDelegate {
     let displayID: CGDirectDisplayID
     let window: NSWindow
     let metalView: MTKView
@@ -252,6 +268,10 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Set before an intentional stop so didStopWithError stays quiet.
     private var _isStopping = false
     private var stream: SCStream?
+    /// Latest captured frame + current brightness, written on the capture
+    /// queue, read on the main thread by draw(in:).
+    private var latestPixelBuffer: CVPixelBuffer?
+    private var brightness: Float = 1
 
     var isCapturing: Bool {
         stateLock.lock()
@@ -277,35 +297,46 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: Lifecycle
 
     func start(factor: Double) {
-        queue.async { [weak self] in
-            self?.renderer.setFactor(Float(factor))
-        }
+        setFactor(factor)
         Task { @MainActor [weak self] in
             await self?.runCapture()
         }
     }
 
     func setFactor(_ factor: Double) {
-        queue.async { [weak self] in
-            self?.renderer.setFactor(Float(factor))
-        }
+        stateLock.lock()
+        brightness = Float(factor)
+        stateLock.unlock()
     }
 
-    /// Stop the stream and hide the window. Serialized with any in-flight
-    /// frame on `queue`, so the renderer is never torn down mid-draw.
+    /// Stop the stream and hide the window. The window is hidden FIRST on the
+    /// main thread, so a stalled capture queue can never leak the overlay.
     func stop() {
         stateLock.lock()
         _isStopping = true
         stateLock.unlock()
+        // Destroy the window outright. The Metal layer can hold its last
+        // presented (brightened) frame even after the view is detached, so
+        // zero the alpha FIRST — a 0-alpha window composites nothing even if
+        // the window server keeps it on-screen. orderOut/close alone were
+        // observed to leave shield-level windows composited on this system.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.window.alphaValue = 0
+            self.metalView.delegate = nil
+            self.window.contentView = nil
+            self.window.orderOut(nil)
+            self.window.close()
+        }
         queue.async { [weak self] in
             guard let self else { return }
             if let stream = self.stream {
                 try? stream.removeStreamOutput(self, type: .screen)
-                stream.stopCapture(completionHandler: nil)
-                self.stream = nil
-            }
-            DispatchQueue.main.async { [weak self] in
-                self?.window.orderOut(nil)
+                stream.stopCapture { [weak self] _ in
+                    // Break the stream↔session retain cycle even if the stop
+                    // callback is delivered asynchronously.
+                    self?.stream = nil
+                }
             }
         }
     }
@@ -386,7 +417,29 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        renderer.render(pixelBuffer: pixelBuffer, in: metalView)
+        stateLock.lock()
+        latestPixelBuffer = pixelBuffer
+        stateLock.unlock()
+        // Render on the main thread via the MTKView draw loop (reliable
+        // compositing for transparent shield windows).
+        DispatchQueue.main.async { [weak self] in
+            self?.metalView.needsDisplay = true
+        }
+    }
+
+    // MARK: MTKViewDelegate
+
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+
+    func draw(in view: MTKView) {
+        stateLock.lock()
+        guard let buffer = latestPixelBuffer else {
+            stateLock.unlock()
+            return
+        }
+        let factor = brightness
+        stateLock.unlock()
+        renderer.render(pixelBuffer: buffer, brightness: factor, in: view)
     }
 
     // MARK: SCStreamDelegate
@@ -407,18 +460,14 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate {
 // MARK: - Metal renderer
 
 /// Draws a captured `CVPixelBuffer` as a fullscreen textured quad with a
-/// `brightness` uniform (> 1 brightens). All methods must be called from the
-/// owning `BoostSession`'s serial queue.
+/// `brightness` uniform (> 1 brightens). Called from the MTKView draw loop
+/// (main thread) via BoostSession.draw(in:).
 private final class BoostRenderer {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let pipelineState: MTLRenderPipelineState
     private let sampler: MTLSamplerState
     private let textureCache: CVMetalTextureCache
-    private let uniformBuffer: MTLBuffer
-
-    /// Current brightness multiplier; only touched on the session's serial queue.
-    private var brightness: Float = 1
 
     /// MSL: fullscreen textured quad; the fragment shader applies the
     /// brightness uniform to the captured color.
@@ -485,26 +534,17 @@ private final class BoostRenderer {
         }
         self.textureCache = cache
 
-        guard let uniformBuffer = device.makeBuffer(length: 16, options: .storageModeShared) else {
-            throw OverlayError.metalSetupFailed
-        }
-        self.uniformBuffer = uniformBuffer
     }
 
-    func setFactor(_ factor: Float) {
-        brightness = max(factor, 1)
-    }
-
-    func render(pixelBuffer: CVPixelBuffer, in view: MTKView) {
+    func render(pixelBuffer: CVPixelBuffer, brightness: Float, in view: MTKView) {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         guard width > 0, height > 0,
-              let layer = view.layer as? CAMetalLayer,
-              let drawable = layer.nextDrawable() else {
+              let drawable = view.currentDrawable else {
             return
         }
-        if Int(layer.drawableSize.width) != width || Int(layer.drawableSize.height) != height {
-            layer.drawableSize = CGSize(width: width, height: height)
+        if Int(view.drawableSize.width) != width || Int(view.drawableSize.height) != height {
+            view.drawableSize = CGSize(width: width, height: height)
         }
 
         var cvTexture: CVMetalTexture?
@@ -531,8 +571,8 @@ private final class BoostRenderer {
             return
         }
         encoder.setRenderPipelineState(pipelineState)
-        uniformBuffer.contents().storeBytes(of: brightness, as: Float.self)
-        encoder.setFragmentBuffer(uniformBuffer, offset: 0, index: 0)
+        var uniform = max(brightness, 1)
+        encoder.setFragmentBytes(&uniform, length: 4, index: 0)
         encoder.setFragmentTexture(texture, index: 0)
         encoder.setFragmentSamplerState(sampler, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)

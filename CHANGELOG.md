@@ -34,6 +34,29 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
     before) and the panel grows to 460×860 on settings open (top-anchored)
     and shrinks back on Back.
 
+## [Unreleased]
+
+### Fixed
+- **XDR software boost was dead on write-protected systems** (found via live
+  testing with a real Screen Recording grant): the explicit
+  `xdr <id> <nits>` command always chose the native preset path when the
+  display was XDR-capable, so on macOS 27 (write-protected preset slots) it
+  failed without ever trying the software overlay. `setXDRUpscaleTarget`
+  now falls back to the software boost when the native write fails.
+- **Boost overlay never composited**: the renderer presented Metal drawables
+  manually from the capture queue on a paused MTKView, which renders nothing
+  on this system. Switched to the MTKView-delegate draw pattern (frames
+  stored on the capture queue, drawn on the main thread).
+- **Boost overlay leaked after "off"**: tearing down could race the session
+  deallocation and leave the last brightened Metal frame frozen on-screen
+  (the screen stayed boosted until the app quit). Teardown now hides the
+  window synchronously (alpha 0 + orderOut) before stopping the stream, and
+  overlay windows are `isReleasedWhenClosed` so close() destroys them.
+
+### Changed
+- `GET /api/health` now reports `boostActive` (display IDs with a live
+  software-boost session) — observability for the overlay.
+
 ## [1.0.0] — 2026-08-02
 
 ### Added
