@@ -1,9 +1,10 @@
 # FBD — Roadmap
 
-Status: **All five tiers shipped** (162 unit tests green; CI green on every
-push). 17+ hardening cycles applied since the tiers: HTTP API auth +
+Status: **All five tiers shipped** (268 unit tests green; CI green on every
+push). 40+ hardening cycles applied since the tiers: HTTP API auth +
 router extraction, EDID validation, virtual-display registry, DDC retries,
-parser fuzz, a11y, NSPanel UI, release docs. See CHANGELOG.md for the
+parser fuzz, a11y, NSPanel glass UI, Sparkle release prep, XDR software
+boost (live-verified), UI regression harness. See CHANGELOG.md for the
 per-cycle record.
 
 Remaining open items (all external/hardware-bound — see
@@ -34,17 +35,19 @@ Remaining open items (all external/hardware-bound — see
 
 - [x] Native XDR upscaling: SkyLight preset rewrite (preset enumeration, `SLSDisplaySetPresetData` + `SetActivePresetIndex`, factory restore). **macOS 13–15**: works. **macOS 27**: preset writes are write-protected (verified by probe) → runtime self-test + automatic software fallback
 - [ ] Direct built-in XDR: `IOMobileFramebufferOpen` — **entitlement-gated on macOS 27** (kIOReturnNotPrivileged); wrappers ship probe-only, degrade gracefully. Open item: private entitlement or older-OS support
-- [x] Software XDR: Metal overlay at `CGShieldingWindowLevel` with ScreenCaptureKit capture + brightness shader (the working upscale method on macOS 27)
+- [x] Software XDR: Metal overlay at `CGShieldingWindowLevel` with ScreenCaptureKit capture + brightness shader (the working upscale method on macOS 27; live-verified with luma measurements: 0.118 -> 0.185 boost on, exact return off, zero leaked windows)
 - [x] Combined brightness controller: nits-based curve (hardware 0…100 % → native XDR → software boost), maxNits/hardwareMaxNits helpers
 - [x] Dim-to-black overlay · forced HDR mode (`SLSDisplaySetHDRModeEnabled`) · XDR preset selector (live-verified preset switching) · brightness-change notifications (DisplayServices registry, lunar pattern)
 - [x] fbdcli: `xdr`, `preset`, `hdr` commands · menu-bar UI: XDR/HDR section (upscale toggle, nits slider, preset picker, HDR toggle) + settings toggles
 
-## Tier 3 — Virtual displays & layout
+## Tier 3 — Virtual displays & layout ✅ (shipped)
 
-- [ ] Virtual screens: `CGVirtualDisplay*` via dlopen (macOS 13–15) + SidecarCore `SidecarDisplayManager` fallback (macOS 26+)
-- [ ] HDR-capable / high-refresh virtual modes · lock/wake connect-disconnect
-- [ ] Soft disconnect (`CGSConfigureDisplayEnabled`) · auto-disconnect built-in on external
-- [ ] Display groups · UI-scale matching · layout protection · mirrored sets
+- [x] Virtual screens: `SLVirtualDisplay*` (SkyLight) on macOS 26+ — live-verified
+      create/destroy/label via app + CLI; `CGVirtualDisplay*` via dlopen on
+      macOS 13–15 (untestable here — awaits 13–15 hardware)
+- [x] HDR-capable / high-refresh virtual modes · lock/wake connect-disconnect · auto-connect
+- [x] Soft disconnect (`CGSConfigureDisplayEnabled`) · auto-disconnect built-in on external
+- [x] Display groups (cross-process shared state) · layout protection · mirrored sets
 
 ## Tier 4 — EDID & advanced config ✅ (shipped)
 
@@ -60,9 +63,10 @@ Remaining open items (all external/hardware-bound — see
 - [x] Network TV/AVR: LG webOS (WebSocket ssap://), Samsung Tizen (WebSocket + pairing token), Philips (HTTP jointSPACE), Yamaha (YXC XML)
 - [x] Local HTTP API (127.0.0.1 only) — LIVE-VERIFIED: GET /api/displays, POST brightness {"ok":true} round-trip through the app
 - [x] App Intents: Set/GetBrightness, SetVolume, ListDisplays, EnableXDRUpscaling (FBDIntents target, package wired in the app)
-- [x] Sparkle updates (2.9.4 via SPM; feed URL configurable, off by default — requires a signed release + appcast)
+- [x] Sparkle updates (2.9.5 via SPM; SUFeedURL + Ed25519 keys configured — requires a signed release + appcast host decision)
 - [x] CLI: http/pip/osd/nightshift/truetone/tv commands; Settings: Integrations section
-- [ ] Remote CLI control of the app-owned HTTP API from fbdcli (app must run; curl works today)
+- [x] fbdcli routes every control command through the app's local HTTP API
+      when the app is running (single-driver; --direct forces local)
 
 ## Hardware verification checklist (Tier 1)
 

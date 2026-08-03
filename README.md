@@ -9,7 +9,7 @@ Updates via Sparkle (optional).**
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-All feature tiers are implemented (218 unit tests, CI green per push). Apple locks down
+All feature tiers are implemented (268 unit tests, CI green per push). Apple locks down
 private display APIs differently per macOS release; FBD degrades gracefully (feature off,
 UI notes it) when a path is unavailable.
 

@@ -17,10 +17,13 @@ external secrets needed.
      `generate_keys` (Keychain-based) or `openssl genpkey -algorithm ED25519`
      → base64 of the raw 32-byte seed (see `.sparkle/` for the format).
    - The Sparkle tools live in `.sparkle/` (generate_appcast, generate_keys,
-     sign_update — from the official Sparkle 2.9.4 release).
+     sign_update — from the official Sparkle 2.9.5 release).
 3. **Appcast host** — the appcast is committed to the repo root and the feed
    URL in `Sources/FBD/Resources/Info.plist` points at
    `https://raw.githubusercontent.com/FisiFla/FBD/main/appcast.xml`.
+   **Note**: raw.githubusercontent 404s while the repo is private — decide
+   before the first release whether to make the repo public at release time
+   or host the appcast elsewhere.
 
 ## Release checklist
 

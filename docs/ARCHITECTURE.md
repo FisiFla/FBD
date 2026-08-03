@@ -6,8 +6,9 @@
 FBDCore        library — all logic (models, controllers, private-API wrappers, DDC protocol)
 FBD            executable — LSUIElement menu-bar app (AppKit + SwiftUI)
 fbdcli         executable — CLI (command bodies + HTTP routing)
-FBDCLIParser   library — CLI command vocabulary + all argument/spec parsers
-               (unit-tested; fbdcli delegates to it)
+FBDCLIParser   library — CLI command vocabulary + all argument/spec parsers +
+               the routed-CLI request/URL builders (HTTPRoutingPlan,
+               HTTPRequestBuilder) — all unit-tested; fbdcli delegates
 FBDIntents     library — Shortcuts actions (AppIntents; exposed via the app's
                FBDAppIntentsBridge)
 CPrivateAPI    C target — private-framework declarations + CGS struct layout (single header)
@@ -25,6 +26,8 @@ UI (SwiftUI views) ──► DisplayController (@MainActor, singleton)
                           ├─► AppleController ──► DisplayServicesAPI (Apple displays)
                           ├─► DDCController ──► ExternalController ──► IOAVServiceAPI (I2C, arm64)
                           ├─► CombinedController (Tier 2 curve; Tier 1 = routing)
+                          ├─► OverlayController (@MainActor; ScreenCaptureKit +
+                          │    Metal — software boost, dim-to-black, PiP)
                           └─► ResolutionController ──► CGSAPI + SkyLightAPI
 Display state (ObservableObject, @Published) ◄── notifications: .fbdDisplaysChanged / .fbdDisplayUpdated
 ```

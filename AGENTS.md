@@ -8,6 +8,7 @@ Repo: https://github.com/FisiFla/FBD (private).
 - `swift build` — build debug (FBDCore lib, FBD app, fbdcli)
 - `swift test` — unit tests
 - `make app` — release bundle at `build/FBD.app` (universal; falls back to native)
+- `make ui-smoke` — drives the real panel via Accessibility/CGEvent (needs a11y permission)
 - `swift run fbdcli list` — CLI smoke test
 
 ## Layout
@@ -15,7 +16,9 @@ Repo: https://github.com/FisiFla/FBD (private).
 - `Sources/CPrivateAPI/` — C target: private-framework declarations (verified signatures) + CGS struct
 - `Sources/FBDCore/` — all logic: `Models/`, `PrivateAPI/` (typed Swift wrappers), `Controllers/`, `Settings.swift`
 - `Sources/FBD/` — app target: `main.swift`, `AppDelegate`, menu bar UI, views
-- `Sources/fbdcli/` — CLI target
+- `Sources/fbdcli/` — CLI target (commands + HTTP routing)
+- `Sources/fbdcli-parser/` — FBDCLIParser library (commands, validators, HTTP plans)
+- `scripts/` — UIDriver + ui-smoke regression harness
 - `Tests/FBDCoreTests/` — unit tests
 
 ## Rules

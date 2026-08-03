@@ -51,7 +51,7 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 |---|---|---|
 | `CBBlueLightClient` (CoreBrightness, ObjC runtime + C shims): `setStrength:commit:`, `getStrength:`, `supportsBlueLightReduction` | ✅ live-verified (strength round-trip 0–100 %) | NightShiftController |
 | `CBTrueToneClient`: `available`, `enabled`, `setEnabled:` | available=false on macOS 26.3+ (degrades) | TrueToneController |
-| Sparkle 2.9.4 (public, SPM) | ✅ linked; feed URL configurable, off by default | UpdaterController |
+| Sparkle 2.9.5 (public, SPM) | ✅ linked; SUFeedURL configured (repo appcast), updater active when signed | UpdaterController |
 | `CoreDisplay_DisplayCreateInfoDictionary` | ✅ live-verified (rich display info; no IODisplayEDID for built-in panel on macOS 27) | EDIDController fallback |
 
 ## Not yet declared (Tier 3+)
