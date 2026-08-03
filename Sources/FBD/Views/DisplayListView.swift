@@ -160,7 +160,7 @@ struct DisplayListView: View {
             // (~12pt circles centered 14pt from the top). The brand row sits
             // directly below with tight spacing — no empty gap.
             Color.clear
-                .frame(height: 22)
+                .frame(height: 24)
                 .accessibilityHidden(true)
 
             HStack(spacing: 10) {
@@ -207,7 +207,7 @@ struct DisplayListView: View {
                 .help("Close")
             }
             .padding(.horizontal, 14)
-            .padding(.top, 4)
+            .padding(.top, 7)
             .padding(.bottom, 8)
         }
         .background(.ultraThinMaterial)
@@ -220,7 +220,7 @@ struct DisplayListView: View {
     private var settingsTopBar: some View {
         VStack(spacing: 0) {
             Color.clear
-                .frame(height: 22)
+                .frame(height: 24)
                 .accessibilityHidden(true)
 
             HStack(spacing: 8) {
@@ -251,7 +251,7 @@ struct DisplayListView: View {
                 .help("Close")
             }
             .padding(.horizontal, 14)
-            .padding(.top, 4)
+            .padding(.top, 7)
             .padding(.bottom, 8)
         }
         .background(.ultraThinMaterial)
