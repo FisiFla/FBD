@@ -3,6 +3,18 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Changed
+- **PiP window is now closable and resizable**: the window gained a standard
+  title bar (transparent titlebar, hidden title) with a native close button
+  and resize edges; closing tears the session down (windowShouldClose ->
+  teardown). Verified live: corner-drag resize 480x270 -> 504x293, close
+  button removes the window, app stable.
+- **"Video Filter Window" renamed to "PiP"** everywhere (footer button,
+  Tools menu item) — the old name was confusing since it opens a
+  picture-in-picture window.
+
 ## [1.3.1] — 2026-08-03
 
 ### Fixed

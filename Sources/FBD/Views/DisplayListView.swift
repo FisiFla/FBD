@@ -20,7 +20,7 @@ struct DisplayListView: View {
     @State private var virtualScreensTick = 0
     @State private var groupItems: [DisplayGroup] = []
 
-    /// PiP / video-filter window for the Tools footer (shared — one window).
+    /// PiP window for the Tools footer (shared — one window).
     @State private var footerPipController = PipStreamController.shared
 
     // Virtual screen creation form.
@@ -306,8 +306,8 @@ struct DisplayListView: View {
                     scrollTarget = .groups
                 }
                 Divider()
-                Button("Video Filter Window") {
-                    openVideoFilterWindow()
+                Button("PiP Window") {
+                    openPiPWindow()
                 }
                 Button("System Colors") {
                     openSystemColors()
@@ -329,12 +329,13 @@ struct DisplayListView: View {
 
             Spacer(minLength: 4)
 
-            Button("Video Filter Window") {
-                openVideoFilterWindow()
+            Button("PiP") {
+                openPiPWindow()
             }
             .buttonStyle(.borderless)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .help("Open a floating picture-in-picture window for the primary display")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
@@ -352,8 +353,8 @@ struct DisplayListView: View {
 
     @State private var scrollTarget: ScrollTarget?
 
-    /// Open the floating video-filter (PiP) window for the primary display.
-    private func openVideoFilterWindow() {
+    /// Open the floating PiP window for the primary display.
+    private func openPiPWindow() {
         let primary = DisplayController.shared.displays.first { $0.id == CGMainDisplayID() }
             ?? DisplayController.shared.displays.first
         guard let primary else { return }

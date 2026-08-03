@@ -43,9 +43,9 @@ public struct VideoFilter: Equatable, Sendable {
 /// synchronously via the return value — never crash, never block; async
 /// failures tear the PiP down and log.
 @MainActor
-public final class PipStreamController {
+public final class PipStreamController: NSObject, NSWindowDelegate {
     /// One PiP window process-wide: every UI entry point (display options
-    /// menu, footer) shares this instance so "Video Filter Window" reuses
+    /// menu, footer) shares this instance so opening PiP reuses
     /// the existing window instead of spawning more.
     public static let shared = PipStreamController()
 
@@ -54,7 +54,7 @@ public final class PipStreamController {
     /// The active capture session (window + stream + renderer); at most one.
     private var session: PipSession?
 
-    public init() {}
+    public override init() { super.init() }
 
     deinit {
         // Break the stream↔output retain cycle (SCStream retains its outputs)
@@ -124,6 +124,15 @@ public final class PipStreamController {
         teardownPip()
     }
 
+    // MARK: NSWindowDelegate
+
+    /// The title-bar close button: tear down the session (the window itself
+    /// is destroyed by teardown, so the close is fully handled here).
+    public func windowShouldClose(_ sender: NSWindow) -> Bool {
+        teardownPip()
+        return false
+    }
+
     // MARK: - Teardown
 
     /// Remove the active PiP (window + stream). Runs on the main actor, so it
@@ -157,8 +166,10 @@ public final class PipStreamController {
 
     // MARK: - Window
 
-    /// Borderless rounded-corner window (~480×270) placed near the bottom-right
-    /// of the source display, draggable by its background.
+    /// Floating PiP window (~480×270) placed near the bottom-right of the
+    /// source display: titled so it has a native close button and resize
+    /// edges, with a transparent titlebar for the compact look, draggable by
+    /// its background.
     private func makeWindow(displayID: CGDirectDisplayID, device: MTLDevice) -> (NSWindow, MTKView) {
         let size = NSSize(width: 480, height: 270)
         let screen = NSScreen.screens.first {
@@ -169,15 +180,20 @@ public final class PipStreamController {
 
         let window = NSWindow(
             contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.borderless],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        window.title = "FBD PiP"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.minSize = NSSize(width: 240, height: 135)
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isOpaque = false
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
+        window.delegate = self
         // isReleasedWhenClosed stays false: close() on an autoreleased
         // window over-released (segfault). Teardown detaches the content
         // view and drops the session reference; the window then deallocates
