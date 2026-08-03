@@ -31,6 +31,20 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   Note: creating more than one SLVirtualDisplay fails on this macOS 27 —
   now a graceful error instead of a crash.
 
+## [Unreleased]
+
+### Changed
+- **UI simplification sweep** (feedback: "confusing / overengineered / footer
+  buttons do nothing"):
+  - Removed the per-card quick-toggles row (HiDPI / Auto Brightness / Notch);
+    HiDPI and Auto Brightness moved into the display's options menu, and the
+    dead Notch toggle was removed entirely.
+  - Tools footer rebuilt: it is now pinned to the panel bottom (it floated
+    mid-window when content was short) and every button has a visible action
+    — Virtual Screens / Groups expand their sections (verified via AX), PiP
+    opens the floating window, Check for Updates and Quit work. The subtle
+    scroll-jump Tools menu and the System Colors button were removed.
+
 ## [1.3.1] — 2026-08-03
 
 ### Fixed

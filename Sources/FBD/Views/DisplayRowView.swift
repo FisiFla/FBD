@@ -49,7 +49,6 @@ struct DisplayRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            quickControls
             BrightnessSliderView(display: display)
             if display.ddcAvailable {
                 ddcPanel
@@ -130,6 +129,20 @@ struct DisplayRowView: View {
 
             Spacer(minLength: 4)
 
+            // Options menu (ellipsis) — the single entry point for the
+            // per-display submenus and quick toggles.
+            Menu {
+                optionsMenuContent
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More options")
+            .accessibilityLabel("More options for \(display.name)")
+
             // Soft-disconnect power button (gated by the connect/disconnect setting).
             if Settings.enableDisconnectOption {
                 Button {
@@ -177,48 +190,23 @@ struct DisplayRowView: View {
         .layoutPriority(1)
     }
 
-    // MARK: - Quick controls & options menu
+    // MARK: - Options menu
 
-    /// Compact quick-toggles row under the header: HiDPI, Auto Brightness,
-    /// Notch (unsupported), and the full options menu.
-    private var quickControls: some View {
-        HStack(spacing: 10) {
-            Toggle("HiDPI", isOn: hidpiBinding)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .font(.caption)
-                .help("Switch between the HiDPI and standard variant of the current resolution")
-            if autoBrightnessAvailable {
-                Toggle("Auto Brightness", isOn: autoBrightnessBinding)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .font(.caption)
-                    .help("Ambient-light compensation (hardware)")
-            }
-            Toggle("Notch", isOn: .constant(false))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .font(.caption)
-                .disabled(true)
-                .help("Hiding the notch needs the SLS custom-resolution API, which is not exported on this macOS")
-            Spacer(minLength: 4)
-            Menu {
-                optionsMenuContent
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 14, weight: .medium))
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("More options")
-            .accessibilityLabel("More options for \(display.name)")
-        }
-    }
-
-    /// The full per-display options menu (BetterDisplay-style).
+    /// The full per-display options menu (BetterDisplay-style): one ellipsis
+    /// button in the card header; the old quick-toggles row (HiDPI / Auto
+    /// Brightness / Notch) was folded in here and the dead Notch toggle
+    /// removed.
     @ViewBuilder
     private var optionsMenuContent: some View {
+        // Quick toggles
+        Toggle("HiDPI", isOn: hidpiBinding)
+            .help("Switch between the HiDPI and standard variant of the current resolution")
+        if autoBrightnessAvailable {
+            Toggle("Auto Brightness", isOn: autoBrightnessBinding)
+                .help("Ambient-light compensation (hardware)")
+        }
+        Divider()
+
         // Display Mode
         Menu("Display Mode") {
             ForEach(display.modes, id: \.self) { mode in

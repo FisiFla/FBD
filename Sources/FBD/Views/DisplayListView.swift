@@ -22,6 +22,10 @@ struct DisplayListView: View {
 
     /// PiP window for the Tools footer (shared — one window).
     @State private var footerPipController = PipStreamController.shared
+    /// Whether the Virtual Screens / Groups sections are expanded (the footer
+    /// buttons toggle them — a visible action, unlike the old scroll menu).
+    @State private var virtualScreensExpanded = false
+    @State private var groupsExpanded = false
 
     // Virtual screen creation form.
     @State private var newScreenName = "Virtual Display"
@@ -111,8 +115,10 @@ struct DisplayListView: View {
 
     /// The whole popover scrolls vertically; display rows are plain VStack
     /// entries (not a nested List) so nothing clips and row heights adapt.
+    /// Scrollable content with the tools footer PINNED to the bottom of the
+    /// panel (it used to sit mid-window when content was short).
     private var mainContent: some View {
-        ScrollViewReader { proxy in
+        VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 8) {
                     if rosettaWarningVisible {
@@ -130,31 +136,18 @@ struct DisplayListView: View {
                                     .padding(.horizontal, 12)
                             }
                         }
-                        .id("displays")
                     }
                     if virtualScreens.isAvailable {
                         virtualScreensSection
-                            .id("virtual")
                     }
                     displayGroupsSection
-                        .id("groups")
-                    toolsFooter
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 10)
             }
             .scrollIndicators(.hidden)
-            .onChange(of: scrollTarget) { target in
-                guard let target else { return }
-                withAnimation(FBDTheme.animationSpring) {
-                    switch target {
-                    case .displays: proxy.scrollTo("displays", anchor: .top)
-                    case .virtual: proxy.scrollTo("virtual", anchor: .top)
-                    case .groups: proxy.scrollTo("groups", anchor: .top)
-                    }
-                }
-                scrollTarget = nil
-            }
+
+            toolsFooter
         }
     }
 
@@ -289,43 +282,29 @@ struct DisplayListView: View {
 
     // MARK: - Tools footer
 
-    /// Bottom tools section: one compact menu holding the section jumps,
-    /// the video-filter window, system colors, updates and quit. (Six loose
-    /// buttons wrapped into a multi-line mess at 460pt — a single menu keeps
-    /// the footer clean.)
+    /// Bottom tools section: every button has a visible action — expand the
+    /// Virtual Screens / Groups sections, open the PiP window, check for
+    /// updates, or quit. (The earlier scroll-jump menu felt like it "did
+    /// nothing"; expand-toggles are immediate.)
     private var toolsFooter: some View {
-        HStack(spacing: 8) {
-            Menu {
-                Button("Displays") {
-                    scrollTarget = .displays
+        HStack(spacing: 12) {
+            Button("Virtual Screens") {
+                withAnimation(FBDTheme.animationSpring) {
+                    virtualScreensExpanded.toggle()
                 }
-                Button("Virtual Screens") {
-                    scrollTarget = .virtual
-                }
-                Button("Groups") {
-                    scrollTarget = .groups
-                }
-                Divider()
-                Button("PiP Window") {
-                    openPiPWindow()
-                }
-                Button("System Colors") {
-                    openSystemColors()
-                }
-                Divider()
-                Button("Check for Updates") {
-                    UpdaterController.shared.checkForUpdates()
-                }
-                Button("Quit FBD") {
-                    NSApp.terminate(nil)
-                }
-            } label: {
-                Label("Tools", systemImage: "wrench.and.screwdriver")
-                    .font(.caption)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(virtualScreensExpanded ? Color.accentColor : .secondary)
+
+            Button("Groups") {
+                withAnimation(FBDTheme.animationSpring) {
+                    groupsExpanded.toggle()
+                }
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(groupsExpanded ? Color.accentColor : .secondary)
 
             Spacer(minLength: 4)
 
@@ -336,6 +315,20 @@ struct DisplayListView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .help("Open a floating picture-in-picture window for the primary display")
+
+            Button("Check for Updates") {
+                UpdaterController.shared.checkForUpdates()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Button("Quit FBD") {
+                NSApp.terminate(nil)
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
@@ -346,13 +339,6 @@ struct DisplayListView: View {
         }
     }
 
-    /// Where the footer menu should scroll to.
-    private enum ScrollTarget {
-        case displays, virtual, groups
-    }
-
-    @State private var scrollTarget: ScrollTarget?
-
     /// Open the floating PiP window for the primary display.
     private func openPiPWindow() {
         let primary = DisplayController.shared.displays.first { $0.id == CGMainDisplayID() }
@@ -361,17 +347,10 @@ struct DisplayListView: View {
         _ = footerPipController.startPiP(displayID: primary.id, filter: .identity)
     }
 
-    /// Open System Settings → Displays (color profile section).
-    private func openSystemColors() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Display-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
     // MARK: - Virtual screens
 
     private var virtualScreensSection: some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded: $virtualScreensExpanded) {
             VStack(alignment: .leading, spacing: 10) {
                 createVirtualScreenRow
 
@@ -522,7 +501,7 @@ struct DisplayListView: View {
     // MARK: - Display groups
 
     private var displayGroupsSection: some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded: $groupsExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     TextField("Group name", text: $newGroupName)
