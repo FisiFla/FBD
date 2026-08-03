@@ -36,6 +36,8 @@ Remaining open items (all external/hardware-bound — see
 - [x] Native XDR upscaling: SkyLight preset rewrite (preset enumeration, `SLSDisplaySetPresetData` + `SetActivePresetIndex`, factory restore). **macOS 13–15**: works. **macOS 27**: preset writes are write-protected (verified by probe) → runtime self-test + automatic software fallback
 - [ ] Direct built-in XDR: `IOMobileFramebufferOpen` — **entitlement-gated on macOS 27** (kIOReturnNotPrivileged); wrappers ship probe-only, degrade gracefully. Open item: private entitlement or older-OS support
 - [x] Software XDR: Metal overlay at `CGShieldingWindowLevel` with ScreenCaptureKit capture + brightness shader (the working upscale method on macOS 27; live-verified with luma measurements: 0.118 -> 0.185 boost on, exact return off, zero leaked windows)
+- [x] Full-screen software filters (same overlay): contrast / saturation / gamma / color temperature / invert — live-verified (saturation 0 -> measured colorfulness 0.0000, exact reset); `fbdcli filter` + routed HTTP
+- [x] Screen rotation 0/90/180/270 via `SLSSetDisplayRotation` (SkyLight): wired in the UI + `fbdcli rotate`; **returns 1001 for the built-in on macOS 27** — graceful failure, external-display verification pending
 - [x] Combined brightness controller: nits-based curve (hardware 0…100 % → native XDR → software boost), maxNits/hardwareMaxNits helpers
 - [x] Dim-to-black overlay · forced HDR mode (`SLSDisplaySetHDRModeEnabled`) · XDR preset selector (live-verified preset switching) · brightness-change notifications (DisplayServices registry, lunar pattern)
 - [x] fbdcli: `xdr`, `preset`, `hdr` commands · menu-bar UI: XDR/HDR section (upscale toggle, nits slider, preset picker, HDR toggle) + settings toggles

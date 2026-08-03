@@ -58,12 +58,14 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 
 | API | Purpose | Tier |
 |---|---|---|
-| `SLSDisplaySetUnderscan`, `SLSGetDisplayModeMinRefreshRate`, `SLSIsDisplayModeProMotion / VRR`, `SLSSetDisplayRotation` | underscan, VRR/ProMotion metadata, rotation | 2→3 |
+| `SLSDisplaySetUnderscan`, `SLSGetDisplayModeMinRefreshRate`, `SLSIsDisplayModeProMotion / VRR` | underscan, VRR/ProMotion metadata | 2→3 |
 | `IOAVServiceSetVirtualEDIDMode` | EDID override (Apple Silicon) | 4 |
 | `SLVirtualDisplay*` (SkyLight, macOS 26+) | virtual displays — **live-verified on macOS 27** (2026-08-02: create/destroy/label via app + CLI) | 3 |
 | `CGVirtualDisplay*` classes (`VirtualDisplay.framework`, dlopen — absent on macOS 26+) | virtual displays on macOS 13–15 only (not runtime-testable here) | 3 |
 | `ColorSyncDeviceSetCustomProfiles` | color profiles / HDR color mode | 4 |
 | `CBBlueLightClient`, `CBTrueToneClient` (CoreBrightness, ObjC runtime lookup) | Night Shift / True Tone | 5 |
+
+| `SLSSetDisplayRotation(cid, displayID, rotation)` + `SLDisplayRotation` | ⚠️ **declared + wired (UI + `fbdcli rotate`), returns status 1001 for the built-in on macOS 27** — graceful failure; external-display check pending | SkyLightAPI / DisplayController / rotation submenu |
 
 ## Notes
 

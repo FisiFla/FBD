@@ -2,7 +2,8 @@
 
 A free, MIT-licensed macOS menu-bar app for display control: brightness (Apple + DDC/CI),
 volume, contrast, input switching, resolution/refresh-rate control, virtual displays,
-XDR/HDR brightness upscaling, EDID overrides, and more.
+XDR/HDR brightness upscaling, full-screen software filters (contrast, saturation,
+gamma, color temperature, invert), screen rotation, EDID overrides, and more.
 
 **Goal: full feature parity with BetterDisplay — no Pro tier, no licensing, no telemetry.
 Updates via Sparkle (optional).**
@@ -52,6 +53,8 @@ permission for your terminal.
 ```bash
 swift run fbdcli list                 # displays
 swift run fbdcli brightness 1 60      # set display 1 to 60%
+swift run fbdcli filter 1 1 0 1 1     # full-screen filter (contrast sat gamma temp)
+swift run fbdcli rotate 3 90          # rotate an external display
 swift run fbdcli settings             # masked settings dump (for bug reports)
 ```
 

@@ -27,7 +27,8 @@ UI (SwiftUI views) ──► DisplayController (@MainActor, singleton)
                           ├─► DDCController ──► ExternalController ──► IOAVServiceAPI (I2C, arm64)
                           ├─► CombinedController (Tier 2 curve; Tier 1 = routing)
                           ├─► OverlayController (@MainActor; ScreenCaptureKit +
-                          │    Metal — software boost, dim-to-black, PiP)
+                          │    Metal — software boost, full-screen filters
+                          │    (ScreenFilterParams), dim-to-black, PiP)
                           └─► ResolutionController ──► CGSAPI + SkyLightAPI
 Display state (ObservableObject, @Published) ◄── notifications: .fbdDisplaysChanged / .fbdDisplayUpdated
 ```
