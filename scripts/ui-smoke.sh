@@ -65,20 +65,22 @@ else
     FOUND_X=$($DRIVER status-sweep 2>/dev/null)
     STATE=$($DRIVER panel-state)
 fi
-if [ "$STATE" = "main" ] && [ "$FOUND_X" != "0" ] && [ -n "$FOUND_X" ]; then
-    ok
-else
-    bad "panel state '$STATE' after status-item click (found-x='$FOUND_X')"
-fi
-
-# If the sweep landed on settings, back out to the main page.
-if [ "$($DRIVER panel-state)" = "settings" ]; then
+# The panel remembers the last page (e.g. Settings from a previous session),
+# so the status-item click can land on Settings — back out to main first.
+if [ "$STATE" = "settings" ]; then
     FRAME=$($DRIVER ax-frame "Back to FBD" 2>/dev/null) || FRAME=""
     if [ -n "$FRAME" ]; then
         IFS=, read -r BX BY _ _ <<<"$FRAME"
         $DRIVER click "$((BX + 10))" "$((BY + 7))" >/dev/null
         sleep 1.5
+        STATE=$($DRIVER panel-state)
     fi
+fi
+
+if [ "$STATE" = "main" ] && [ "$FOUND_X" != "0" ] && [ -n "$FOUND_X" ]; then
+    ok
+else
+    bad "panel state '$STATE' after status-item click (found-x='$FOUND_X')"
 fi
 
 # --- 2. Brightness slider drives the display -------------------------------
