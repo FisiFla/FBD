@@ -129,6 +129,9 @@ public final class DisplayController {
             xdr.refresh(for: display)
             if display.appleBrightnessAvailable {
                 brightnessObserver.observe(display: display)
+                // Initial read so the UI shows the current value at launch —
+                // the observer only fires on external brightness *changes*.
+                _ = getBrightness(for: display)
             }
             updated.append(display)
         }

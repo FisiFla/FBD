@@ -61,6 +61,11 @@ struct DisplayListView: View {
         // (see StatusItemController) so this NSVisualEffectView provides the
         // Control Center-style blur and rounded corners.
         .background(FrostedBackground())
+        // The panel uses .fullSizeContentView; ignore the titlebar safe-area
+        // inset so the top bar actually extends up under the traffic lights
+        // (without this the whole bar is pushed ~28pt down, recreating the
+        // gap between the buttons and the content).
+        .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplaysChanged)) { _ in
             displays = DisplayController.shared.displays
             virtualScreensTick += 1

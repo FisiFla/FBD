@@ -57,6 +57,25 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - `GET /api/health` now reports `boostActive` (display IDs with a live
   software-boost session) — observability for the overlay.
 
+## [Unreleased]
+
+### Fixed
+- **Panel showed "Brightness unavailable" at launch**: nothing performed an
+  initial brightness read — the value only appeared after a write or an
+  external change. `DisplayController.refresh()` now reads each
+  brightness-capable display once at enumeration.
+- **Top bar sat ~34pt below the traffic lights**: the SwiftUI root was
+  inset by the titlebar safe area despite `.fullSizeContentView`; the root
+  now uses `.ignoresSafeArea()` so the material bar actually extends up
+  under the buttons.
+
+### Verified (with Accessibility permission granted)
+- Full UI flow driven end-to-end: status-item click opens the main page,
+  the custom brightness slider sets real brightness (24.8% / 71.4%
+  read-backs), the gear opens Settings (window grows to 860), Back returns
+  to the main page (650), the close × hides the panel. Button hit areas
+  were verified against the live Accessibility frames.
+
 ## [1.0.0] — 2026-08-02
 
 ### Added
