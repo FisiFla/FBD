@@ -20,8 +20,8 @@ struct DisplayListView: View {
     @State private var virtualScreensTick = 0
     @State private var groupItems: [DisplayGroup] = []
 
-    /// PiP / video-filter window for the Tools footer.
-    @State private var footerPipController = PipStreamController()
+    /// PiP / video-filter window for the Tools footer (shared — one window).
+    @State private var footerPipController = PipStreamController.shared
 
     // Virtual screen creation form.
     @State private var newScreenName = "Virtual Display"
@@ -289,12 +289,14 @@ struct DisplayListView: View {
 
     // MARK: - Tools footer
 
-    /// Bottom tools section: quick jumps, video-filter window, system colors,
-    /// updates and quit.
+    /// Bottom tools section: one compact menu holding the section jumps,
+    /// the video-filter window, system colors, updates and quit. (Six loose
+    /// buttons wrapped into a multi-line mess at 460pt — a single menu keeps
+    /// the footer clean.)
     private var toolsFooter: some View {
-        HStack(spacing: 12) {
-            Menu("Displays And Virtual Screens") {
-                Button("Scroll to Displays") {
+        HStack(spacing: 8) {
+            Menu {
+                Button("Displays") {
                     scrollTarget = .displays
                 }
                 Button("Virtual Screens") {
@@ -303,18 +305,29 @@ struct DisplayListView: View {
                 Button("Groups") {
                     scrollTarget = .groups
                 }
+                Divider()
+                Button("Video Filter Window") {
+                    openVideoFilterWindow()
+                }
+                Button("System Colors") {
+                    openSystemColors()
+                }
+                Divider()
+                Button("Check for Updates") {
+                    UpdaterController.shared.checkForUpdates()
+                }
+                Button("Quit FBD") {
+                    NSApp.terminate(nil)
+                }
+            } label: {
+                Label("Tools", systemImage: "wrench.and.screwdriver")
+                    .font(.caption)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .font(.caption)
             .fixedSize()
 
-            Button("Groups") {
-                scrollTarget = .groups
-            }
-            .buttonStyle(.borderless)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
 
             Button("Video Filter Window") {
                 openVideoFilterWindow()
@@ -322,32 +335,9 @@ struct DisplayListView: View {
             .buttonStyle(.borderless)
             .font(.caption)
             .foregroundStyle(.secondary)
-
-            Button("System Colors") {
-                openSystemColors()
-            }
-            .buttonStyle(.borderless)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            Spacer(minLength: 4)
-
-            Button("Check for Updates") {
-                UpdaterController.shared.checkForUpdates()
-            }
-            .buttonStyle(.borderless)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            Button("Quit FBD") {
-                NSApp.terminate(nil)
-            }
-            .buttonStyle(.borderless)
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial)
         .overlay(alignment: .top) {

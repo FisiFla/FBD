@@ -44,6 +44,11 @@ public struct VideoFilter: Equatable, Sendable {
 /// failures tear the PiP down and log.
 @MainActor
 public final class PipStreamController {
+    /// One PiP window process-wide: every UI entry point (display options
+    /// menu, footer) shares this instance so "Video Filter Window" reuses
+    /// the existing window instead of spawning more.
+    public static let shared = PipStreamController()
+
     /// The active PiP window (nil when no PiP is showing).
     private var window: NSWindow?
     /// The active capture session (window + stream + renderer); at most one.
@@ -173,6 +178,10 @@ public final class PipStreamController {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
+        // isReleasedWhenClosed stays false: close() on an autoreleased
+        // window over-released (segfault). Teardown detaches the content
+        // view and drops the session reference; the window then deallocates
+        // naturally and the window server removes it.
         window.isReleasedWhenClosed = false
         window.hasShadow = true
 
@@ -258,10 +267,18 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
-    /// Stop the stream and hide the window. Serialized with any in-flight
-    /// frame on `queue`, so the renderer is never torn down mid-draw.
+    /// Stop the stream and destroy the window. The window is made invisible
+    /// and detached SYNCHRONOUSLY (this runs on the main actor via
+    /// teardownPip) — a lone async orderOut leaves the window composited on
+    /// this system (same fix as the boost overlay). The stream is stopped on
+    /// `queue` afterwards; once the session's strong references drop, the
+    /// window deallocates and the window server removes it.
     func stop() {
         stateLock.withLock { _isStopping = true }
+        window.alphaValue = 0
+        window.contentView = nil
+        metalView.delegate = nil
+        window.orderOut(nil)
         queue.async { [weak self] in
             guard let self else { return }
             let current = stateLock.withLock { self.stream }
@@ -272,9 +289,6 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             stateLock.lock()
             self.stream = nil
             stateLock.unlock()
-            DispatchQueue.main.async { [weak self] in
-                self?.window.orderOut(nil)
-            }
         }
     }
 

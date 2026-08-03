@@ -3,6 +3,22 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [1.3.1] — 2026-08-03
+
+### Fixed
+- **Tools footer wrapped into a multi-line mess at 460pt**: collapsed into a
+  single compact "Tools" menu (Displays / Virtual Screens / Groups / Video
+  Filter Window / System Colors / Check for Updates / Quit) plus one quick
+  Video Filter Window button.
+- **Each "Video Filter Window" click spawned a new window** (rows and footer
+  each owned a PipStreamController instance; teardown used async orderOut
+  only, which leaves windows composited on this system): the controller is
+  now a shared singleton and stop() detaches + drops references
+  synchronously. Verified: 3 consecutive clicks -> exactly one window, no
+  crash (an earlier close()-based attempt over-released and segfaulted —
+  isReleasedWhenClosed stays false; the window deallocates via reference
+  drop).
+
 ## [1.3.0] — 2026-08-03
 
 ### Added

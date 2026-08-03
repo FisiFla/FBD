@@ -27,8 +27,8 @@ struct DisplayRowView: View {
     @State private var upscaleDebounceWorkItem: DispatchWorkItem?
     /// Confirmation for the soft-disconnect action.
     @State private var confirmingDisable = false
-    /// PiP / video-filter window controller (per-row; process-wide state).
-    @State private var pipController = PipStreamController()
+    /// PiP / video-filter window controller (shared — one window process-wide).
+    @State private var pipController = PipStreamController.shared
 
     // MARK: EDID & color profile (Tier 4)
 
