@@ -1,3 +1,4 @@
+import FBDCLIParser
 import FBDCore
 import Foundation
 
@@ -37,18 +38,16 @@ enum HTTPAPIClient {
     }
 
     /// Synchronous HTTP/1.1 request with a short timeout (CLI context).
+    /// The request itself (URL/method/body/headers) is built by the tested
+    /// HTTPRequestBuilder (FBDCLIParser); this function only executes it.
     private static func request(method: String, path: String, port: Int, body: [String: Any]?) -> (Int, Data)? {
-        guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else { return nil }
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = method
-        urlRequest.timeoutInterval = 3
-        if let body {
-            urlRequest.httpBody = try? JSONSerialization.data(withJSONObject: body)
-            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        }
-        // The app's HTTP API requires the shared local token (same defaults
-        // domain, so both sides read the same value).
-        urlRequest.setValue(Settings.httpAPIToken, forHTTPHeaderField: "X-FBD-Token")
+        guard let urlRequest = HTTPRequestBuilder.request(
+            method: method,
+            path: path,
+            port: port,
+            body: body,
+            token: Settings.httpAPIToken
+        ) else { return nil }
         let semaphore = DispatchSemaphore(value: 0)
         var result: (Int, Data)?
         let task = URLSession.shared.dataTask(with: urlRequest) { data, response, _ in
