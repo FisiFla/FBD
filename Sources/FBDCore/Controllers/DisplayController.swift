@@ -241,6 +241,20 @@ public final class DisplayController {
         overlay.activeBoostDisplayIDs()
     }
 
+    // MARK: - Full-screen image adjustments
+
+    /// Apply (or update) the full-screen software filter for a display.
+    /// Neutral params stop it.
+    @discardableResult
+    public func setScreenFilter(_ params: ScreenFilterParams, on display: Display) -> Bool {
+        overlay.setScreenFilter(params, displayID: display.id)
+    }
+
+    /// Stop the full-screen filter for a display.
+    public func stopScreenFilter(on display: Display) {
+        overlay.stopScreenFilter(displayID: display.id)
+    }
+
     // MARK: - Ambient light compensation (Auto Brightness)
 
     /// Whether the display's ambient-light compensation ("auto brightness")
@@ -251,6 +265,13 @@ public final class DisplayController {
 
     public func setAmbientLightCompensation(_ enabled: Bool, on display: Display) {
         apple.setAmbientLightCompensation(enabled, for: display)
+    }
+
+    /// Rotate the display (degrees: 0/90/180/270). Returns the applied
+    /// rotation on success, nil on failure.
+    @discardableResult
+    public func setRotation(_ degrees: Int, on display: Display) -> Int? {
+        SkyLightAPI.setRotation(degrees, for: display.id)
     }
 
     // MARK: - Main display / arrangement

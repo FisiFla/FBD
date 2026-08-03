@@ -20,6 +20,8 @@ public enum Command: String, CaseIterable {
     case preset
     case hdr
     case virtual
+    case rotate
+    case filter
     case disable
     case enable
     case layout

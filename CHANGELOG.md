@@ -3,7 +3,27 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
-## [Unreleased]
+## [1.3.0] — 2026-08-03
+
+### Added
+- **Full-screen Image Adjustments** (the last UI gap): per-display software
+  filter with live contrast / saturation / gamma / color-temperature
+  sliders and an invert toggle, rendered by the SCK+Metal overlay (the same
+  pipeline as the XDR boost). `ScreenFilterParams` + `setScreenFilter` on
+  the controller, CLI (`fbdcli filter <id> <contrast> <sat> <gamma> <temp>
+  [--invert] | off`) and routed HTTP API. Verified live: saturation 0 ->
+  measured colorfulness 0.0000 with luma preserved, reset restores exactly.
+- **Screen Rotation** (0/90/180/270): `SLSSetDisplayRotation` declared and
+  wrapped (SkyLight), wired into the options submenu + `fbdcli rotate`.
+  NOTE: the SLS call returns status 1001 for the built-in on this system —
+  graceful failure; external-display verification pending (recorded).
+- **fbdcli rotate / filter** commands (direct + routed through the app's
+  HTTP API; the CLI process's own SCK overlays do not composite, so the
+  routed path is the working one — single-driver).
+- HTTP API: POST /api/displays/<id>/rotate and /filter (+ off); router
+  tests (270 total).
+
+
 
 ### Added
 - **Per-display options menu** (ellipsis in each display card): Display Mode

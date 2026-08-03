@@ -26,6 +26,9 @@ public enum DisplayAction: Equatable {
     case mode(width: Int32, height: Int32, hz: Double?)
     case xdr(nits: Int)
     case xdrDisable
+    case rotate(Int)
+    case filter(ScreenFilterParams)
+    case filterOff
 }
 
 /// Validated virtual-display creation request.
@@ -195,6 +198,27 @@ public enum HTTPRouter {
                 return .action(.xdrDisable)
             }
             return .error(400, "expected {\"nits\": n} or {\"enabled\": false}")
+        case "rotate":
+            guard let degrees = (object["degrees"] as? NSNumber)?.intValue,
+                  [0, 90, 180, 270].contains(degrees) else {
+                return .error(400, "degrees must be 0, 90, 180 or 270")
+            }
+            return .action(.rotate(degrees))
+        case "filter":
+            if let off = object["off"] as? Bool, off {
+                return .action(.filterOff)
+            }
+            guard let contrast = (object["contrast"] as? NSNumber)?.doubleValue,
+                  let saturation = (object["saturation"] as? NSNumber)?.doubleValue,
+                  let gamma = (object["gamma"] as? NSNumber)?.doubleValue,
+                  let temperature = (object["temperature"] as? NSNumber)?.doubleValue else {
+                return .error(400, "expected contrast/saturation/gamma/temperature")
+            }
+            return .action(.filter(ScreenFilterParams(
+                contrast: contrast, saturation: saturation,
+                gamma: gamma, temperature: temperature,
+                invert: (object["invert"] as? Bool) ?? false
+            )))
         default:
             return .error(404, "unknown action '\(action)'")
         }

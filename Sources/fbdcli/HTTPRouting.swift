@@ -14,7 +14,7 @@ enum HTTPRouting {
     /// Commands that can be routed through the app's HTTP API.
     static let routable: Set<Command> = [
         .list, .info, .brightness, .contrast, .volume, .mute, .input,
-        .caps, .modes, .setMode, .xdr, .virtual,
+        .caps, .modes, .setMode, .xdr, .virtual, .rotate, .filter,
     ]
 
     /// Route `command` over HTTP. Returns the exit code, or nil when the app
@@ -35,6 +35,8 @@ enum HTTPRouting {
         case .setMode: return routedSetMode(rest)
         case .xdr: return routedXDR(rest)
         case .virtual: return routedVirtual(rest)
+        case .rotate: return routedRotate(rest)
+        case .filter: return routedFilter(rest)
         default: return nil
         }
     }
@@ -290,6 +292,28 @@ enum HTTPRouting {
         } else {
             print("xdr \(id): upscaling enabled to \(Int(args[1]) ?? 0) nits (via app)")
         }
+        return 0
+    }
+
+    private static func routedRotate(_ args: [String]) -> Int32 {
+        guard let plan = planFor(.rotate, args) else { return 1 }
+        guard let id = args.first else { return 1 }
+        guard postOK(plan.path, plan.payload ?? [:]) else {
+            print("fbdcli: rotate: failed to rotate display \(id) (via app)")
+            return 2
+        }
+        print("display \(id) rotated to \(args[1])° (via app)")
+        return 0
+    }
+
+    private static func routedFilter(_ args: [String]) -> Int32 {
+        guard let plan = planFor(.filter, args) else { return 1 }
+        guard let id = args.first else { return 1 }
+        guard postOK(plan.path, plan.payload ?? [:]) else {
+            print("fbdcli: filter: failed to apply filter (via app)")
+            return 2
+        }
+        print(args.count >= 2 && args[1] == "off" ? "filter off (via app)" : "filter applied (via app)")
         return 0
     }
 

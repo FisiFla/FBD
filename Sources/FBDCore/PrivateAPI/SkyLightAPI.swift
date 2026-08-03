@@ -67,6 +67,17 @@ public enum SkyLightAPI {
 
     /// Ask the WindowServer to re-detect connected displays. Used after
     /// configuration changes (mode apply, virtual display add/remove).
+    /// Rotate a display: degrees must be a multiple of 90; mapped to the
+    /// SLS 0-3 rotation steps (0 = normal, 1 = 90° clockwise, 2 = 180°, 3 = 270°).
+    /// Returns the current rotation in degrees (0/90/180/270) on success.
+    public static func setRotation(_ degrees: Int, for displayID: CGDirectDisplayID) -> Int? {
+        let steps = ((degrees % 360) + 360) % 360 / 90
+        guard SLSMainConnectionID() != 0 else { return nil }
+        let error = SLSSetDisplayRotation(SLSMainConnectionID(), Int32(displayID), Int32(steps))
+        guard error == .success else { return nil }
+        return Int(SLDisplayRotation(SLSMainConnectionID(), Int32(displayID))) * 90
+    }
+
     public static func detectDisplays() {
         let status = SLSDetectDisplays(Int32(mainConnectionID))
         if status != .success {

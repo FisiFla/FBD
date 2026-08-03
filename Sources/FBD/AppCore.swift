@@ -364,6 +364,19 @@ final class AppCore {
             case .xdrDisable:
                 guard displayController.disableXDRUpscaling(on: display) else { return (500, HTTPJSON.error("failed to disable XDR upscaling")) }
                 return (200, HTTPJSON.encode(["ok": true]))
+            case .rotate(let degrees):
+                guard displayController.setRotation(degrees, on: display) != nil else {
+                    return (500, HTTPJSON.error("failed to rotate display"))
+                }
+                return (200, HTTPJSON.encode(["ok": true, "degrees": degrees]))
+            case .filter(let params):
+                guard displayController.setScreenFilter(params, on: display) else {
+                    return (500, HTTPJSON.error("failed to apply filter"))
+                }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .filterOff:
+                displayController.stopScreenFilter(on: display)
+                return (200, HTTPJSON.encode(["ok": true]))
             }
         case .virtualList:
             let controller = VirtualScreenController.shared

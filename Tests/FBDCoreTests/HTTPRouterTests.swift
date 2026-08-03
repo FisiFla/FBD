@@ -211,4 +211,24 @@ final class HTTPRouterTests: XCTestCase {
         XCTAssertEqual(route("POST", "/api/virtual/create", body: nil),
                        .error(status: 400, message: "invalid JSON body"))
     }
+
+    func testRotateActionParsing() {
+        XCTAssertEqual(route("POST", "/api/displays/1/rotate", body: #"{"degrees": 90}"#),
+                       .route(.displayAction(id: 1, action: .rotate(90))))
+        XCTAssertEqual(route("POST", "/api/displays/1/rotate", body: #"{"degrees": 0}"#),
+                       .route(.displayAction(id: 1, action: .rotate(0))))
+        XCTAssertEqual(route("POST", "/api/displays/1/rotate", body: #"{"degrees": 45}"#),
+                       .error(status: 400, message: "degrees must be 0, 90, 180 or 270"))
+        XCTAssertEqual(route("POST", "/api/displays/1/rotate", body: #"{}"#),
+                       .error(status: 400, message: "degrees must be 0, 90, 180 or 270"))
+    }
+
+    func testFilterActionParsing() {
+        XCTAssertEqual(route("POST", "/api/displays/1/filter", body: #"{"contrast": 1, "saturation": 0, "gamma": 1, "temperature": 1}"#),
+                       .route(.displayAction(id: 1, action: .filter(ScreenFilterParams(contrast: 1, saturation: 0, gamma: 1, temperature: 1)))))
+        XCTAssertEqual(route("POST", "/api/displays/1/filter", body: #"{"off": true}"#),
+                       .route(.displayAction(id: 1, action: .filterOff)))
+        XCTAssertEqual(route("POST", "/api/displays/1/filter", body: #"{}"#),
+                       .error(status: 400, message: "expected contrast/saturation/gamma/temperature"))
+    }
 }

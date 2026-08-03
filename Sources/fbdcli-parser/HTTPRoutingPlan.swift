@@ -139,6 +139,31 @@ public enum HTTPRoutingPlanBuilder {
             }
             return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/xdr", payload: ["nits": nits]))
 
+        case .rotate:
+            guard let id = args.first else {
+                return .failure(HTTPRoutingError(message: "fbdcli: rotate: display id required"))
+            }
+            guard args.count >= 2, let degrees = Int(args[1]), [0, 90, 180, 270].contains(degrees) else {
+                return .failure(HTTPRoutingError(message: "fbdcli: rotate: expected <0|90|180|270> (got '\(args.count >= 2 ? args[1] : "")')"))
+            }
+            return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/rotate", payload: ["degrees": degrees]))
+
+        case .filter:
+            guard let id = args.first else {
+                return .failure(HTTPRoutingError(message: "fbdcli: filter: display id required"))
+            }
+            if args.count >= 2, args[1] == "off" {
+                return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/filter", payload: ["off": true]))
+            }
+            guard args.count >= 5,
+                  let contrast = Double(args[1]), let saturation = Double(args[2]),
+                  let gamma = Double(args[3]), let temperature = Double(args[4]) else {
+                return .failure(HTTPRoutingError(message: "fbdcli: filter: expected <id> <contrast> <saturation> <gamma> <temperature> [--invert] or <id> off"))
+            }
+            var payload: [String: Any] = ["contrast": contrast, "saturation": saturation, "gamma": gamma, "temperature": temperature]
+            if args.contains("--invert") { payload["invert"] = true }
+            return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/filter", payload: payload))
+
         case .virtual:
             guard let action = args.first else {
                 return .failure(HTTPRoutingError(message: "fbdcli: virtual: action required (list|create|destroy)"))

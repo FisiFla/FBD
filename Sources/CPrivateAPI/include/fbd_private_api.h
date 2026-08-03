@@ -81,6 +81,8 @@ kern_return_t IOAVServiceWriteI2C(IOAVServiceRef service, uint32_t address, uint
 #pragma mark - SkyLight — minimal Tier 1 surface
 
 int SLSMainConnectionID(void);
+CGError SLSSetDisplayRotation(int cid, int displayID, int rotation);
+int SLDisplayRotation(int cid, int displayID);
 CGError SLSDetectDisplays(int cid);
 
 #pragma mark - SkyLight — display presets + HDR mode (Tier 2, verified on macOS 27)

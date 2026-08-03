@@ -1379,6 +1379,51 @@ func httpPortLabel(_ port: Int) -> String {
 
 // MARK: - Picture-in-picture (Tier 5)
 
+/// `fbdcli rotate <id> <0|90|180|270>` — rotate a display (SLS private API).
+@MainActor
+func cmdRotate(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let id = args.first, let display = requireDisplay(id, in: controller) else { return 1 }
+    guard args.count >= 2, let degrees = Int(args[1]), [0, 90, 180, 270].contains(degrees) else {
+        print("fbdcli: rotate: expected <0|90|180|270> (got '\(args.count >= 2 ? args[1] : "")')")
+        return 1
+    }
+    guard let applied = controller.setRotation(degrees, on: display) else {
+        print("fbdcli: rotate: failed to rotate display \(display.id)")
+        return 2
+    }
+    print("display \(display.id) rotated to \(applied)°")
+    return 0
+}
+
+/// `fbdcli filter <id> off` — stop the full-screen software filter.
+/// `fbdcli filter <id> <contrast> <saturation> <gamma> <temperature> [--invert]`
+/// — apply it (0.5-2 contrast, 0-2 saturation, 0.4-2.5 gamma, 0.5-1.5 temp).
+@MainActor
+func cmdFilter(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let id = args.first, let display = requireDisplay(id, in: controller) else { return 1 }
+    if args.count >= 2, args[1] == "off" {
+        controller.stopScreenFilter(on: display)
+        print("filter off")
+        return 0
+    }
+    guard args.count >= 5,
+          let contrast = Double(args[1]), let saturation = Double(args[2]),
+          let gamma = Double(args[3]), let temperature = Double(args[4]) else {
+        print("fbdcli: filter: expected <id> <contrast> <saturation> <gamma> <temperature> [--invert] or <id> off")
+        return 1
+    }
+    let params = ScreenFilterParams(
+        contrast: contrast, saturation: saturation, gamma: gamma, temperature: temperature,
+        invert: args.contains("--invert")
+    )
+    guard controller.setScreenFilter(params, on: display) else {
+        print("fbdcli: filter: failed to apply filter (Screen Recording permission needed)")
+        return 2
+    }
+    print("filter applied (contrast \(contrast), saturation \(saturation), gamma \(gamma), temperature \(temperature)\(params.invert ? ", invert" : "")")
+    return 0
+}
+
 /// `fbdcli pip <id> [brightness] [contrast] [saturation]` — open a PiP window
 /// streaming a display's content, with optional video-filter values (defaults
 /// 1 = none). The command keeps the window alive until it closes or a key is

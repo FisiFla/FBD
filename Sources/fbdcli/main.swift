@@ -169,6 +169,10 @@ func run(arguments: [String]) -> Int32 {
         return cmdHDR(controller, display: display, args: rest)
     case .virtual:
         return cmdVirtual(args: rest)
+    case .rotate:
+        return cmdRotate(controller, args: rest)
+    case .filter:
+        return cmdFilter(controller, args: rest)
     case .disable:
         guard let displayID = requireOnlineDisplay(rest.first) else { return 1 }
         return cmdDisableEnable(displayID: displayID, enabled: false)

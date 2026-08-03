@@ -112,21 +112,34 @@ public final class OverlayController {
             stop(for: displayID)
             return true
         }
+        return setScreenFilter(ScreenFilterParams(brightness: factor), displayID: displayID)
+    }
+
+    /// Apply (or update) a full-screen software filter for a display. Neutral
+    /// params stop the overlay. Returns false when ScreenCaptureKit is
+    /// unavailable or screen-recording permission is missing (reason logged);
+    /// asynchronous stream failures tear the overlay down and log.
+    @discardableResult
+    public func setScreenFilter(_ params: ScreenFilterParams, displayID: CGDirectDisplayID) -> Bool {
+        guard !params.isNeutral else {
+            stopScreenFilter(displayID: displayID)
+            return true
+        }
         guard CGPreflightScreenCaptureAccess() else {
-            log.error("setSoftwareBoost: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording")
+            log.error("setScreenFilter: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording")
             return false
         }
         guard let device = MTLCreateSystemDefaultDevice() else {
-            log.error("setSoftwareBoost: no Metal device available")
+            log.error("setScreenFilter: no Metal device available")
             return false
         }
         let bounds = CGDisplayBounds(displayID)
         guard isUsable(bounds) else {
-            log.error("setSoftwareBoost: no valid bounds for display \(displayID)")
+            log.error("setScreenFilter: no valid bounds for display \(displayID)")
             return false
         }
         if let session = boostSessions[displayID] {
-            session.setFactor(factor)
+            session.setParams(params)
             return true
         }
         do {
@@ -144,12 +157,17 @@ public final class OverlayController {
             view.delegate = session
             boostSessions[displayID] = session
             window.orderFrontRegardless()
-            session.start(factor: factor)
+            session.start(params: params)
             return true
         } catch {
-            log.error("setSoftwareBoost: Metal pipeline setup failed: \(error.localizedDescription)")
+            log.error("setScreenFilter: Metal pipeline setup failed: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Stop any full-screen filter overlay for the display.
+    public func stopScreenFilter(displayID: CGDirectDisplayID) {
+        teardownBoost(for: displayID)
     }
 
     private func makeBoostView(device: MTLDevice) -> MTKView {
@@ -268,10 +286,10 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
     /// Set before an intentional stop so didStopWithError stays quiet.
     private var _isStopping = false
     private var stream: SCStream?
-    /// Latest captured frame + current brightness, written on the capture
-    /// queue, read on the main thread by draw(in:).
+    /// Latest captured frame + current filter params, written on the capture
+    /// queue / UI thread, read on the main thread by draw(in:).
     private var latestPixelBuffer: CVPixelBuffer?
-    private var brightness: Float = 1
+    private var filterParams = ScreenFilterParams.neutral
 
     var isCapturing: Bool {
         stateLock.lock()
@@ -296,16 +314,16 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
 
     // MARK: Lifecycle
 
-    func start(factor: Double) {
-        setFactor(factor)
+    func start(params: ScreenFilterParams) {
+        setParams(params)
         Task { @MainActor [weak self] in
             await self?.runCapture()
         }
     }
 
-    func setFactor(_ factor: Double) {
+    func setParams(_ params: ScreenFilterParams) {
         stateLock.lock()
-        brightness = Float(factor)
+        filterParams = params
         stateLock.unlock()
     }
 
@@ -441,9 +459,9 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
             stateLock.unlock()
             return
         }
-        let factor = brightness
+        let params = filterParams
         stateLock.unlock()
-        renderer.render(pixelBuffer: buffer, brightness: factor, in: view)
+        renderer.render(pixelBuffer: buffer, params: params, in: view)
     }
 
     // MARK: SCStreamDelegate
@@ -495,11 +513,22 @@ private final class BoostRenderer {
     }
 
     fragment float4 boost_frag(BoostVertexOut in [[stage_in]],
-                               constant float &brightness [[buffer(0)]],
+                               constant float *p [[buffer(0)]],
                                texture2d<float> captureTexture [[texture(0)]],
                                sampler captureSampler [[sampler(0)]]) {
+        // p[0]=brightness p[1]=contrast p[2]=saturation p[3]=gamma
+        // p[4]=temperature p[5]=invert
         float4 color = captureTexture.sample(captureSampler, in.uv);
-        return float4(color.rgb * brightness, color.a);
+        float3 c = color.rgb;
+        if (p[5] > 0.5) c = 1.0 - c;
+        c.r *= p[4];
+        c.b *= (2.0 - p[4]);
+        c = (c - 0.5) * p[1] + 0.5;
+        float luma = dot(c, float3(0.2126, 0.7152, 0.0722));
+        c = mix(float3(luma), c, p[2]);
+        c = pow(max(c, 0.0), float3(p[3]));
+        c *= p[0];
+        return float4(c, color.a);
     }
     """
 
@@ -540,7 +569,7 @@ private final class BoostRenderer {
 
     }
 
-    func render(pixelBuffer: CVPixelBuffer, brightness: Float, in view: MTKView) {
+    func render(pixelBuffer: CVPixelBuffer, params: ScreenFilterParams, in view: MTKView) {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         guard width > 0, height > 0,
@@ -575,8 +604,12 @@ private final class BoostRenderer {
             return
         }
         encoder.setRenderPipelineState(pipelineState)
-        var uniform = max(brightness, 1)
-        encoder.setFragmentBytes(&uniform, length: 4, index: 0)
+        var uniforms: [Float] = [
+            Float(params.brightness), Float(params.contrast),
+            Float(params.saturation), Float(params.gamma),
+            Float(params.temperature), params.invert ? 1 : 0,
+        ]
+        encoder.setFragmentBytes(&uniforms, length: uniforms.count * MemoryLayout<Float>.size, index: 0)
         encoder.setFragmentTexture(texture, index: 0)
         encoder.setFragmentSamplerState(sampler, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)

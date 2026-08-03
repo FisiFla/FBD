@@ -200,7 +200,7 @@ struct DisplayRowView: View {
                 .controlSize(.mini)
                 .font(.caption)
                 .disabled(true)
-                .help("Hiding the notch requires custom resolution support — not implemented")
+                .help("Hiding the notch needs the SLS custom-resolution API, which is not exported on this macOS")
             Spacer(minLength: 4)
             Menu {
                 optionsMenuContent
@@ -312,16 +312,11 @@ struct DisplayRowView: View {
             startVideoFilterWindow()
         }
 
-        // Image Adjustments (video-filter window)
+        // Image Adjustments (full-screen software filter)
         Menu("Image Adjustments") {
-            Button("Open Video Filter Window…") {
-                startVideoFilterWindow()
-            }
+            Toggle("Apply to Display", isOn: filterActiveBinding)
             Divider()
-            Text("Contrast / Saturation apply to the filter window")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Slider(value: videoFilterContrast, in: 0.5...2, step: 0.05) {
+            Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
                 Text("Contrast")
             } minimumValueLabel: {
                 Text("0.5")
@@ -329,7 +324,7 @@ struct DisplayRowView: View {
                 Text("2")
             }
             .font(.caption)
-            Slider(value: videoFilterSaturation, in: 0...2, step: 0.05) {
+            Slider(value: filterSaturation, in: 0...2, step: 0.05) {
                 Text("Saturation")
             } minimumValueLabel: {
                 Text("0")
@@ -337,6 +332,27 @@ struct DisplayRowView: View {
                 Text("2")
             }
             .font(.caption)
+            Slider(value: filterGamma, in: 0.4...2.5, step: 0.05) {
+                Text("Gamma")
+            } minimumValueLabel: {
+                Text("0.4")
+            } maximumValueLabel: {
+                Text("2.5")
+            }
+            .font(.caption)
+            Slider(value: filterTemperature, in: 0.5...1.5, step: 0.05) {
+                Text("Color Temperature")
+            } minimumValueLabel: {
+                Text("Warm")
+            } maximumValueLabel: {
+                Text("Cool")
+            }
+            .font(.caption)
+            Toggle("Invert Colors", isOn: filterInvert)
+            Divider()
+            Button("Reset") {
+                resetScreenFilter()
+            }
         }
 
         // Move Display
@@ -349,15 +365,13 @@ struct DisplayRowView: View {
                 .foregroundStyle(.secondary)
         }
 
-        // Screen Rotation (not implemented — honest disable)
+        // Screen Rotation
         Menu("Screen Rotation") {
-            ForEach(["0°", "90°", "180°", "270°"], id: \.self) { angle in
-                Button(angle) {}
-                    .disabled(true)
+            ForEach([0, 90, 180, 270], id: \.self) { angle in
+                Button("\(angle)°") {
+                    _ = DisplayController.shared.setRotation(angle, on: display)
+                }
             }
-            Text("Rotation is not supported on this build")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
 
         // Configuration Protection
@@ -481,22 +495,67 @@ struct DisplayRowView: View {
         _ = pipController.startPiP(displayID: display.id, filter: .identity)
     }
 
-    private var videoFilterContrast: Binding<Double> {
+    @State private var filterParams = ScreenFilterParams.neutral
+
+    private var filterActiveBinding: Binding<Bool> {
         Binding(
-            get: { 1 },
-            set: { value in
-                pipController.setFilter(VideoFilter(brightness: 1, contrast: value, saturation: videoFilterSaturation.wrappedValue))
+            get: { !filterParams.isNeutral },
+            set: { active in
+                if active {
+                    _ = DisplayController.shared.setScreenFilter(filterParams, on: display)
+                } else {
+                    resetScreenFilter()
+                }
             }
         )
     }
 
-    private var videoFilterSaturation: Binding<Double> {
+    private var filterContrast: Binding<Double> {
         Binding(
-            get: { 1 },
-            set: { value in
-                pipController.setFilter(VideoFilter(brightness: 1, contrast: videoFilterContrast.wrappedValue, saturation: value))
-            }
+            get: { filterParams.contrast },
+            set: { filterParams.contrast = $0; applyScreenFilter() }
         )
+    }
+
+    private var filterSaturation: Binding<Double> {
+        Binding(
+            get: { filterParams.saturation },
+            set: { filterParams.saturation = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterGamma: Binding<Double> {
+        Binding(
+            get: { filterParams.gamma },
+            set: { filterParams.gamma = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterTemperature: Binding<Double> {
+        Binding(
+            get: { filterParams.temperature },
+            set: { filterParams.temperature = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterInvert: Binding<Bool> {
+        Binding(
+            get: { filterParams.invert },
+            set: { filterParams.invert = $0; applyScreenFilter() }
+        )
+    }
+
+    private func applyScreenFilter() {
+        if filterParams.isNeutral {
+            DisplayController.shared.stopScreenFilter(on: display)
+        } else {
+            _ = DisplayController.shared.setScreenFilter(filterParams, on: display)
+        }
+    }
+
+    private func resetScreenFilter() {
+        filterParams = .neutral
+        DisplayController.shared.stopScreenFilter(on: display)
     }
 
     // MARK: - Disclosure sections
