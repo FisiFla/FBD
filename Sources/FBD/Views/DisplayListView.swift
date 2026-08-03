@@ -138,25 +138,7 @@ struct DisplayListView: View {
                 .frame(width: 64)
                 .accessibilityHidden(true)
 
-            RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
-                .fill(Color.accentColor.gradient)
-                .frame(width: 20, height: 20)
-                .overlay(
-                    Image(systemName: "display")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                )
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text("FBD")
-                    .font(.headline)
-                Text("Free Better Display")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
+            Spacer(minLength: 0)
 
             Button {
                 openSettings()
@@ -179,6 +161,29 @@ struct DisplayListView: View {
             .foregroundStyle(.secondary)
             .accessibilityLabel("Close FBD panel")
             .help("Close")
+        }
+        // Brand centered in the bar (like a window title), independent of the
+        // traffic-light clearance on the left.
+        .overlay {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
+                    .fill(Color.accentColor.gradient)
+                    .frame(width: 20, height: 20)
+                    .overlay(
+                        Image(systemName: "display")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                    )
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("FBD")
+                        .font(.headline)
+                    Text("Free Better Display")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: 30)
@@ -206,10 +211,7 @@ struct DisplayListView: View {
             .accessibilityLabel("Back to FBD")
             .help("Back")
 
-            Text("Settings")
-                .font(.headline)
-
-            Spacer()
+            Spacer(minLength: 0)
 
             Button {
                 NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
@@ -221,6 +223,10 @@ struct DisplayListView: View {
             .foregroundStyle(.secondary)
             .accessibilityLabel("Close FBD panel")
             .help("Close")
+        }
+        .overlay {
+            Text("Settings")
+                .font(.headline)
         }
         .padding(.horizontal, 12)
         .frame(height: 30)
