@@ -129,8 +129,6 @@ public final class HotkeyController {
     /// Process a media key code. Returns true if the key was consumed by FBD.
     @MainActor
     fileprivate func handleMediaKey(keyCode: Int32) -> Bool {
-        guard Settings.interceptMediaKeys else { return false }
-
         let displayController = DisplayController.shared
         let displays = displayController.displays
         guard !displays.isEmpty else { return false }
@@ -143,52 +141,49 @@ public final class HotkeyController {
 
         guard let targetDisplay else { return false }
 
-        // Only intercept if we have a control path (Apple brightness or DDC)
-        guard targetDisplay.appleBrightnessAvailable || targetDisplay.ddcAvailable else { return false }
+        // Pure routing decision (unit-tested in MediaKeyRouterTests); the
+        // event is only consumed when an action is returned.
+        let action = MediaKeyRouter.route(
+            keyCode: keyCode,
+            interceptEnabled: Settings.interceptMediaKeys,
+            targetHasControlPath: targetDisplay.appleBrightnessAvailable || targetDisplay.ddcAvailable,
+            targetHasDDC: targetDisplay.ddcAvailable
+        )
 
-        let step = 0.0625 // 1/16th (~6.25%) matching macOS standard step
+        let step = MediaKeyRouter.step
 
-        switch keyCode {
-        case 2: // NX_KEYTYPE_BRIGHTNESS_UP
+        switch action {
+        case .none:
+            return false
+
+        case .brightnessUp:
             let current = targetDisplay.brightness ?? displayController.getBrightness(for: targetDisplay) ?? 0.5
             displayController.setBrightness(min(current + step, 1.0), on: targetDisplay)
             return true
 
-        case 3: // NX_KEYTYPE_BRIGHTNESS_DOWN
+        case .brightnessDown:
             let current = targetDisplay.brightness ?? displayController.getBrightness(for: targetDisplay) ?? 0.5
             displayController.setBrightness(max(current - step, 0.0), on: targetDisplay)
             return true
 
-        case 0: // NX_KEYTYPE_SOUND_UP
-            if targetDisplay.ddcAvailable {
-                let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
-                displayController.setVolume(min(current + step, 1.0), on: targetDisplay)
-                NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
-                return true
-            }
-            return false
+        case .volumeUp:
+            let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
+            displayController.setVolume(min(current + step, 1.0), on: targetDisplay)
+            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
+            return true
 
-        case 1: // NX_KEYTYPE_SOUND_DOWN
-            if targetDisplay.ddcAvailable {
-                let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
-                displayController.setVolume(max(current - step, 0.0), on: targetDisplay)
-                NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
-                return true
-            }
-            return false
+        case .volumeDown:
+            let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
+            displayController.setVolume(max(current - step, 0.0), on: targetDisplay)
+            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
+            return true
 
-        case 7: // NX_KEYTYPE_MUTE
-            if targetDisplay.ddcAvailable {
-                let muted = displayController.readDDCControls(for: targetDisplay).muted
-                let newMuted = muted == false
-                displayController.setMuted(newMuted, on: targetDisplay)
-                NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
-                return true
-            }
-            return false
-
-        default:
-            return false
+        case .toggleMute:
+            let muted = displayController.readDDCControls(for: targetDisplay).muted
+            let newMuted = muted == false
+            displayController.setMuted(newMuted, on: targetDisplay)
+            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
+            return true
         }
     }
 }
