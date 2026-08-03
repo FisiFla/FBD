@@ -54,6 +54,15 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   other sections. Verified live: dragging the saturation slider to 0 makes
   the screen measured-grayscale (colorfulness 0.0000), Reset restores it.
 
+## [Unreleased]
+
+### Changed
+- **Adaptive panel-height experiment reverted**: fitting the panel to the
+  SwiftUI content on display changes fought the hosting controller (window
+  grew past the 900pt max to 1008). The panel stays at the fixed 650/860
+  sizing; the pinned footer remains. (Dead-band cosmetic with a single
+  display is acceptable versus unstable window sizing.)
+
 ## [1.3.1] — 2026-08-03
 
 ### Fixed
