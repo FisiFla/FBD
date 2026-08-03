@@ -48,13 +48,13 @@ public enum Settings {
 
     /// The app bundle's standard domain IS dev.fisifla.fbd; anything else
     /// (CLI, tests) must target the suite explicitly so both read the same plist.
-    private static var defaults: UserDefaults {
+    public static var defaults: UserDefaults {
         if Bundle.main.bundleIdentifier == "dev.fisifla.fbd" {
             return .standard
         }
         return UserDefaults(suiteName: suite) ?? .standard
     }
-    private static let suite = "dev.fisifla.fbd"
+    static let suite = "dev.fisifla.fbd"
 
     // MARK: DDC
 

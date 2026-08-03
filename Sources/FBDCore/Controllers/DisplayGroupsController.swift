@@ -15,6 +15,11 @@ public final class DisplayGroupsController {
     /// Observable groups (persisted via JSON under "displayGroups.v1").
     public private(set) var groups: [DisplayGroup] = []
 
+    /// Persistence domain. Defaults to the shared FBD suite so the app and
+    /// the CLI see the same groups (UserDefaults.standard differs per
+    /// process bundle id and silently split the state).
+    private let defaults: UserDefaults
+
     /// Codable mirror of `DisplayGroup` for persistence.
     private struct StoredGroup: Codable {
         var id: String
@@ -22,8 +27,9 @@ public final class DisplayGroupsController {
         var displayIDs: [CGDirectDisplayID]
     }
 
-    public init() {
-        groups = Self.load()
+    public init(defaults: UserDefaults = Settings.defaults) {
+        self.defaults = defaults
+        groups = Self.load(from: defaults)
     }
 
     // MARK: - Group management
@@ -160,8 +166,8 @@ public final class DisplayGroupsController {
 
     // MARK: - Persistence
 
-    private static func load() -> [DisplayGroup] {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
+    private static func load(from defaults: UserDefaults) -> [DisplayGroup] {
+        guard let data = defaults.data(forKey: storageKey),
               let stored = try? JSONDecoder().decode([StoredGroup].self, from: data) else {
             return []
         }
@@ -174,6 +180,6 @@ public final class DisplayGroupsController {
             log.warning("save: failed to encode groups")
             return
         }
-        UserDefaults.standard.set(data, forKey: Self.storageKey)
+        defaults.set(data, forKey: Self.storageKey)
     }
 }
