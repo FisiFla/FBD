@@ -26,6 +26,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
     titlebar strip so content never slides under the traffic lights, with
     the bar's material extending up into the strip so the traffic lights
     sit ON the bar (unified-toolbar look) instead of floating above it; the
+    bar is a single row — traffic lights and content share the band (64pt
+    light clearance, content beside them), no empty gap under the buttons; the
     main header is now a fixed elevated bar (material + hairline divider,
     gear moved in from the toolbar) instead of floating; Settings got its
     own fixed header bar with a **Back** button (there was no way back
