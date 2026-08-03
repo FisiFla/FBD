@@ -3,6 +3,16 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Fixed
+- **Software XDR boost rendered the screen out of focus**: the ScreenCaptureKit
+  capture used the display's point size (1728×1117), so the overlay redrew a
+  2x display at half resolution. The capture now uses the physical pixel
+  resolution (CGDisplayPixelsWide/High — 3456×2234 on the built-in).
+  Verified: overlay layer resolution 1728×1117 → 3456×2234, and edge energy
+  with boost on stays at ~0.91 of the unboosted screen (was heavily blurred).
+
 ## [1.2.0] — 2026-08-03
 
 ### Changed

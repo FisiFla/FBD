@@ -394,8 +394,12 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
 
     private func makeConfiguration(for display: SCDisplay) -> SCStreamConfiguration {
         let config = SCStreamConfiguration()
-        config.width = display.width
-        config.height = display.height
+        // Capture at the display's PHYSICAL pixel resolution. SCDisplay.width/
+        // height are points — on a 2x display (e.g. the built-in XDR panel)
+        // that made the overlay render at half resolution, which reads as
+        // soft/out-of-focus when the boost is active.
+        config.width = CGDisplayPixelsWide(display.displayID)
+        config.height = CGDisplayPixelsHigh(display.displayID)
         config.minimumFrameInterval = CMTime(value: 1, timescale: 10) // ~10 fps
         config.queueDepth = 3
         config.showsCursor = false
