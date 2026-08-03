@@ -76,7 +76,18 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   to the main page (650), the close × hides the panel. Button hit areas
   were verified against the live Accessibility frames.
 
-## [1.0.0] — 2026-08-02
+## [Unreleased]
+
+### Fixed
+- **Settings toggles turned gray after the panel lost focus**: the panel is
+  a `.nonactivatingPanel` that rarely holds key status, so SwiftUI rendered
+  every control in the gray "inactive" variant whenever another window had
+  focus (observed live: switches blue on first open, gray after clicking
+  outside). The panel root now forces `controlActiveState = .key`, and the
+  settings switches get an explicit `.tint(.blue)` on-state. Verified by
+  pixel-sampling the switch fill while focused and unfocused (both blue).
+
+
 
 ### Added
 - AppIntents bridge (`FBDAppIntentsBridge`) so the Shortcuts actions from the

@@ -61,6 +61,12 @@ struct DisplayListView: View {
         // (see StatusItemController) so this NSVisualEffectView provides the
         // Control Center-style blur and rounded corners.
         .background(FrostedBackground())
+        // The panel is a .nonactivatingPanel that rarely holds key status, so
+        // AppKit/SwiftUI would render every control in the gray "inactive"
+        // variant whenever another window has focus (observed: toggles blue on
+        // first open, gray after clicking outside). Force the key appearance
+        // so switches keep their on-state color.
+        .environment(\.controlActiveState, .key)
         // The panel uses .fullSizeContentView; ignore the titlebar safe-area
         // inset so the top bar actually extends up under the traffic lights
         // (without this the whole bar is pushed ~28pt down, recreating the

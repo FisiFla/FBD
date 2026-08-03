@@ -188,6 +188,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // Explicit saturated blue for the switch on-state so active toggles
+        // are unmistakable against the material background.
+        .tint(.blue)
         .navigationTitle("Settings")
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
