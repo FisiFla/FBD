@@ -131,41 +131,15 @@ struct DisplayListView: View {
     /// window server in the first ~64pt) and the brand/actions share the same
     /// band, so there is no empty gap under the buttons.
     private var mainTopBar: some View {
-        HStack(spacing: 10) {
-            // Horizontal clearance for the traffic lights (drawn over the top
-            // ~28pt; the bar's height keeps them vertically centered).
+        VStack(spacing: 0) {
+            // Traffic-light band: the window server draws the buttons here
+            // (~12pt circles centered 14pt from the top). The brand row sits
+            // directly below with tight spacing — no empty gap.
             Color.clear
-                .frame(width: 64)
+                .frame(height: 22)
                 .accessibilityHidden(true)
 
-            Spacer(minLength: 0)
-
-            Button {
-                openSettings()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel("Settings")
-            .help("Settings")
-
-            Button {
-                NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel("Close FBD panel")
-            .help("Close")
-        }
-        // Brand centered in the bar (like a window title), independent of the
-        // traffic-light clearance on the left.
-        .overlay {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
                     .fill(Color.accentColor.gradient)
                     .frame(width: 20, height: 20)
@@ -183,11 +157,35 @@ struct DisplayListView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+
+                Spacer(minLength: 4)
+
+                Button {
+                    openSettings()
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Settings")
+                .help("Settings")
+
+                Button {
+                    NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Close FBD panel")
+                .help("Close")
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 4)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 30)
-        .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Divider().opacity(0.5)
@@ -196,41 +194,42 @@ struct DisplayListView: View {
 
     /// Settings top bar: same unified row — lights + back + title + close.
     private var settingsTopBar: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 0) {
             Color.clear
-                .frame(width: 64)
+                .frame(height: 22)
                 .accessibilityHidden(true)
 
-            Button {
-                NotificationCenter.default.post(name: .fbdSettingsClosed, object: nil)
-            } label: {
-                Label("FBD", systemImage: "chevron.left")
-                    .font(.callout)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Back to FBD")
-            .help("Back")
+            HStack(spacing: 8) {
+                Button {
+                    NotificationCenter.default.post(name: .fbdSettingsClosed, object: nil)
+                } label: {
+                    Label("FBD", systemImage: "chevron.left")
+                        .font(.callout)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Back to FBD")
+                .help("Back")
 
-            Spacer(minLength: 0)
+                Text("Settings")
+                    .font(.headline)
 
-            Button {
-                NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
+                Spacer(minLength: 4)
+
+                Button {
+                    NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Close FBD panel")
+                .help("Close")
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel("Close FBD panel")
-            .help("Close")
+            .padding(.horizontal, 14)
+            .padding(.top, 4)
+            .padding(.bottom, 8)
         }
-        .overlay {
-            Text("Settings")
-                .font(.headline)
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 30)
-        .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Divider().opacity(0.5)
