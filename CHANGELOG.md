@@ -45,6 +45,15 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
     opens the floating window, Check for Updates and Quit work. The subtle
     scroll-jump Tools menu and the System Colors button were removed.
 
+## [Unreleased]
+
+### Changed
+- **Image Adjustments moved out of the options menu into a card "Filters"
+  disclosure** — sliders inside SwiftUI menus are fragile (they close on
+  accidental clicks and are hard to hit); the disclosure matches the card's
+  other sections. Verified live: dragging the saturation slider to 0 makes
+  the screen measured-grayscale (colorfulness 0.0000), Reset restores it.
+
 ## [1.3.1] — 2026-08-03
 
 ### Fixed

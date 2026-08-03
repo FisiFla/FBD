@@ -50,6 +50,9 @@ struct DisplayRowView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             BrightnessSliderView(display: display)
+            disclosureSection(icon: "slider.horizontal.3", title: "Filters") {
+                filterControls
+            }
             if display.ddcAvailable {
                 ddcPanel
             }
@@ -300,49 +303,6 @@ struct DisplayRowView: View {
             startVideoFilterWindow()
         }
 
-        // Image Adjustments (full-screen software filter)
-        Menu("Image Adjustments") {
-            Toggle("Apply to Display", isOn: filterActiveBinding)
-            Divider()
-            Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
-                Text("Contrast")
-            } minimumValueLabel: {
-                Text("0.5")
-            } maximumValueLabel: {
-                Text("2")
-            }
-            .font(.caption)
-            Slider(value: filterSaturation, in: 0...2, step: 0.05) {
-                Text("Saturation")
-            } minimumValueLabel: {
-                Text("0")
-            } maximumValueLabel: {
-                Text("2")
-            }
-            .font(.caption)
-            Slider(value: filterGamma, in: 0.4...2.5, step: 0.05) {
-                Text("Gamma")
-            } minimumValueLabel: {
-                Text("0.4")
-            } maximumValueLabel: {
-                Text("2.5")
-            }
-            .font(.caption)
-            Slider(value: filterTemperature, in: 0.5...1.5, step: 0.05) {
-                Text("Color Temperature")
-            } minimumValueLabel: {
-                Text("Warm")
-            } maximumValueLabel: {
-                Text("Cool")
-            }
-            .font(.caption)
-            Toggle("Invert Colors", isOn: filterInvert)
-            Divider()
-            Button("Reset") {
-                resetScreenFilter()
-            }
-        }
-
         // Move Display
         Menu("Move Display") {
             Button("Set as Main Display") {
@@ -544,6 +504,53 @@ struct DisplayRowView: View {
     private func resetScreenFilter() {
         filterParams = .neutral
         DisplayController.shared.stopScreenFilter(on: display)
+    }
+
+    /// Full-screen software filter controls (contrast / saturation / gamma /
+    /// color temperature / invert). Moved out of the options menu — sliders
+    /// inside menus are fragile; a disclosure row matches the card's other
+    /// sections.
+    private var filterControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Apply to Display", isOn: filterActiveBinding)
+            Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
+                Text("Contrast")
+            } minimumValueLabel: {
+                Text("0.5")
+            } maximumValueLabel: {
+                Text("2")
+            }
+            .font(.caption)
+            Slider(value: filterSaturation, in: 0...2, step: 0.05) {
+                Text("Saturation")
+            } minimumValueLabel: {
+                Text("0")
+            } maximumValueLabel: {
+                Text("2")
+            }
+            .font(.caption)
+            Slider(value: filterGamma, in: 0.4...2.5, step: 0.05) {
+                Text("Gamma")
+            } minimumValueLabel: {
+                Text("0.4")
+            } maximumValueLabel: {
+                Text("2.5")
+            }
+            .font(.caption)
+            Slider(value: filterTemperature, in: 0.5...1.5, step: 0.05) {
+                Text("Color Temperature")
+            } minimumValueLabel: {
+                Text("Warm")
+            } maximumValueLabel: {
+                Text("Cool")
+            }
+            .font(.caption)
+            Toggle("Invert Colors", isOn: filterInvert)
+            Button("Reset") {
+                resetScreenFilter()
+            }
+            .controlSize(.small)
+        }
     }
 
     // MARK: - Disclosure sections
