@@ -64,5 +64,9 @@ bump-version:
 	/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $$BUILD" $$PLIST; \
 	echo "version bumped to $(VERSION) (build $$BUILD, was $$CURRENT)"
 
+## Drive the real panel via Accessibility/CGEvent (needs a11y permission).
+ui-smoke:
+	bash scripts/ui-smoke.sh
+
 clean:
 	rm -rf .build build

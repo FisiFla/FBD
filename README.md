@@ -42,6 +42,11 @@ make app          # release universal FBD.app → build/FBD.app
 open build/FBD.app
 ```
 
+`make ui-smoke` drives the real panel via Accessibility/CGEvent (status-item
+click → brightness slider → Settings → Back → close); needs Accessibility
+permission for your terminal.
+```
+
 `fbdcli` (command-line interface) is built alongside:
 
 ```bash
