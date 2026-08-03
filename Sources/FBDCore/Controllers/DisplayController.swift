@@ -219,10 +219,18 @@ public final class DisplayController {
             guard Settings.softwareUpscalingEnabled, hardwareMax > 0, target > hardwareMax else {
                 return false
             }
-            return overlay.setSoftwareBoost(Double(target) / Double(hardwareMax), displayID: display.id)
+            let ok = overlay.setSoftwareBoost(Double(target) / Double(hardwareMax), displayID: display.id)
+            if ok {
+                display.updateSoftwareBoost(true, targetNits: target)
+            }
+            return ok
         case .softwareBoost(let factor):
             // Requires Screen Recording permission (logged by the overlay).
-            return overlay.setSoftwareBoost(factor, displayID: display.id)
+            let ok = overlay.setSoftwareBoost(factor, displayID: display.id)
+            if ok {
+                display.updateSoftwareBoost(true, targetNits: nits)
+            }
+            return ok
         case .hardware, .fail:
             return false
         }
@@ -239,6 +247,7 @@ public final class DisplayController {
     public func disableXDRUpscaling(on display: Display) -> Bool {
         let native = xdr.disableUpscaling(for: display)
         overlay.setSoftwareBoost(1, displayID: display.id)
+        display.updateSoftwareBoost(false, targetNits: nil)
         return native
     }
 
@@ -258,7 +267,9 @@ public final class DisplayController {
     /// factor <= 1 stops the stream.
     @discardableResult
     public func setSoftwareBoost(_ factor: Double, on display: Display) -> Bool {
-        overlay.setSoftwareBoost(factor, displayID: display.id)
+        let ok = overlay.setSoftwareBoost(factor, displayID: display.id)
+        display.updateSoftwareBoost(factor > 1 && ok, targetNits: nil)
+        return ok
     }
 
     /// Set the dim-to-black overlay opacity 0…1 (0 = none, 1 = fully black).

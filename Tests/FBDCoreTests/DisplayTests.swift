@@ -35,6 +35,42 @@ final class DisplayTests: XCTestCase {
         XCTAssertEqual(key.components(separatedBy: "-").count, 3)
     }
 
+    func testUpdateSoftwareBoostSetsAndClearsUpscaleState() {
+        // Arrange
+        let display = makeDisplay(id: 1)
+
+        // Act: boost starts
+        display.updateSoftwareBoost(true, targetNits: 800)
+
+        // Assert
+        XCTAssertTrue(display.isXDRUpscaled)
+        XCTAssertEqual(display.xdrUpscaleTargetNits, 800)
+
+        // Act: boost stops
+        display.updateSoftwareBoost(false, targetNits: nil)
+
+        // Assert
+        XCTAssertFalse(display.isXDRUpscaled)
+        XCTAssertNil(display.xdrUpscaleTargetNits)
+    }
+
+    func testUpdateSoftwareBoostClearsStaleTargetWhenInactive() {
+        // Arrange — a stale native target from an earlier native upscale
+        let display = makeDisplay(id: 1)
+        display.updateXDRState(
+            presets: [], isXDRCapable: true, activePresetIndex: nil,
+            isXDRUpscaled: true, xdrUpscaleTargetNits: 1000,
+            isHDRModeCapable: false, isHDRModeEnabled: false
+        )
+
+        // Act
+        display.updateSoftwareBoost(false, targetNits: nil)
+
+        // Assert — no stale target survives the stop
+        XCTAssertFalse(display.isXDRUpscaled)
+        XCTAssertNil(display.xdrUpscaleTargetNits)
+    }
+
     func testIsVirtualTrueForVirtualDisplayID() {
         // Arrange
         let display = makeDisplay(id: 0xF0F0)

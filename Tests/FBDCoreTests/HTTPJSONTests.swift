@@ -71,6 +71,31 @@ final class HTTPJSONTests: XCTestCase {
         XCTAssertNil(json["currentMode"])
     }
 
+    func testDisplayJSONReflectsSoftwareBoostState() throws {
+        // Arrange
+        let display = Display(
+            id: 1, name: "Boosted", isBuiltin: true,
+            vendorNumber: 0, modelNumber: 0, serialNumber: 0,
+            bounds: .zero, isOnline: true, isActive: true
+        )
+
+        // Act: simulate a software boost
+        display.updateSoftwareBoost(true, targetNits: 800)
+        let json = HTTPJSON.display(display)
+
+        // Assert
+        XCTAssertEqual(json["xdrUpscaled"] as? Bool, true)
+        XCTAssertEqual(json["xdrTargetNits"] as? Int, 800)
+
+        // Act: boost stops
+        display.updateSoftwareBoost(false, targetNits: nil)
+        let stopped = HTTPJSON.display(display)
+
+        // Assert
+        XCTAssertEqual(stopped["xdrUpscaled"] as? Bool, false)
+        XCTAssertNil(stopped["xdrTargetNits"])
+    }
+
     func testModeJSONShape() {
         let json = HTTPJSON.mode(mode(3, w: 1920, h: 1080, hz: 60, hidpi: true))
         XCTAssertEqual(json["key"] as? String, "1920x1080@60.00")

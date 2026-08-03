@@ -80,6 +80,15 @@ public final class Display: ObservableObject, Identifiable {
         brightness = value
     }
 
+    /// Reflect software-boost overlay state (the overlay itself has no
+    /// Display reference). Keeps `isXDRUpscaled`/`xdrUpscaleTargetNits`
+    /// honest for the UI, the HTTP API and the CLI regardless of which
+    /// mechanism (native preset or software overlay) is boosting.
+    public func updateSoftwareBoost(_ active: Bool, targetNits: Int?) {
+        isXDRUpscaled = active
+        xdrUpscaleTargetNits = active ? targetNits : nil
+    }
+
     public func updateModes(_ modes: [DisplayMode], current: DisplayMode?) {
         self.modes = modes
         currentMode = current
