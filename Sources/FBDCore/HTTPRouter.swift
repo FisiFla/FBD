@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import Foundation
 
 /// Typed, validated HTTP API request produced by `HTTPRouter`. Execution
@@ -74,7 +75,7 @@ public enum HTTPRouter {
         // Local API token auth (fail closed).
         let provided = headers["x-fbd-token"] ?? headers["authorization"]
             .flatMap { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : nil }
-        guard provided == expectedToken else {
+        guard Self.tokenMatches(provided, expectedToken) else {
             return .error(status: 401, message: "unauthorized")
         }
 
@@ -95,6 +96,17 @@ public enum HTTPRouter {
         default:
             return .error(status: 404, message: "not found")
         }
+    }
+
+    /// Constant-time-ish token comparison: hashing both sides first makes
+    /// the comparison independent of token length and prefix content, so a
+    /// local attacker timing the endpoint learns nothing usable about the
+    /// token (the digest `==` leaks at most an irrelevant digest byte).
+    private static func tokenMatches(_ provided: String?, _ expected: String) -> Bool {
+        guard let provided, !provided.isEmpty else { return false }
+        let providedDigest = SHA256.hash(data: Data(provided.utf8))
+        let expectedDigest = SHA256.hash(data: Data(expected.utf8))
+        return providedDigest == expectedDigest
     }
 
     // MARK: - /api/displays
