@@ -15,6 +15,22 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   Tools menu item) — the old name was confusing since it opens a
   picture-in-picture window.
 
+## [Unreleased]
+
+### Fixed
+- **App crashed when a second virtual screen was created** (and at launch
+  when an autoConnect config reconnected after one was already active):
+  `VirtualDisplayAPI.takeError` took an owning reference to the framework's
+  NSError, but the SL framework's error lifetime differs on the
+  second-display failure path — the over-release crashed at the
+  autorelease-pool drain (`-[NSError release] sent to deallocated
+  instance`, confirmed with NSZombieEnabled). The error description is now
+  copied via CF bridging without ever retaining/releasing the
+  framework-owned object. Verified: 1st create works, 2nd/3rd creates fail
+  cleanly ("failed via app"), app stays alive, launch reconnect survives.
+  Note: creating more than one SLVirtualDisplay fails on this macOS 27 —
+  now a graceful error instead of a crash.
+
 ## [1.3.1] — 2026-08-03
 
 ### Fixed

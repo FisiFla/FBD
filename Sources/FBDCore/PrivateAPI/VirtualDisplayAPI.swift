@@ -15,7 +15,15 @@ private let log = Logger(subsystem: "dev.fisifla.fbd", category: "VirtualDisplay
 public enum VirtualDisplayAPI {
     private static func takeError(_ ptr: UnsafeMutableRawPointer?) -> NSError? {
         guard let ptr else { return nil }
-        return Unmanaged<NSError>.fromOpaque(ptr).takeRetainedValue()
+        // Read the framework error WITHOUT taking ownership of it. The SL
+        // framework's NSError** lifetime differs per failure path (the second
+        // virtual-display create over-released a takeRetainedValue'd error,
+        // crashing at the autorelease-pool drain: "-[NSError release] sent to
+        // deallocated instance"). Copying the description via CF never
+        // retains/releases the framework-owned object.
+        let cfError = unsafeBitCast(ptr, to: CFError.self)
+        let message = CFErrorCopyDescription(cfError) as String? ?? "unknown error"
+        return NSError(domain: NSCocoaErrorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
     /// P3 chromaticities used for virtual display configs (macOS 26+ path).
     public static let p3Chromaticities = fbd_chromaticities(
