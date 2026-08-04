@@ -12,7 +12,8 @@ import os
 /// activates that slot. Disabling restores the slot's original dict and the
 /// pre-upscale active preset.
 ///
-/// Persistence: the target is stored in `UserDefaults.standard` under
+/// Persistence: the target is stored under `Settings.defaults` (the
+/// suite-aware accessor) so the app and the CLI read the same plist —
 /// `xdrUpscaleTarget.<identityKey>` while upscaling is active. The slot's
 /// ORIGINAL dict is kept in memory only (`slotStates`) — after a restart the
 /// original blank dict is unknown, so `disableUpscaling` restores whatever the
@@ -141,7 +142,7 @@ public final class XDRNativeController {
         }
 
         slotStates[key] = stateToSave
-        UserDefaults.standard.set(target, forKey: targetKey(for: display))
+        Settings.defaults.set(target, forKey: targetKey(for: display))
         // NOTE: state is recorded BEFORE activation on purpose — if activation
         // fails, a later disableUpscaling must restore the slot's original data
         // rather than the FBD dict we just wrote.
@@ -290,11 +291,11 @@ public final class XDRNativeController {
     }
 
     private func persistedTarget(for display: Display) -> Int? {
-        UserDefaults.standard.object(forKey: targetKey(for: display)) as? Int
+        Settings.defaults.object(forKey: targetKey(for: display)) as? Int
     }
 
     private func clearPersistedTarget(for display: Display) {
-        UserDefaults.standard.removeObject(forKey: targetKey(for: display))
+        Settings.defaults.removeObject(forKey: targetKey(for: display))
     }
 
     private func targetKey(for display: Display) -> String {
