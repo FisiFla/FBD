@@ -55,6 +55,16 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Changed (deepening — virtual displays, settings persistence)
+- **Virtual displays route through the `DisplayControlling` seam** — the
+  executor's virtual create/destroy/list go through one surface
+  (VirtualScreenController behind the adapter), testable with a fake.
+- **Closed the settings-persistence bypass**: XDRNativeController wrote its
+  upscale target via `UserDefaults.standard`, invisible to the app when the
+  CLI drove it — everything now goes through `Settings.defaults` (the
+  suite-aware accessor). No direct `UserDefaults.standard` writes remain in
+  FBDCore outside Settings.
+
 ### Changed (deepening — HTTP executor)
 - **`HTTPExecutor` moved into FBDCore behind the `DisplayControlling` seam** —
   the whole local API surface (health, displays, controls, actions, virtual)
