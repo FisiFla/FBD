@@ -22,6 +22,23 @@ private final class FakeDisplayController: DisplayControlling {
     var lastFilter: ScreenFilterParams? = nil
     var filterStopped = false
     var modeSwitchCalls = 0
+    var virtualScreens: [VirtualScreenInstance] = []
+    var virtualConfigs: [VirtualScreenConfig] = []
+    var virtualAvailable = false
+    var createdConfigs: [VirtualScreenConfig] = []
+    var destroyedIDs: [String] = []
+
+    @discardableResult
+    func createVirtual(_ config: VirtualScreenConfig) -> Bool {
+        createdConfigs.append(config)
+        return virtualAvailable
+    }
+    @discardableResult
+    func destroyVirtual(id: String) -> Bool {
+        destroyedIDs.append(id)
+        return virtualConfigs.contains { $0.id == id }
+    }
+    func virtualDisplayID(for id: String) -> CGDirectDisplayID? { 42 }
 
     func display(withID id: CGDirectDisplayID) -> Display? {
         displays.first { $0.id == id }
@@ -185,11 +202,36 @@ final class HTTPExecutorTests: XCTestCase {
         XCTAssertEqual(run(.displayAction(id: 99, action: .brightness(0.5))).0, 404)
     }
 
-    // MARK: - Virtual (shared singleton — only hardware-free paths)
+    // MARK: - Virtual (through the seam — no hardware)
 
-    func testVirtualListAndDestroyMissing() {
-        XCTAssertEqual(run(.virtualList).0, 200)
-        // Destroying a nonexistent id must 404 without touching hardware.
+    func testVirtualList() {
+        let config = VirtualScreenConfig(name: "V", width: 1920, height: 1080)
+        fake.virtualConfigs = [config]
+        fake.virtualScreens = [VirtualScreenInstance(id: config.id, displayID: 42, config: config)]
+        let (status, body) = run(.virtualList)
+        XCTAssertEqual(status, 200)
+        XCTAssertTrue(body.contains("\"id\":\"\(config.id)\""))
+    }
+
+    func testVirtualCreateSuccessAndUnavailable() {
+        fake.virtualAvailable = true
+        let request = VirtualCreateRequest(name: "V", width: 1920, height: 1080, hz: 60, isHDR: false)
+        let (status, body) = run(.virtualCreate(request))
+        XCTAssertEqual(status, 201)
+        XCTAssertEqual(fake.createdConfigs.count, 1)
+        XCTAssertEqual(fake.createdConfigs[0].name, "V")
+        XCTAssertTrue(body.contains("\"displayID\":42"))
+
+        fake.virtualAvailable = false
+        XCTAssertEqual(run(.virtualCreate(request)).0, 500)
+        XCTAssertEqual(fake.createdConfigs.count, 1, "unavailable must not attempt creation")
+    }
+
+    func testVirtualDestroy() {
+        let config = VirtualScreenConfig(name: "V", width: 1920, height: 1080)
+        fake.virtualConfigs = [config]
+        XCTAssertEqual(run(.virtualDestroy(id: config.id)).0, 200)
+        XCTAssertEqual(fake.destroyedIDs, [config.id])
         XCTAssertEqual(run(.virtualDestroy(id: "nonexistent")).0, 404)
     }
 }

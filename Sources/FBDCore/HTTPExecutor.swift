@@ -26,9 +26,33 @@ public protocol DisplayControlling: AnyObject {
     func setScreenFilter(_ params: ScreenFilterParams, on display: Display) -> Bool
     func stopScreenFilter(on display: Display)
     func activeBoostDisplayIDs() -> [UInt32]
+
+    // Virtual displays — routed through the single VirtualScreenController so
+    // CLI, HTTP and UI share one surface.
+    var virtualScreens: [VirtualScreenInstance] { get }
+    var virtualConfigs: [VirtualScreenConfig] { get }
+    var virtualAvailable: Bool { get }
+    @discardableResult func createVirtual(_ config: VirtualScreenConfig) -> Bool
+    @discardableResult func destroyVirtual(id: String) -> Bool
+    func virtualDisplayID(for id: String) -> CGDirectDisplayID?
 }
 
-extension DisplayController: DisplayControlling {}
+extension DisplayController: DisplayControlling {
+    public var virtualScreens: [VirtualScreenInstance] { VirtualScreenController.shared.screens }
+    public var virtualConfigs: [VirtualScreenConfig] { VirtualScreenController.shared.configs }
+    public var virtualAvailable: Bool { VirtualScreenController.shared.isAvailable }
+    @discardableResult
+    public func createVirtual(_ config: VirtualScreenConfig) -> Bool {
+        VirtualScreenController.shared.create(config)
+    }
+    @discardableResult
+    public func destroyVirtual(id: String) -> Bool {
+        VirtualScreenController.shared.destroy(id: id)
+    }
+    public func virtualDisplayID(for id: String) -> CGDirectDisplayID? {
+        VirtualScreenController.shared.displayID(for: id)
+    }
+}
 
 // MARK: - The executor
 
@@ -139,13 +163,11 @@ public enum HTTPExecutor {
                 return (200, HTTPJSON.encode(["ok": true]))
             }
         case .virtualList:
-            let controller = VirtualScreenController.shared
-            let screens = controller.screens.map { ["id": $0.id, "name": $0.config.name, "displayID": $0.displayID] }
-            let configs = controller.configs.map { ["id": $0.id, "name": $0.name] }
+            let screens = controller.virtualScreens.map { ["id": $0.id, "name": $0.config.name, "displayID": $0.displayID] }
+            let configs = controller.virtualConfigs.map { ["id": $0.id, "name": $0.name] }
             return (200, HTTPJSON.encode(["screens": screens, "configs": configs]))
         case .virtualCreate(let request):
-            let controller = VirtualScreenController.shared
-            guard controller.isAvailable else {
+            guard controller.virtualAvailable else {
                 return (500, HTTPJSON.error("virtual displays unavailable on this macOS"))
             }
             let config = VirtualScreenConfig(
@@ -156,14 +178,13 @@ public enum HTTPExecutor {
                 isHDR: request.isHDR,
                 autoConnect: true
             )
-            guard controller.create(config) else {
+            guard controller.createVirtual(config) else {
                 return (500, HTTPJSON.error("failed to create virtual display"))
             }
-            let displayID = controller.displayID(for: config.id) ?? 0
+            let displayID = controller.virtualDisplayID(for: config.id) ?? 0
             return (201, HTTPJSON.encode(["ok": true, "id": config.id, "displayID": displayID]))
         case .virtualDestroy(let id):
-            let controller = VirtualScreenController.shared
-            guard controller.destroy(id: id) else {
+            guard controller.destroyVirtual(id: id) else {
                 return (404, HTTPJSON.error("no virtual display '\(id)'"))
             }
             return (200, HTTPJSON.encode(["ok": true]))
