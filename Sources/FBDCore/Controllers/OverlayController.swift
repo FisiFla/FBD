@@ -521,8 +521,8 @@ private final class BoostRenderer {
         float4 color = captureTexture.sample(captureSampler, in.uv);
         float3 c = color.rgb;
         if (p[5] > 0.5) c = 1.0 - c;
-        c.r *= p[4];
-        c.b *= (2.0 - p[4]);
+        c.r *= (2.0 - p[4]);
+        c.b *= p[4];
         c = (c - 0.5) * p[1] + 0.5;
         float luma = dot(c, float3(0.2126, 0.7152, 0.0722));
         c = mix(float3(luma), c, p[2]);

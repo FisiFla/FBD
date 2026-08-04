@@ -1,6 +1,21 @@
 import AppIntents
 import FBDCore
 
+/// App Intents package exposing FBD's Shortcuts actions.
+///
+/// Public so the app target can wire it up centrally (via the app's own
+/// AppIntentsBridge). There is deliberately no `@main` here — the package
+/// just declares this module's `AppIntent` conformances for discovery.
+/// (This SDK's `AppIntentsPackage` exposes the module's intents without a
+/// `body`; `includedPackages` stays empty because there are no sub-packages.)
+@available(macOS 14, *)
+public struct FBDAppIntents: AppIntentsPackage {
+    public init() {}
+
+    /// No sub-packages; all FBD intents live in this module.
+    public static var includedPackages: [any AppIntentsPackage.Type] { [] }
+}
+
 /// Errors surfaced to Shortcuts when an intent cannot complete.
 @available(macOS 13, *)
 enum DisplayIntentError: LocalizedError {

@@ -79,7 +79,7 @@ public final class TizenController {
             self.currentToken = self.authToken ?? ""
 
             // URL(string:) needs IPv6 literals bracketed.
-            let displayHost = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+            let displayHost = NetworkHost.bracketed(host)
             guard let name = Data("FBD".utf8).base64EncodedString()
                 .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                 let url = URL(string: "ws://\(displayHost):\(port)"

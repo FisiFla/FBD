@@ -22,7 +22,6 @@ UI notes it) when a path is unavailable.
 | DDC/CI (external displays, Apple Silicon) | ✅ | ✅ | ✅ |
 | Virtual displays | ✅ `CGVirtualDisplay` (dlopen) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
 | XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
-| XDR direct (IOMobileFramebuffer) | ✅ | ⚠️ | ❌ entitlement-gated (probe only) |
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 

@@ -69,7 +69,9 @@ public enum Settings {
     public static var brightnessDebounceMilliseconds: Int
 
     /// Intercept F1/F2 and F10/F11/F12 media keys for external displays.
-    @Storage(key: "interceptMediaKeys", defaultValue: true)
+    /// Off by default — on by explicit opt-in (key capture must never be
+    /// silent).
+    @Storage(key: "interceptMediaKeys", defaultValue: false)
     public static var interceptMediaKeys: Bool
 
     /// Allow applying modes outside the safe-mode flag set (experimental).
@@ -178,7 +180,7 @@ public enum Settings {
     public static var httpServerEnabled: Bool
 
     /// Port for the HTTP control API (0 = ephemeral).
-    @Storage(key: "httpServerPort", defaultValue: 0)
+    @Storage(key: "httpServerPort", defaultValue: 8765)
     public static var httpServerPort: Int
 
     /// ACTUAL listening port of the running app's HTTP API (0 = not running).

@@ -332,16 +332,33 @@ public final class DisplayController {
 
     // MARK: - DDC controls
 
+    /// Read contrast 0…1 via DDC/CI, or nil when the monitor doesn't answer.
+    public func readContrast(for display: Display) -> Double? {
+        ddc.getFeature(.contrast, for: display)
+    }
+
     /// Set contrast 0…1 via DDC/CI. Returns whether the write was accepted.
     @discardableResult
     public func setContrast(_ value: Double, on display: Display) -> Bool {
         ddc.setFeature(.contrast, value: value, for: display)
     }
 
+    /// Read speaker volume 0…1 via DDC/CI, or nil when the monitor doesn't answer.
+    public func readVolume(for display: Display) -> Double? {
+        ddc.getFeature(.volume, for: display)
+    }
+
     /// Set speaker volume 0…1 via DDC/CI. Returns whether the write was accepted.
     @discardableResult
     public func setVolume(_ value: Double, on display: Display) -> Bool {
         ddc.setFeature(.volume, value: value, for: display)
+    }
+
+    /// Read the speaker mute state via DDC/CI (MCCS 0x8D: 1 = on, 2 = off),
+    /// or nil when the monitor doesn't answer.
+    public func readMuted(for display: Display) -> Bool? {
+        guard let raw = ddc.getFeature(.mute, for: display) else { return nil }
+        return raw <= 1.5
     }
 
     /// Mute/unmute the display's speakers via DDC/CI. Returns whether the write was accepted.

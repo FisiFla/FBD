@@ -120,7 +120,7 @@ public final class PhilipsTVController {
                 return
             }
             guard !self.host.isEmpty,
-                  let url = URL(string: "http://\(self.displayHost(self.host)):1926\(path)") else {
+                  let url = URL(string: "http://\(NetworkHost.bracketed(self.host)):1926\(path)") else {
                 completion(false, "invalid host")
                 return
             }
@@ -165,8 +165,4 @@ public final class PhilipsTVController {
         }
     }
 
-    /// Brackets IPv6 literals so URL(string:) accepts them.
-    private func displayHost(_ host: String) -> String {
-        host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
-    }
 }

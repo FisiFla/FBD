@@ -91,11 +91,18 @@ if [ -z "$SLIDER" ]; then
     bad "brightness slider not found via AX"
 else
     IFS=, read -r SX SY SW SH <<<"$SLIDER"
-    # Click the middle of the slider track (≈50%).
-    $DRIVER click "$((SX + SW / 2))" "$((SY + SH / 2))" >/dev/null
-    sleep 2
-    AFTER=$(swift run --disable-sandbox fbdcli brightness 1 2>/dev/null | tail -1 | tr -dc '0-9.')
-    DELTA=$(awk -v a="$BEFORE" -v b="$AFTER" 'BEGIN { d = a - b; if (d < 0) d = -d; printf "%.1f", d }')
+    # Click at 85% of the track, then 15% if that barely moved (the value
+    # may have already been near 85%) — the check is "a click changes the
+    # brightness", so pick the end that guarantees movement.
+    DELTA=0
+    for FRAC in 85 15; do
+        X=$((SX + SW * FRAC / 100))
+        $DRIVER click "$X" "$((SY + SH / 2))" >/dev/null
+        sleep 2
+        AFTER=$(swift run --disable-sandbox fbdcli brightness 1 2>/dev/null | tail -1 | tr -dc '0-9.')
+        DELTA=$(awk -v a="$BEFORE" -v b="$AFTER" 'BEGIN { d = a - b; if (d < 0) d = -d; printf "%.1f", d }')
+        if awk -v d="$DELTA" 'BEGIN { exit !(d > 5) }'; then break; fi
+    done
     if awk -v d="$DELTA" 'BEGIN { exit !(d > 5) }'; then
         ok
         # Restore the original brightness and let the app's debounced write

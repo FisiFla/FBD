@@ -68,7 +68,7 @@ public final class YamahaAVRController {
                 return
             }
             guard !self.host.isEmpty,
-                  let url = URL(string: "http://\(self.displayHost(self.host))/YamahaRemoteControl/ctrl") else {
+                  let url = URL(string: "http://\(NetworkHost.bracketed(self.host))/YamahaRemoteControl/ctrl") else {
                 completion?(false)
                 return
             }
@@ -117,8 +117,4 @@ public final class YamahaAVRController {
             .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
-    /// Brackets IPv6 literals so URL(string:) accepts them.
-    private func displayHost(_ host: String) -> String {
-        host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
-    }
 }

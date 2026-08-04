@@ -70,7 +70,7 @@ Commands:
   protect restore <id>          Re-apply saved config if needed
   http on [port]                Enable the HTTP control API (port 1024-65535;
                                 default keeps the current port). The API is
-                                served by the app — restart the app to apply
+                                served by the app — applied live, no restart
   http off                      Disable the HTTP control API
   http status                   Show HTTP API state and port
   auth-token                    Print the local HTTP API token (needed for
