@@ -250,6 +250,9 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 24)
                 }
+                // Display arrangement grid (System Settings-style drag to move).
+                ArrangementGridView()
+                    .padding(.horizontal, 12)
                 ForEach(shown) { display in
                     perDisplayCard(display)
                         .padding(.horizontal, 12)

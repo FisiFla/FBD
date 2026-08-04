@@ -250,9 +250,18 @@ public final class DisplayController {
     /// LayoutProtectionController.restoreArrangement.
     @discardableResult
     public func setAsMainDisplay(_ display: Display) -> Bool {
+        setOrigin(CGPoint(x: 0, y: 0), for: display)
+    }
+
+    /// Move a display to an absolute origin on the desktop (System
+    /// Settings-style arrangement) via the public CoreGraphics display
+    /// configuration API. The other displays keep their origins; the change
+    /// is committed permanently (like System Settings' Apply).
+    @discardableResult
+    public func setOrigin(_ origin: CGPoint, for display: Display) -> Bool {
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let config,
-              CGConfigureDisplayOrigin(config, display.id, 0, 0) == .success else {
+              CGConfigureDisplayOrigin(config, display.id, Int32(origin.x), Int32(origin.y)) == .success else {
             return false
         }
         return CGCompleteDisplayConfiguration(config, .permanently) == .success

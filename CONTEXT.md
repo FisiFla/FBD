@@ -18,3 +18,9 @@ refer to these names, not file paths.
   nits. Invariant: it must mirror what is actually on screen on every path.
 - **Combined route** — the plan decision (hardware / native upscale /
   software boost / fail) for a brightness request.
+- **Arrangement** — the desktop positions of the connected displays; edited
+  in the Settings → Per-Display grid and committed via the public
+  CoreGraphics configuration API.
+- **Virtual screen** — a display created by FBD via the OS virtual-display
+  framework; configured at creation (size/HDR/Hz) and not resizable or
+  dimmable at runtime (see ADR-0001).
