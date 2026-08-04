@@ -22,7 +22,7 @@ public final class DisplayController {
     private let xdr = XDRNativeController()
     private let overlay = OverlayController()
     private let brightnessObserver = BrightnessChangeObserver()
-    private let combined: CombinedController
+    private let combined: CombinedBrightness
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayController")
 
     private var hasRegistered = false
@@ -34,7 +34,7 @@ public final class DisplayController {
 
     public init() {
         ddc = DDCController(external: external)
-        combined = CombinedController(apple: apple, ddc: ddc, xdr: xdr, overlay: overlay)
+        combined = CombinedBrightness(apple: apple, ddc: ddc, xdr: xdr, overlay: overlay)
     }
 
     // MARK: - DDC surface (typed, no controller exposure)
@@ -173,7 +173,7 @@ public final class DisplayController {
         let combined = self.combined
         brightnessDebounceWorkItems[display.id]?.cancel()
         let workItem = DispatchWorkItem {
-            combined.setBrightness(clamped, on: display)
+            combined.set(clamped, on: display)
             display.updateBrightness(clamped)
             // Let the OSD and any observers follow UI/CLI brightness writes.
             NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id])
@@ -188,7 +188,7 @@ public final class DisplayController {
 
     /// Current brightness 0…1 and updates `display.brightness`.
     public func getBrightness(for display: Display) -> Double? {
-        let value = combined.getBrightness(for: display)
+        let value = combined.get(for: display)
         if let value {
             display.updateBrightness(value)
         }
@@ -197,43 +197,12 @@ public final class DisplayController {
 
     // MARK: - XDR, HDR, overlays (passthroughs)
 
-    /// Raise the native XDR upscale target (nits) for the display.
+    /// Raise the native XDR upscale target (nits) for the display. The
+    /// fallback chain (native -> software boost overlay on write-protected
+    /// systems) and the upscale-state sync live in CombinedBrightness.
     @discardableResult
     public func setXDRUpscaleTarget(_ nits: Int, on display: Display) -> Bool {
-        switch XDRBoostPlanner.plan(
-            nits: nits,
-            hardwareMaxNits: combined.hardwareMaxNits(for: display),
-            nativeAvailable: xdr.isAvailable(for: display),
-            softwareEnabled: Settings.softwareUpscalingEnabled
-        ) {
-        case .nativeUpscale(let target):
-            if xdr.setUpscaleTarget(target, for: display) {
-                return true
-            }
-            // Native preset write failed (e.g. write-protected preset slots
-            // on macOS 27). Fall back to the software boost overlay when it
-            // is enabled and the target has headroom above the hardware
-            // ceiling — otherwise the explicit `xdr <id> <nits>` command is
-            // dead on write-protected systems.
-            let hardwareMax = combined.hardwareMaxNits(for: display)
-            guard Settings.softwareUpscalingEnabled, hardwareMax > 0, target > hardwareMax else {
-                return false
-            }
-            let ok = overlay.setSoftwareBoost(Double(target) / Double(hardwareMax), displayID: display.id)
-            if ok {
-                display.updateSoftwareBoost(true, targetNits: target)
-            }
-            return ok
-        case .softwareBoost(let factor):
-            // Requires Screen Recording permission (logged by the overlay).
-            let ok = overlay.setSoftwareBoost(factor, displayID: display.id)
-            if ok {
-                display.updateSoftwareBoost(true, targetNits: nits)
-            }
-            return ok
-        case .hardware, .fail:
-            return false
-        }
+        combined.setTarget(nits, on: display)
     }
 
     /// Display IDs currently running a software boost overlay.
@@ -290,13 +259,10 @@ public final class DisplayController {
     }
 
     /// Remove native XDR upscaling (restore the factory preset) and stop any
-    /// software boost overlay.
+    /// software boost overlay. State sync lives in CombinedBrightness.
     @discardableResult
     public func disableXDRUpscaling(on display: Display) -> Bool {
-        let native = xdr.disableUpscaling(for: display)
-        overlay.setSoftwareBoost(1, displayID: display.id)
-        display.updateSoftwareBoost(false, targetNits: nil)
-        return native
+        combined.setTarget(nil, on: display)
     }
 
     /// Activate a display preset by index.
@@ -327,7 +293,7 @@ public final class DisplayController {
 
     /// Dim-to-black on/off (fully black vs. no dimming).
     public func setDimToBlack(_ enabled: Bool, on display: Display) {
-        combined.setDimToBlack(enabled, on: display)
+        overlay.setDimFactor(enabled ? 1 : 0, displayID: display.id)
     }
 
     // MARK: - DDC controls

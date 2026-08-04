@@ -33,6 +33,26 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - IPv6 URL bracketing centralized in `NetworkHost.bracketed` (+3 tests).
 - README documents the `fbd://open` URL scheme and the media-keys opt-in.
 
+## [Unreleased]
+
+### Changed (deepening — combined brightness)
+- **One deep `CombinedBrightness` module** replaces `CombinedController` +
+  `CombinedRouting` + the hand-written fallback in
+  `DisplayController.setXDRUpscaleTarget`. The nits ceiling math now lives in
+  one place, and the **upscale-state invariant** holds on every path: the
+  software-boost and hardware-stop branches of the slider always sync
+  `display.isXDRUpscale`/`xdrUpscaleTargetNits`, so brightness read-back
+  agrees with the screen (previously a slider-driven software boost left the
+  flag stale). Interface: `get` / `set` / `setTarget(nil = off)`, behind
+  four control seams (`AppleControlling`, `DDCControlling`, `XDRUpscaling`,
+  `OverlayControlling` — the ExternalControlling test pattern).
+- 9 new `CombinedBrightnessTests` at the new interface (route choice +
+  state invariant + read-back agreement); `CombinedRoutingTests` /
+  `CombinedRoutingPropertyTests` deleted per replace-don't-layer.
+- `CONTEXT.md` added — domain glossary (Display, Brightness, Combined
+  brightness, Hardware ceiling, XDR upscaling, Software boost, Upscale
+  state).
+
 ## [1.3.2] — 2026-08-03
 
 ### Changed

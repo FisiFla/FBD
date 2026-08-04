@@ -5,7 +5,7 @@ import os
 /// Apple display brightness control via DisplayServices.framework
 /// (built-in and some external displays driven by the WindowServer).
 ///
-/// Plain class (not MainActor): called from DisplayController and CombinedController.
+/// Plain class (not MainActor): called from DisplayController and CombinedBrightness.
 /// All private-API failures degrade to nil/false with a logged warning.
 public final class AppleController {
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "AppleController")
