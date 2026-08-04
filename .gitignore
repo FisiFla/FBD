@@ -10,3 +10,7 @@ xcuserdata/
 # Stray compiler artifacts (root-level .o/.swiftdeps from CLI builds)
 *.o
 *.swiftdeps
+
+# Secrets
+.env
+.env.*
