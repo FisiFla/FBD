@@ -2,7 +2,9 @@
 
 Free, MIT-licensed macOS menu-bar app for display control (BetterDisplay parity).
 
-> **When to read this file:** every task in this repo. It is short and is the
+> **When to read this file:** every task in this repo. If you're working in
+> this repo, read this file, then `CONTEXT.md` and `docs/PRIVATE_APIS.md`
+> before touching code. It is short and is the
 > only project-level instructions file; `CONTEXT.md` carries the domain
 > glossary, `docs/agents/*.md` the engineering-skill wiring, and
 > `docs/PRIVATE_APIS.md` the private-API ledger.
