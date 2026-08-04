@@ -1,11 +1,11 @@
 # FBD — AGENTS.md
 
+Free, MIT-licensed macOS menu-bar app for display control (BetterDisplay parity).
+
 > **When to read this file:** every task in this repo. It is short and is the
 > only project-level instructions file; `CONTEXT.md` carries the domain
 > glossary, `docs/agents/*.md` the engineering-skill wiring, and
 > `docs/PRIVATE_APIS.md` the private-API ledger.
-
-Free, MIT-licensed macOS menu-bar app for display control (BetterDisplay parity).
 Repo: https://github.com/FisiFla/FBD (private).
 
 ## Commands
