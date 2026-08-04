@@ -334,6 +334,18 @@ public final class DisplayController {
         ddc.setFeature(.mute, value: muted ? 1 : 2, for: display)
     }
 
+    /// Read the current input source (VCP 0x60 raw value) via DDC/CI, or nil
+    /// when the monitor doesn't answer.
+    public func readInputSource(for display: Display) -> Double? {
+        ddc.getFeature(.inputSource, for: display)
+    }
+
+    /// Raw VCP read (the CLI's `ddc-test` diagnostic) — one serialized DDC
+    /// stack, no second probe.
+    public func readRawVCP(_ code: UInt8, for display: Display) -> DDC.DDCValue? {
+        ddc.readVCP(code, for: display)
+    }
+
     /// Switch the display's input source (VCP 0x60 value) via DDC/CI.
     /// Returns whether the write was accepted.
     @discardableResult

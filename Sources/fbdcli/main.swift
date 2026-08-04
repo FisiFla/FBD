@@ -3,12 +3,6 @@ import FBDCore
 import Foundation
 import os
 
-/// Standalone DDC probe used for read-only VCP/capabilities access that
-/// DisplayController does not expose (contrast/volume/mute/input reads,
-/// capabilities, ddc-test). Writes still go through DisplayController so the
-/// app's routing (Apple vs DDC) stays authoritative.
-let ddcProbe = DDCController(external: ExternalController())
-
 let log = Logger(subsystem: "dev.fisifla.fbd", category: "fbdcli")
 
 // MARK: - Usage
@@ -141,13 +135,13 @@ func run(arguments: [String]) -> Int32 {
     case .input:
         return withDisplay(controller, rest) { cmdInput(controller, display: $0, args: $1) }
     case .caps:
-        return withDisplay(controller, rest) { display, _ in cmdCaps(display) }
+        return withDisplay(controller, rest) { display, _ in cmdCaps(controller, display: display) }
     case .modes:
         return withDisplay(controller, rest) { display, _ in cmdModes(display) }
     case .setMode:
         return withDisplay(controller, rest) { cmdSetMode(controller, display: $0, args: $1) }
     case .ddcTest:
-        return withDisplay(controller, rest) { display, _ in cmdDdcTest(display) }
+        return withDisplay(controller, rest) { display, _ in cmdDdcTest(controller, display: display) }
     case .xdr:
         return withDisplay(controller, rest) { cmdXDR(controller, display: $0, args: $1) }
     case .preset:

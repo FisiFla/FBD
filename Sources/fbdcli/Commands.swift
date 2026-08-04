@@ -143,7 +143,7 @@ func cmdContrast(_ controller: DisplayController, display: Display, args: [Strin
         return 0
     }
     guard !ddcUnusable(display) else { return 2 }
-    guard let value = ddcProbe.getFeature(.contrast, for: display) else {
+    guard let value = controller.readContrast(for: display) else {
         log.warning("contrast read failed for \(display.id)")
         print("contrast read failed for display \(display.id)")
         return 2
@@ -166,7 +166,7 @@ func cmdVolume(_ controller: DisplayController, display: Display, args: [String]
         return 0
     }
     guard !ddcUnusable(display) else { return 2 }
-    guard let value = ddcProbe.getFeature(.volume, for: display) else {
+    guard let value = controller.readVolume(for: display) else {
         log.warning("volume read failed for \(display.id)")
         print("volume read failed for display \(display.id)")
         return 2
@@ -199,13 +199,12 @@ func cmdMute(_ controller: DisplayController, display: Display, args: [String]) 
         return 0
     }
     guard !ddcUnusable(display) else { return 2 }
-    guard let value = ddcProbe.getFeature(.mute, for: display) else {
+    guard let muted = controller.readMuted(for: display) else {
         log.warning("mute read failed for \(display.id)")
         print("mute read failed for display \(display.id)")
         return 2
     }
-    // MCCS: 1 = muted, 2 = unmuted (0 reported by some displays = unmuted).
-    print(value == 1 ? "on" : "off")
+    print(muted ? "on" : "off")
     return 0
 }
 
@@ -235,7 +234,7 @@ func cmdInput(_ controller: DisplayController, display: Display, args: [String])
     }
     guard !ddcUnusable(display) else { return 2 }
     var status: Int32 = 0
-    if let value = ddcProbe.getFeature(.inputSource, for: display) {
+    if let value = controller.readInputSource(for: display) {
         let source = UInt16(value)
         if let label = inputSourceLabel(source) {
             print("current input: \(source) (\(label))")
@@ -309,9 +308,9 @@ let inputSourceHintTable: String = {
 /// `fbdcli caps <id>` — read the display's DDC capabilities and print the raw
 /// capabilities text, parsed VCP codes, and MCCS version.
 @MainActor
-func cmdCaps(_ display: Display) -> Int32 {
+func cmdCaps(_ controller: DisplayController, display: Display) -> Int32 {
     guard !ddcUnusable(display) else { return 2 }
-    guard let caps = ddcProbe.readCapabilities(for: display) else {
+    guard let caps = controller.readDDCCapabilities(for: display) else {
         log.warning("capabilities read failed for \(display.id)")
         print("capabilities read failed for display \(display.id)")
         return 2
@@ -399,7 +398,7 @@ func cmdSetMode(_ controller: DisplayController, display: Display, args: [String
 /// Silicon, AVService presence, then live readCapabilities and readVCP
 /// (brightness). Exit 0 when both DDC reads work, 2 otherwise.
 @MainActor
-func cmdDdcTest(_ display: Display) -> Int32 {
+func cmdDdcTest(_ controller: DisplayController, display: Display) -> Int32 {
     #if arch(arm64)
     let arch = "arm64"
     #else
@@ -414,8 +413,7 @@ func cmdDdcTest(_ display: Display) -> Int32 {
         print("  \(message)")
     }
 
-    let external = ExternalController()
-    let avService = external.avService(for: display) != nil
+    let avService = display.ddcAvailable
     print("  avService: \(avService ? "found" : "not found")")
 
     var ok = true
@@ -424,7 +422,7 @@ func cmdDdcTest(_ display: Display) -> Int32 {
     if let reason = ddcFailureReason(for: display) {
         print("  step readCapabilities: failed — \(reason)")
         ok = false
-    } else if let caps = ddcProbe.readCapabilities(for: display) {
+    } else if let caps = controller.readDDCCapabilities(for: display) {
         print("  step readCapabilities: ok — mccs \(caps.mccsVersion), \(caps.vcpCodes.count) VCP codes")
     } else {
         log.warning("ddc-test readCapabilities failed for \(display.id)")
@@ -436,7 +434,7 @@ func cmdDdcTest(_ display: Display) -> Int32 {
     if let reason = ddcFailureReason(for: display) {
         print("  step readVCP(brightness): failed — \(reason)")
         ok = false
-    } else if let value = ddcProbe.readVCP(DDC.VCPCode.brightness.rawValue, for: display) {
+    } else if let value = controller.readRawVCP(DDC.VCPCode.brightness.rawValue, for: display) {
         print("  step readVCP(brightness): ok — \(String(format: "%.1f", value.normalized * 100))%")
     } else {
         log.warning("ddc-test readVCP(brightness) failed for \(display.id)")
