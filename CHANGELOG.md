@@ -33,7 +33,7 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - IPv6 URL bracketing centralized in `NetworkHost.bracketed` (+3 tests).
 - README documents the `fbd://open` URL scheme and the media-keys opt-in.
 
-## [Unreleased]
+## [1.4.0] — 2026-08-04
 
 ### Changed (deepening — combined brightness)
 - **One deep `CombinedBrightness` module** replaces `CombinedController` +
