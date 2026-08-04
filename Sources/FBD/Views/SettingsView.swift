@@ -260,50 +260,7 @@ struct SettingsView: View {
     }
 
     private func perDisplayCard(_ display: Display) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(display.name)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(display.isOnline ? "online" : "offline")
-                    .font(.caption2)
-                    .foregroundStyle(display.isOnline ? .green : .secondary)
-                Spacer()
-                if Settings.enableDisconnectOption {
-                    if display.isOnline {
-                        Button("Disable") {
-                            _ = DisconnectController().setEnabled(false, displayID: display.id)
-                        }
-                        .controlSize(.small)
-                    } else {
-                        Button("Re-enable") {
-                            _ = DisconnectController().setEnabled(true, displayID: display.id)
-                        }
-                        .controlSize(.small)
-                    }
-                }
-            }
-            if let mode = display.currentMode {
-                Text("Mode: \(mode.label)\(mode.refreshLabel.isEmpty ? "" : " · \(mode.refreshLabel)")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let brightness = display.brightness {
-                Text(String(format: "Brightness: %.0f%%", brightness * 100))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        PerDisplayCardView(display: display)
     }
 
     // MARK: - Bindings
