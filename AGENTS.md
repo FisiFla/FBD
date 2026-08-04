@@ -29,3 +29,21 @@ Repo: https://github.com/FisiFla/FBD (private).
 - Never crash on missing private APIs — degrade with a clear message.
 - Controller public API is the contract for UI/CLI/tests — changing signatures requires updating all callers.
 - Docs: `docs/PRIVATE_APIS.md` tracks every private API used and its verification source.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs for this repo live as GitHub issues; the engineering skills
+use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles map 1:1 to the label names: `needs-triage`,
+`needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/` for
+decisions. Read both before exploring. See `docs/agents/domain.md`.
