@@ -53,6 +53,20 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   brightness, Hardware ceiling, XDR upscaling, Software boost, Upscale
   state).
 
+## [Unreleased]
+
+### Changed (deepening — HTTP executor)
+- **`HTTPExecutor` moved into FBDCore behind the `DisplayControlling` seam** —
+  the whole local API surface (health, displays, controls, actions, virtual)
+  is now testable with a fake; `AppCore.execute` shrank from ~120 lines to a
+  thin wrapper supplying the adapter + app version. The router (path → route)
+  and the executor (route → action) now live side by side in FBDCore.
+- 11 new `HTTPExecutorTests` at the seam (health/list/info/controls/actions/
+  virtual error paths).
+- `ddcProbe` (a second DDC stack in the CLI) deleted — contrast/volume/mute/
+  input/caps/ddc-test all read through DisplayController's single serialized
+  stack (+ `readInputSource`, `readRawVCP`).
+
 ## [1.3.2] — 2026-08-03
 
 ### Changed
