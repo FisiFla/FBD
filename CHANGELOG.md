@@ -3,7 +3,7 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
-## [Unreleased]
+## [1.3.3] — 2026-08-04
 
 ### Fixed
 - **Color-temperature filter was inverted** — dragging toward "Warm" made the
