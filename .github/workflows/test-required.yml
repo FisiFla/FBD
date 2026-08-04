@@ -1,0 +1,48 @@
+# test-required.yml — gate code changes on test/smoke coverage.
+# Any PR that changes Sources/ (app, core, CLI, parser) must also touch
+# Tests/ or scripts/ui-smoke.sh. Opt-out via a "[x] no tests needed: <reason>"
+# checkbox in the PR body (the reason must be non-empty and not a placeholder).
+
+name: test-required
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-test-pairing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check code changes pair with tests/smoke
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if echo "$PR_BODY" | grep -qiE '^\[x\] no tests needed because:'; then
+            reason="$(echo "$PR_BODY" | grep -iE '^\[x\] no tests needed because:' | head -1)"
+            if ! echo "$reason" | grep -qE '^<!--' && echo "$reason" | grep -qE '[a-zA-Z]'; then
+              echo "Opt-out accepted: $reason"
+              exit 0
+            fi
+            echo "Opt-out checkbox present but reason is empty/placeholder." >&2
+            exit 1
+          fi
+
+          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          code_changes="$(echo "$changed" | grep -E '^Sources/' | grep -v '/Resources/' || true)"
+          test_changes="$(echo "$changed" | grep -E '^(Tests/|scripts/ui-smoke)' || true)"
+          if [ -n "$code_changes" ] && [ -z "$test_changes" ]; then
+            echo "This PR changes Sources/ without touching Tests/ or ui-smoke." >&2
+            echo "Add test coverage, or opt out with the PR-body checkbox." >&2
+            exit 1
+          fi
+          echo "OK: code changes are paired with tests/smoke (or none needed)."

@@ -1,4 +1,9 @@
-# FBD — agent guide
+# FBD — AGENTS.md
+
+> **When to read this file:** every task in this repo. It is short and is the
+> only project-level instructions file; `CONTEXT.md` carries the domain
+> glossary, `docs/agents/*.md` the engineering-skill wiring, and
+> `docs/PRIVATE_APIS.md` the private-API ledger.
 
 Free, MIT-licensed macOS menu-bar app for display control (BetterDisplay parity).
 Repo: https://github.com/FisiFla/FBD (private).
@@ -47,3 +52,25 @@ The five canonical triage roles map 1:1 to the label names: `needs-triage`,
 
 Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/` for
 decisions. Read both before exploring. See `docs/agents/domain.md`.
+
+## Build & test
+
+- Build: `make app` (universal, produces `build/FBD.app`) or `swift build --disable-sandbox` (debug)
+- Test: `swift test --disable-sandbox` (288 unit tests) or `make test`
+- UI smoke: `make ui-smoke` (drives the real panel; needs Accessibility permission)
+- Release: `make bump-version VERSION=x.y.z` then the flow in `RELEASING.md`
+
+## Rules
+
+- Don't touch private APIs except through `Sources/FBDCore/PrivateAPI` + the
+  C header — never call private symbols inline.
+- Don't add a control path (brightness, XDR, filter, virtual, arrangement)
+  without routing it through its controller seam (`DisplayControlling`,
+  `CombinedBrightness`, `VirtualScreenController`) — the seams are what make
+  the behavior testable.
+- Don't leave a persisted setting with two write paths — everything goes
+  through `Settings.defaults` (the suite-aware accessor).
+- Don't change a controller's public API without updating every caller
+  (UI, CLI, HTTP executor, tests) — the API is the contract.
+- Because macOS releases move private frameworks: every private API entry
+  must stay in `docs/PRIVATE_APIS.md` with its verification status.
