@@ -350,10 +350,7 @@ func cmdModes(_ display: Display) -> Int32 {
 /// physical pixels, nearest refresh rate, HiDPI preferred) and apply it.
 @MainActor
 func cmdSetMode(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: set-mode: expected <id> <W>x<H>[@<hz>]")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: set-mode: expected <id> <W>x<H>[@<hz>]") else { return 1 }
     guard let (width, height, hz) = parseModeSpec(args[1]) else {
         print("fbdcli: set-mode: invalid mode spec '\(args[1])' (expected WxH[@hz], e.g. 1920x1080@60)")
         return 1
@@ -614,10 +611,7 @@ func cmdVirtualList() -> Int32 {
 /// and connect a virtual screen (default refresh rate 60 Hz, auto-connect on).
 @MainActor
 func cmdVirtualCreate(args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: virtual create: expected <name> <W>x<H>[@<hz>] [--hdr] [--no-auto]")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: virtual create: expected <name> <W>x<H>[@<hz>] [--hdr] [--no-auto]") else { return 1 }
     let name = args[0]
     guard let (width, height, hz) = parseModeSpec(args[1]) else {
         print("fbdcli: virtual create: invalid spec '\(args[1])' (expected WxH[@hz], e.g. 1920x1080@60)")
@@ -715,8 +709,7 @@ func requireOnlineDisplay(_ idString: String?) -> CGDirectDisplayID? {
         print("fbdcli: missing display id")
         return nil
     }
-    guard let id = parseDisplayID(idString) else {
-        print("fbdcli: invalid display id '\(idString)'")
+    guard let id = requireDisplayID(idString) else {
         return nil
     }
     guard CGDisplayIsOnline(id) != 0 else {
@@ -911,14 +904,10 @@ func cmdGroupDelete(args: [String]) -> Int32 {
 /// `fbdcli group add <name> <id>` — add a known display to a group.
 @MainActor
 func cmdGroupAdd(_ controller: DisplayController, args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: group add: expected <name> <id>")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: group add: expected <name> <id>") else { return 1 }
     let groups = DisplayGroupsController()
     guard let group = requireGroup(args[0], in: groups) else { return 1 }
-    guard let id = parseDisplayID(args[1]) else {
-        print("fbdcli: invalid display id '\(args[1])'")
+    guard let id = requireDisplayID(args[1]) else {
         return 1
     }
     guard controller.display(withID: id) != nil else {
@@ -937,14 +926,10 @@ func cmdGroupAdd(_ controller: DisplayController, args: [String]) -> Int32 {
 /// `fbdcli group remove <name> <id>` — remove a display from a group.
 @MainActor
 func cmdGroupRemove(args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: group remove: expected <name> <id>")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: group remove: expected <name> <id>") else { return 1 }
     let groups = DisplayGroupsController()
     guard let group = requireGroup(args[0], in: groups) else { return 1 }
-    guard let id = parseDisplayID(args[1]) else {
-        print("fbdcli: invalid display id '\(args[1])'")
+    guard let id = requireDisplayID(args[1]) else {
         return 1
     }
     guard group.displayIDs.contains(id) else {
@@ -1065,10 +1050,7 @@ func cmdEDIDExport(_ controller: DisplayController, args: [String]) -> Int32 {
 /// parse it from a hex string, then install it as a virtual EDID.
 @MainActor
 func cmdEDIDApply(_ controller: DisplayController, args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: edid apply: expected <id> <file-or-hex>")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: edid apply: expected <id> <file-or-hex>") else { return 1 }
     guard let display = requireDisplay(args[0], in: controller) else { return 1 }
     let edidController = EDIDController()
     if !edidController.isAvailable {
@@ -1179,10 +1161,7 @@ func cmdProfileList(_ controller: DisplayController, args: [String]) -> Int32 {
 /// (from `profile list`) or by URL/name substring.
 @MainActor
 func cmdProfileApply(_ controller: DisplayController, args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: profile apply: expected <id> <index-or-url>")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: profile apply: expected <id> <index-or-url>") else { return 1 }
     guard let display = requireDisplay(args[0], in: controller) else { return 1 }
     let profileController = ColorProfileController()
     let profiles = profileController.profiles(for: display)
@@ -1495,10 +1474,7 @@ func stdinHasInput() -> Bool {
 /// HUD's ~1.2 s auto-hide window.
 @MainActor
 func cmdOSD(args: [String]) -> Int32 {
-    guard args.count >= 2 else {
-        print("fbdcli: osd: expected <icon> <0-100> (e.g. 'fbdcli osd sun.max 50')")
-        return 1
-    }
+    guard requireArgCount(args, 2, usage: "fbdcli: osd: expected <icon> <0-100> (e.g. 'fbdcli osd sun.max 50')") else { return 1 }
     guard let value = parsePercent(args[1], command: "osd") else { return 1 }
     let osd = CustomOSD()
     if !Settings.customOSDEnabled {

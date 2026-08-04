@@ -3,6 +3,36 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Fixed
+- **Color-temperature filter was inverted** — dragging toward "Warm" made the
+  screen bluer. The shader's r/b math is swapped (p<1 now = more red).
+- **HTTP API default port was 0 (ephemeral)** despite the README promising
+  8765 — the default is now 8765.
+- **Media-key interception was silently ON** — now opt-in (default off) and
+  documented.
+- **DDC contrast/volume/mute UI was send-only** (always showed 50%) — the
+  panel now reads the monitor's real values back.
+- **Dead code removed**: IOMobileFramebufferAPI (an unimplemented "XDR
+  direct" path the README claimed), the "Stream Display" menu twin of
+  Picture-in-Picture, the FBDIntents placeholder.
+
+### Changed (review-driven structure)
+- LG webOS + Samsung Tizen controllers now share one WebSocket base
+  (`WebSocketDisplayController`) — the duplicated receive loop / connection
+  teardown is gone (LG 372→201, Tizen 403→275 lines).
+- Routed CLI vocabulary has a single source
+  (`HTTPRoutingPlanBuilder.supportedCommands`) instead of a second list in
+  HTTPRouting that could drift.
+- `DisplayRowView` (1068 lines) split into per-capability child views:
+  DisplayOptionsMenuView, FilterControlsView, DDCPanelView,
+  DisplaySectionsView, DisclosureSection — behavior unchanged.
+- CLI helper shapes extracted: withDisplay / requireDisplayID /
+  requireArgCount (repeated guard-and-fail blocks).
+- IPv6 URL bracketing centralized in `NetworkHost.bracketed` (+3 tests).
+- README documents the `fbd://open` URL scheme and the media-keys opt-in.
+
 ## [1.3.2] — 2026-08-03
 
 ### Changed

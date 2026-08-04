@@ -129,44 +129,31 @@ func run(arguments: [String]) -> Int32 {
     case .list:
         return cmdList(controller, args: rest)
     case .info:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdInfo(display, args: rest)
+        return withDisplay(controller, rest) { cmdInfo($0, args: $1) }
     case .brightness:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdBrightness(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdBrightness(controller, display: $0, args: $1) }
     case .contrast:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdContrast(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdContrast(controller, display: $0, args: $1) }
     case .volume:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdVolume(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdVolume(controller, display: $0, args: $1) }
     case .mute:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdMute(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdMute(controller, display: $0, args: $1) }
     case .input:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdInput(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdInput(controller, display: $0, args: $1) }
     case .caps:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdCaps(display)
+        return withDisplay(controller, rest) { display, _ in cmdCaps(display) }
     case .modes:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdModes(display)
+        return withDisplay(controller, rest) { display, _ in cmdModes(display) }
     case .setMode:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdSetMode(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdSetMode(controller, display: $0, args: $1) }
     case .ddcTest:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdDdcTest(display)
+        return withDisplay(controller, rest) { display, _ in cmdDdcTest(display) }
     case .xdr:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdXDR(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdXDR(controller, display: $0, args: $1) }
     case .preset:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdPreset(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdPreset(controller, display: $0, args: $1) }
     case .hdr:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdHDR(controller, display: display, args: rest)
+        return withDisplay(controller, rest) { cmdHDR(controller, display: $0, args: $1) }
     case .virtual:
         return cmdVirtual(args: rest)
     case .rotate:
@@ -188,8 +175,7 @@ func run(arguments: [String]) -> Int32 {
     case .profile:
         return cmdProfile(controller, args: rest)
     case .underscan:
-        guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
-        return cmdUnderscan(display: display, args: rest)
+        return withDisplay(controller, rest) { cmdUnderscan(display: $0, args: $1) }
     case .protect:
         return cmdProtect(controller, args: rest)
     case .http:
@@ -232,8 +218,38 @@ func parseDisplayID(_ string: String) -> UInt32? {
     return UInt32(string)
 }
 
-/// Resolve a display by id. Prints a message and returns nil on failure
-/// (caller exits 1: usage/argument error).
+/// Resolves the display-id argument and runs `body`, or prints the standard
+/// CLI error and fails. Collapses the guard-and-fail shape repeated at every
+/// display command's dispatch.
+@MainActor
+func withDisplay(
+    _ controller: DisplayController,
+    _ rest: [String],
+    _ body: (Display, [String]) -> Int32
+) -> Int32 {
+    guard let display = requireDisplay(rest.first, in: controller) else { return 1 }
+    return body(display, rest)
+}
+
+/// Parses a display id, printing the CLI's standard error on failure.
+func requireDisplayID(_ raw: String) -> UInt32? {
+    guard let id = parseDisplayID(raw) else {
+        print("fbdcli: invalid display id '\(raw)'")
+        return nil
+    }
+    return id
+}
+
+/// Ensures `args` has at least `count` elements, printing `usage` otherwise.
+@discardableResult
+func requireArgCount(_ args: [String], _ count: Int, usage: String) -> Bool {
+    guard args.count >= count else {
+        print(usage)
+        return false
+    }
+    return true
+}
+
 @MainActor
 func requireDisplay(_ idString: String?, in controller: DisplayController) -> Display? {
     guard let idString, !idString.isEmpty else {

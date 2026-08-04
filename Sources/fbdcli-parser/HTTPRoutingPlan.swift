@@ -35,6 +35,15 @@ public struct HTTPRoutingError: Error, Equatable {
 /// without a running app. Failures carry the exact usage message the CLI
 /// prints.
 public enum HTTPRoutingPlanBuilder {
+    /// The commands the HTTP routing supports — the single source for "can
+    /// this command go over the app API?" The routed CLI path consults this
+    /// directly, so a command added here needs a plan case and a routed
+    /// handler (HTTPRouting asserts on drift).
+    public static let supportedCommands: Set<Command> = [
+        .list, .info, .brightness, .contrast, .volume, .mute, .input,
+        .caps, .modes, .setMode, .xdr, .virtual, .rotate, .filter,
+    ]
+
     /// Plan the request for a routable command. `args` are the CLI arguments
     /// after the command word (same shape `HTTPRouting.route` receives).
     /// `.failure(message)` means invalid arguments; the message is the CLI's

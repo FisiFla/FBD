@@ -16,32 +16,18 @@ import os
 /// the client key returned by `connect` and passes it back on reconnects so the
 /// TV does not re-prompt for permission.
 ///
-/// All callbacks run on a private serial queue. Every completion is invoked
-/// exactly once; each network step is bounded by a 5-second timeout.
-public final class LGWebOSController {
-    private let queue = DispatchQueue(label: "dev.fisifla.fbd.lgwebos")
-    private let log = Logger(subsystem: "dev.fisifla.fbd", category: "LGWebOSController")
+/// All callbacks run on the shared serial queue (see
+/// `WebSocketDisplayController`). Every completion is invoked exactly once;
+/// each network step is bounded by a 5-second timeout.
+public final class LGWebOSController: WebSocketDisplayController {
     private let handshakeTimeout: TimeInterval = 5
     private let requestTimeout: TimeInterval = 5
-
-    private var connection: NWConnection?
-    private var nextRequestID = 1
-    /// In-flight requests, keyed by JSON-RPC id.
-    private var pending: [Int: (Bool, [String: Any]?) -> Void] = [:]
-    private var handshakeCompletion: ((Bool, String?) -> Void)?
-    private var handshakeTimer: DispatchWorkItem?
     private var clientKey: String?
 
-    private let stateLock = NSLock()
-    private var _isConnected = false
-
-    public var isConnected: Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return _isConnected
+    public init() {
+        super.init(queue: DispatchQueue(label: "dev.fisifla.fbd.lgwebos"), logCategory: "LGWebOSController")
+        wsSubprotocol = "luna-sublime"
     }
-
-    public init() {}
 
     // MARK: - Connect / disconnect
 
@@ -50,58 +36,23 @@ public final class LGWebOSController {
     /// it back on the next `connect` call so pairing is not requested again.
     public func connect(host: String, port: UInt16 = 3000, clientKey: String?,
                         completion: @escaping (Bool, String?) -> Void) {
-        queue.async { [weak self] in
-            guard let self else {
-                completion(false, "controller deallocated")
-                return
-            }
-            guard self.connection == nil else {
-                completion(false, "already connected or connecting")
-                return
-            }
-            self.handshakeCompletion = completion
-            self.clientKey = clientKey
-
-            guard let port = NWEndpoint.Port(rawValue: port) else {
-                self.failHandshake("invalid port")
-                return
-            }
-
-            // WebSocket with the "luna-sublime" subprotocol webOS documents for
-            // the TV API. NWParameters.ws already carries a WebSocket options
-            // object — configure that one rather than stacking a second.
-            var params = NWParameters.tcp
-            let wsOptions = NWProtocolWebSocket.Options()
-            wsOptions.autoReplyPing = true
-            params.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
-            if let wsOptions = params.defaultProtocolStack.applicationProtocols.first
-                as? NWProtocolWebSocket.Options {
-                wsOptions.autoReplyPing = true
-                wsOptions.setSubprotocols(["luna-sublime"])
-            }
-
-            let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: params)
-            self.connection = connection
-            connection.stateUpdateHandler = { [weak self] state in
-                self?.handleState(state)
-            }
-            connection.start(queue: self.queue)
-            self.receiveLoop()
-
-            // The whole handshake (TCP + WS upgrade + hello + deviceInfo) must
-            // finish within 5 seconds.
-            let timer = DispatchWorkItem { [weak self] in
-                self?.failHandshake("handshake timed out")
-            }
-            self.handshakeTimer = timer
-            self.queue.asyncAfter(deadline: .now() + self.handshakeTimeout, execute: timer)
-        }
+        self.clientKey = clientKey
+        super.connect(host: host, port: port, completion: completion)
     }
 
-    public func disconnect() {
-        queue.async { [weak self] in
-            self?.teardown()
+    /// The whole handshake (TCP + WS upgrade + hello + deviceInfo) must finish
+    /// within 5 seconds.
+    override func didStartConnection() {
+        let timer = DispatchWorkItem { [weak self] in
+            self?.failInit("handshake timed out")
         }
+        initTimer = timer
+        queue.asyncAfter(deadline: .now() + handshakeTimeout, execute: timer)
+    }
+
+    /// The socket is up — start the "hello" handshake.
+    override func onSocketReady() {
+        sendHello()
     }
 
     // MARK: - Commands
@@ -144,75 +95,6 @@ public final class LGWebOSController {
         }
     }
 
-    // MARK: - Connection state
-
-    private func handleState(_ state: NWConnection.State) {
-        switch state {
-        case .ready:
-            log.info("connected to webOS TV")
-            sendHello()
-        case .waiting(let error):
-            log.debug("waiting: \(error)")
-        case .failed(let error):
-            log.error("connection failed: \(error)")
-            if handshakeCompletion != nil {
-                failHandshake("connection failed: \(error.localizedDescription)")
-            } else {
-                failPending("connection lost")
-                connection?.cancel()
-                connection = nil
-                setConnected(false)
-            }
-        case .cancelled:
-            if handshakeCompletion != nil {
-                failHandshake("connection cancelled")
-            }
-        default:
-            break
-        }
-    }
-
-    /// Fails the pending handshake, cancels the socket, and reports exactly once.
-    private func failHandshake(_ reason: String) {
-        guard handshakeCompletion != nil else { return }
-        handshakeTimer?.cancel()
-        handshakeTimer = nil
-        let completion = handshakeCompletion
-        handshakeCompletion = nil
-        connection?.cancel()
-        connection = nil
-        setConnected(false)
-        completion?(false, reason)
-    }
-
-    private func failPending(_ reason: String) {
-        guard !pending.isEmpty else { return }
-        log.warning("failing \(self.pending.count) pending request(s): \(reason)")
-        for (_, callback) in pending {
-            callback(false, nil)
-        }
-        pending.removeAll()
-    }
-
-    private func teardown() {
-        handshakeTimer?.cancel()
-        handshakeTimer = nil
-        if let completion = handshakeCompletion {
-            handshakeCompletion = nil
-            completion(false, "disconnected")
-        }
-        failPending("disconnected")
-        connection?.cancel()
-        connection = nil
-        setConnected(false)
-    }
-
-    private func setConnected(_ connected: Bool) {
-        stateLock.lock()
-        _isConnected = connected
-        stateLock.unlock()
-    }
-
     // MARK: - Handshake
 
     private func sendHello() {
@@ -230,7 +112,7 @@ public final class LGWebOSController {
         sendText(hello) { [weak self] ok in
             guard let self else { return }
             if !ok {
-                self.failHandshake("failed to send hello")
+                self.failInit("failed to send hello")
             }
         }
     }
@@ -242,7 +124,7 @@ public final class LGWebOSController {
                 ?? payload["errorCode"] as? String
                 ?? "registration rejected by TV"
             log.error("hello rejected: \(reason)")
-            failHandshake(reason)
+            failInit(reason)
             return
         }
 
@@ -255,15 +137,15 @@ public final class LGWebOSController {
         sendRequest(uri: "ssap://api/deviceInfo", payload: [:]) { [weak self] ok, _ in
             guard let self else { return }
             guard ok else {
-                self.failHandshake("deviceInfo failed")
+                self.failInit("deviceInfo failed")
                 return
             }
-            self.handshakeTimer?.cancel()
-            self.handshakeTimer = nil
+            self.initTimer?.cancel()
+            self.initTimer = nil
             self.setConnected(true)
-            log.info("handshake complete, client-key registered")
-            if let completion = self.handshakeCompletion {
-                self.handshakeCompletion = nil
+            self.log.info("handshake complete, client-key registered")
+            if let completion = self.initCompletion {
+                self.initCompletion = nil
                 completion(true, grantedKey)
             }
         }
@@ -298,75 +180,22 @@ public final class LGWebOSController {
         }
     }
 
-    private func sendText(_ object: [String: Any], completion: ((Bool) -> Void)? = nil) {
-        guard let connection else {
-            completion?(false)
-            return
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: object) else {
-            completion?(false)
-            return
-        }
-        let context = NWConnection.ContentContext(
-            identifier: "json",
-            metadata: [NWProtocolWebSocket.Metadata(opcode: .text)]
-        )
-        connection.send(content: data, contentContext: context, isComplete: true,
-                        completion: .contentProcessed { [weak self] error in
-            if let error {
-                self?.log.error("send failed: \(error)")
-                completion?(false)
-            } else {
-                completion?(true)
-            }
-        })
-    }
-
-    private func receiveLoop() {
-        connection?.receiveMessage { [weak self] data, _, isComplete, error in
-            guard let self else { return }
-            if let error {
-                self.log.error("receive failed: \(error)")
-                self.handleConnectionLost()
-                return
-            }
-            if let data, !data.isEmpty {
-                self.handleMessage(data)
-            }
-            if isComplete {
-                // Close frame or EOF — the TV hung up.
-                self.handleConnectionLost()
-                return
-            }
-            self.receiveLoop()
-        }
-    }
-
-    private func handleMessage(_ data: Data) {
+    /// Messages carry a JSON-RPC id; the handshake response is id 0, other
+    /// responses resolve the matching pending request. Notifications (no id)
+    /// are ignored.
+    override func handleMessage(_ data: Data) {
         guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
             log.warning("non-JSON message from TV")
             return
         }
-        // Notifications (no id) are ignored.
         guard let id = object["id"] as? Int else { return }
 
-        if id == 0, handshakeCompletion != nil {
+        if id == 0, initCompletion != nil {
             handleHandshakeResponse(object)
             return
         }
         if let callback = pending.removeValue(forKey: id) {
             callback(true, object)
-        }
-    }
-
-    private func handleConnectionLost() {
-        if handshakeCompletion != nil {
-            failHandshake("connection lost during handshake")
-        } else {
-            failPending("connection lost")
-            connection?.cancel()
-            connection = nil
-            setConnected(false)
         }
     }
 }

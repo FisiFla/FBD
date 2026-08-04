@@ -89,6 +89,15 @@ DDC/CI uses the private IOKit `IOAVService` I2C transport, which exists only on 
 Silicon — **DDC does not work under Rosetta** (disabled with a warning) and is not
 supported on Intel Macs.
 
+## URL scheme & media keys
+
+- `fbd://open` opens the settings panel (handy for Shortcuts / quick-launch
+  tools; `fbd://open` is also what the CLI's `http` status hints at).
+- Media-key interception (F1/F2, F10–F12 mapped to external-display
+  brightness/volume) is **off by default** — enable it explicitly in
+  Settings → General ("Intercept media keys"). It requires Accessibility
+  permission and only affects keys when FBD is running.
+
 ## Docs
 
 Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

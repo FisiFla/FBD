@@ -11,11 +11,9 @@ import Foundation
 /// functions only execute the plan and format output.
 @MainActor
 enum HTTPRouting {
-    /// Commands that can be routed through the app's HTTP API.
-    static let routable: Set<Command> = [
-        .list, .info, .brightness, .contrast, .volume, .mute, .input,
-        .caps, .modes, .setMode, .xdr, .virtual, .rotate, .filter,
-    ]
+    /// Commands that can be routed through the app's HTTP API — declared in
+    /// the plan builder (the tested single source); no second list to drift.
+    static let routable: Set<Command> = HTTPRoutingPlanBuilder.supportedCommands
 
     /// Route `command` over HTTP. Returns the exit code, or nil when the app
     /// is not running (caller falls back to direct execution).
@@ -37,7 +35,11 @@ enum HTTPRouting {
         case .virtual: return routedVirtual(rest)
         case .rotate: return routedRotate(rest)
         case .filter: return routedFilter(rest)
-        default: return nil
+        default:
+            // A command in supportedCommands without a routed handler is a
+            // programming error — loud in debug, safe fallback in release.
+            assertionFailure("routable command \(command) has no routed handler")
+            return nil
         }
     }
 
