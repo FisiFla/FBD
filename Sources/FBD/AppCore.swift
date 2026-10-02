@@ -39,6 +39,7 @@ final class AppCore {
         layoutProtection.start()
         edid.start()
         configProtection.start(controller: displayController)
+        automation.start(controller: displayController)
         HotkeyController.shared.start()
         UpdaterController.shared.start()
         // Recreate persisted virtual screens at launch (they are process-lifetime).
@@ -80,6 +81,9 @@ final class AppCore {
     let layoutProtection = LayoutProtectionController()
     let edid = EDIDController()
     let configProtection = ConfigProtectionController()
+    /// Per-display event automation. Lives here so one instance owns the
+    /// observers; the CLI creates its own for one-shot rule edits.
+    let automation = DisplayAutomationController()
 
     // Tier 5 controller instances (owned here; UI/CLI create their own for one-shot use).
     let httpServer = HTTPServer()

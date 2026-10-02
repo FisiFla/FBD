@@ -1,10 +1,11 @@
+import AppKit
 import FBDCore
 import SwiftUI
 
 /// Full-screen software filter controls (contrast / saturation / gamma /
-/// color temperature / invert). Shown in a "Filters" disclosure row — sliders
-/// inside menus are fragile; a disclosure row matches the card's other
-/// sections.
+/// color temperature / invert / sharpening / geometry / 3D LUT). Shown in a
+/// "Filters" disclosure row — sliders inside menus are fragile; a disclosure
+/// row matches the card's other sections.
 ///
 /// Owns the filter parameter state and the apply/reset round-trip through
 /// DisplayController.
@@ -66,6 +67,48 @@ struct FilterControlsView: View {
         )
     }
 
+    private var filterSharpness: Binding<Double> {
+        Binding(
+            get: { filterParams.sharpness },
+            set: { filterParams.sharpness = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterUnsharpRadius: Binding<Double> {
+        Binding(
+            get: { filterParams.unsharpRadius },
+            set: { filterParams.unsharpRadius = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterZoom: Binding<Double> {
+        Binding(
+            get: { filterParams.zoom },
+            set: { filterParams.zoom = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterOffsetX: Binding<Double> {
+        Binding(
+            get: { filterParams.offsetX },
+            set: { filterParams.offsetX = $0; applyScreenFilter() }
+        )
+    }
+
+    private var filterOffsetY: Binding<Double> {
+        Binding(
+            get: { filterParams.offsetY },
+            set: { filterParams.offsetY = $0; applyScreenFilter() }
+        )
+    }
+
+    /// The pan margin the current zoom leaves — mirrors the clamp in
+    /// `ScreenFilterParams.init`, so the sliders cannot show a value the
+    /// parameter model would silently reduce.
+    private var panLimit: Double {
+        (1 - 1 / filterParams.zoom) / 2
+    }
+
     private func applyScreenFilter() {
         if filterParams.isNeutral {
             DisplayController.shared.stopScreenFilter(on: display)
@@ -77,6 +120,16 @@ struct FilterControlsView: View {
     private func resetScreenFilter() {
         filterParams = .neutral
         DisplayController.shared.stopScreenFilter(on: display)
+    }
+
+    private func chooseLUT() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose a .cube 3D LUT"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        filterParams.lutPath = url.path
+        applyScreenFilter()
     }
 
     private var filterControls: some View {
@@ -115,6 +168,62 @@ struct FilterControlsView: View {
             }
             .font(.caption)
             Toggle("Invert Colors", isOn: filterInvert)
+
+            Divider()
+            Slider(value: filterSharpness, in: 0...ScreenFilterParams.maxSharpness, step: 0.1) {
+                Text("Sharpness")
+            } minimumValueLabel: {
+                Text("Off")
+            } maximumValueLabel: {
+                Text("\(Int(ScreenFilterParams.maxSharpness))")
+            }
+            .font(.caption)
+            if filterParams.sharpness > 0 {
+                Slider(value: filterUnsharpRadius, in: 0...ScreenFilterParams.maxUnsharpRadius, step: 0.5) {
+                    Text("Radius (px)")
+                } minimumValueLabel: {
+                    Text("0")
+                } maximumValueLabel: {
+                    Text("\(Int(ScreenFilterParams.maxUnsharpRadius))")
+                }
+                .font(.caption)
+            }
+
+            Divider()
+            Slider(value: filterZoom, in: 1...4, step: 0.05) {
+                Text("Zoom")
+            } minimumValueLabel: {
+                Text("1x")
+            } maximumValueLabel: {
+                Text("4x")
+            }
+            .font(.caption)
+            if filterParams.zoom > 1 {
+                Slider(value: filterOffsetX, in: -panLimit...panLimit, step: 0.005) {
+                    Text("Pan Horizontal")
+                }
+                .font(.caption)
+                Slider(value: filterOffsetY, in: -panLimit...panLimit, step: 0.005) {
+                    Text("Pan Vertical")
+                }
+                .font(.caption)
+            }
+
+            Divider()
+            HStack(spacing: 8) {
+                Button(filterParams.lutPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Choose LUT…") {
+                    chooseLUT()
+                }
+                .controlSize(.small)
+                if filterParams.lutPath != nil {
+                    Button("Clear LUT") {
+                        filterParams.lutPath = nil
+                        applyScreenFilter()
+                    }
+                    .controlSize(.small)
+                }
+            }
+
             Button("Reset") {
                 resetScreenFilter()
             }

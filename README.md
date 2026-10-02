@@ -3,14 +3,15 @@
 A free, MIT-licensed macOS menu-bar app for display control: brightness (Apple + DDC/CI),
 volume, contrast, input switching, resolution/refresh-rate control, virtual displays,
 XDR/HDR brightness upscaling, full-screen software filters (contrast, saturation,
-gamma, color temperature, invert), screen rotation, EDID overrides, and more.
+gamma, color temperature, invert, sharpening, zoom/pan, 3D LUT), screen rotation,
+EDID overrides, per-display event automation, and more.
 
 **Goal: full feature parity with BetterDisplay — no Pro tier, no licensing, no telemetry.
 Updates via Sparkle (optional).**
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-All feature tiers are implemented (268 unit tests, CI green per push). Apple locks down
+All feature tiers are implemented (390 unit tests, CI green per push). Apple locks down
 private display APIs differently per macOS release; FBD degrades gracefully (feature off,
 UI notes it) when a path is unavailable.
 
@@ -27,6 +28,14 @@ UI notes it) when a path is unavailable.
 
 \* The software boost overlay needs **Screen Recording** permission and combined
 brightness mode enabled — with both in place, XDR upscaling works on macOS 27.
+
+**Built-in display disconnect is refused on base-M3 MacBooks.** On Macs with the
+base M3 chip (M3 MacBook Air, entry-level M3 MacBook Pro) Apple repurposed the
+built-in panel's connection to drive two external displays in clamshell mode; a
+soft-disconnected built-in display may then not come back without a reboot. FBD
+refuses to disconnect the built-in display on those Macs unless you set the
+explicit override in Settings → Displays. BetterDisplay ships the same guard
+(waydabber/BetterDisplay#4723).
 
 ## Requirements
 
@@ -53,6 +62,8 @@ permission for your terminal.
 swift run fbdcli list                 # displays
 swift run fbdcli brightness 1 60      # set display 1 to 60%
 swift run fbdcli filter 1 1 0 1 1     # full-screen filter (contrast sat gamma temp)
+swift run fbdcli filter 1 1 1 1 1 --sharpness 2 --zoom 1.5   # sharpen + zoom
+swift run fbdcli filter 1 1 1 1 1 --lut ~/LUTs/grade.cube     # custom 3D LUT
 swift run fbdcli rotate 3 90          # rotate an external display
 swift run fbdcli settings             # masked settings dump (for bug reports)
 ```

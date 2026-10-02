@@ -1,6 +1,6 @@
 # FBD — Roadmap
 
-Status: **All five tiers shipped** (268 unit tests green; CI green on every
+Status: **All five tiers shipped** (390 unit tests green; CI green on every
 push). 40+ hardening cycles applied since the tiers: HTTP API auth +
 router extraction, EDID validation, virtual-display registry, DDC retries,
 parser fuzz, a11y, NSPanel glass UI, Sparkle release prep, XDR software

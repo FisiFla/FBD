@@ -321,10 +321,15 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
         }
     }
 
+    /// Update the filter. Callers are main-thread (@MainActor
+    /// `OverlayController.setScreenFilter` / `start`), which is the same thread
+    /// the MTKView draw loop runs on — so mutating the renderer's LUT texture
+    /// here cannot race `draw(in:)`.
     func setParams(_ params: ScreenFilterParams) {
         stateLock.lock()
         filterParams = params
         stateLock.unlock()
+        renderer.setLUT(path: params.lutPath)
     }
 
     /// Stop the stream and hide the window. The window is hidden FIRST on the
@@ -481,18 +486,49 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
 
 // MARK: - Metal renderer
 
-/// Draws a captured `CVPixelBuffer` as a fullscreen textured quad with a
-/// `brightness` uniform (> 1 brightens). Called from the MTKView draw loop
-/// (main thread) via BoostSession.draw(in:).
+/// Draws a captured `CVPixelBuffer` as a fullscreen textured quad, applying the
+/// `ScreenFilterParams` in one pass: colour (brightness/contrast/saturation/
+/// gamma/temperature/invert), then an unsharp mask, then geometry and an
+/// optional 3D LUT.
+///
+/// Called from the MTKView draw loop (main thread) via `BoostSession.draw(in:)`,
+/// which is also where the parameters and the LUT are updated — one thread, so
+/// no locking.
 private final class BoostRenderer {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let pipelineState: MTLRenderPipelineState
     private let sampler: MTLSamplerState
     private let textureCache: CVMetalTextureCache
+    /// Identity LUT bound whenever no cube is loaded, so the `texture3d`
+    /// argument is always backed. A 2³ cube sampled linearly *is* the
+    /// identity, and `p[11]` skips the stage entirely unless a real LUT is set
+    /// — which matters because the stage clamps to 0…1 and would otherwise
+    /// clip the XDR boost's > 1 values.
+    private let identityLUT: MTLTexture?
+    private var lutTexture: MTLTexture?
+    private var lutPath: String?
 
-    /// MSL: fullscreen textured quad; the fragment shader applies the
-    /// brightness uniform to the captured color.
+    /// Uniform indices shared with the shader below. Keep the two in step.
+    private enum Uniform {
+        static let brightness = 0
+        static let contrast = 1
+        static let saturation = 2
+        static let gamma = 3
+        static let temperature = 4
+        static let invert = 5
+        static let sharpness = 6
+        static let unsharpRadius = 7
+        static let zoom = 8
+        static let offsetX = 9
+        static let offsetY = 10
+        static let lutEnabled = 11
+        static let count = 12
+    }
+
+    /// MSL: fullscreen textured quad; the vertex stage applies zoom/pan to the
+    /// sampling coordinate, the fragment stage the colour, sharpening and LUT
+    /// maths. `p[]` indices mirror `Uniform` above.
     private static let shaderSource = """
     #include <metal_stdlib>
     using namespace metal;
@@ -502,25 +538,46 @@ private final class BoostRenderer {
         float2 uv;
     };
 
-    vertex BoostVertexOut boost_vert(uint vid [[vertex_id]]) {
+    vertex BoostVertexOut boost_vert(uint vid [[vertex_id]],
+                                     constant float *p [[buffer(0)]]) {
         // Two triangles covering the clip space quad.
         float2 pos = float2(float((vid << 1) & 2), float(vid & 2));
         BoostVertexOut out;
         out.position = float4(pos * 2.0 - 1.0, 0.0, 1.0);
         // Captured pixels are top-left origin; Metal NDC is bottom-left.
-        out.uv = float2(pos.x, 1.0 - pos.y);
+        float2 uv = float2(pos.x, 1.0 - pos.y);
+        // p[8]=zoom p[9]=offsetX p[10]=offsetY. Both are clamped on the Swift
+        // side so the sampled window always lies inside the source image.
+        float zoom = max(p[8], 1.0);
+        out.uv = (uv - 0.5) / zoom + float2(p[9], p[10]) + 0.5;
         return out;
     }
 
     fragment float4 boost_frag(BoostVertexOut in [[stage_in]],
                                constant float *p [[buffer(0)]],
                                texture2d<float> captureTexture [[texture(0)]],
+                               texture3d<float> lutTexture [[texture(1)]],
                                sampler captureSampler [[sampler(0)]]) {
         // p[0]=brightness p[1]=contrast p[2]=saturation p[3]=gamma
-        // p[4]=temperature p[5]=invert
+        // p[4]=temperature p[5]=invert p[6]=sharpness p[7]=unsharpRadius
+        // p[11]=lutEnabled
         float4 color = captureTexture.sample(captureSampler, in.uv);
         float3 c = color.rgb;
         if (p[5] > 0.5) c = 1.0 - c;
+
+        // Unsharp mask: a 4-tap cross blur, then push the difference back.
+        // Applied on the neutral signal, before the colour maths, so it is a
+        // spatial operation on the source image.
+        if (p[6] > 0.0 && p[7] > 0.0) {
+            float2 texel = 1.0 / float2(captureTexture.get_width(), captureTexture.get_height());
+            float2 r = texel * p[7];
+            float3 blur = (captureTexture.sample(captureSampler, in.uv + float2(r.x, 0.0)).rgb
+                         + captureTexture.sample(captureSampler, in.uv - float2(r.x, 0.0)).rgb
+                         + captureTexture.sample(captureSampler, in.uv + float2(0.0, r.y)).rgb
+                         + captureTexture.sample(captureSampler, in.uv - float2(0.0, r.y)).rgb) * 0.25;
+            c = c + p[6] * (c - blur);
+        }
+
         c.r *= (2.0 - p[4]);
         c.b *= p[4];
         c = (c - 0.5) * p[1] + 0.5;
@@ -528,6 +585,14 @@ private final class BoostRenderer {
         c = mix(float3(luma), c, p[2]);
         c = pow(max(c, 0.0), float3(p[3]));
         c *= p[0];
+
+        if (p[11] > 0.5) {
+            // Address the cube by its texel centres so a size-N LUT maps 0…1
+            // onto the full grid rather than stopping half a texel short.
+            float size = float(lutTexture.get_width());
+            float3 uvw = clamp(c, 0.0, 1.0) * ((size - 1.0) / size) + (0.5 / size);
+            c = lutTexture.sample(captureSampler, uvw).rgb;
+        }
         return float4(c, color.a);
     }
     """
@@ -555,6 +620,8 @@ private final class BoostRenderer {
         samplerDescriptor.magFilter = .linear
         samplerDescriptor.sAddressMode = .clampToEdge
         samplerDescriptor.tAddressMode = .clampToEdge
+        // Samplers are dimension-agnostic; the 3D LUT reuses this one.
+        samplerDescriptor.rAddressMode = .clampToEdge
         guard let sampler = device.makeSamplerState(descriptor: samplerDescriptor) else {
             throw OverlayError.metalSetupFailed
         }
@@ -566,7 +633,94 @@ private final class BoostRenderer {
             throw OverlayError.metalSetupFailed
         }
         self.textureCache = cache
+        self.identityLUT = Self.makeIdentityLUTTexture(device: device)
+    }
 
+    // MARK: LUT
+
+    /// Load (or clear) the 3D LUT backing the filter. No-op when the path is
+    /// unchanged. A LUT that fails to load is logged and the stage is skipped —
+    /// a bad cube must never take the overlay down with it.
+    func setLUT(path: String?) {
+        guard path != lutPath else { return }
+        lutPath = path
+        guard let path else {
+            lutTexture = nil
+            return
+        }
+        do {
+            let cube = try LUTCubeParser.parse(contentsOf: URL(fileURLWithPath: path))
+            lutTexture = Self.makeTexture(device: device, cube: cube)
+            if lutTexture == nil {
+                log.error("filter LUT '\(path)' parsed but the GPU texture could not be created")
+            }
+        } catch {
+            log.error("filter LUT '\(path)' could not be loaded: \(String(describing: error))")
+            lutTexture = nil
+        }
+    }
+
+    /// A 2×2×2 identity cube — sampling it linearly is a no-op.
+    private static func makeIdentityLUTTexture(device: MTLDevice) -> MTLTexture? {
+        var values: [Float] = []
+        values.reserveCapacity(8 * 3)
+        for b in 0..<2 {
+            for g in 0..<2 {
+                for r in 0..<2 {
+                    values.append(Float(r))
+                    values.append(Float(g))
+                    values.append(Float(b))
+                }
+            }
+        }
+        return makeTexture(device: device, cube: LUTCube(size: 2, values: values))
+    }
+
+    /// Upload a cube as a `size³` RGBA float 3D texture.
+    private static func makeTexture(device: MTLDevice, cube: LUTCube) -> MTLTexture? {
+        let descriptor = MTLTextureDescriptor()
+        descriptor.textureType = .type3D
+        descriptor.pixelFormat = .rgba32Float
+        descriptor.width = cube.size
+        descriptor.height = cube.size
+        descriptor.depth = cube.size
+        descriptor.usage = .shaderRead
+        descriptor.storageMode = .managed
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+
+        // Rows are padded to Metal's 256-byte alignment requirement.
+        let rowBytes = ((cube.size * 16) + 255) / 256 * 256
+        var bytes = [UInt8](repeating: 0, count: rowBytes * cube.size * cube.size)
+        for index in 0..<(cube.size * cube.size * cube.size) {
+            let source = index * 3
+            let destination = (index / cube.size) * rowBytes + (index % cube.size) * 16
+            for component in 0..<3 {
+                var bits = cube.values[source + component].bitPattern.littleEndian
+                withUnsafeBytes(of: &bits) { raw in
+                    for offset in 0..<4 {
+                        bytes[destination + component * 4 + offset] = raw[offset]
+                    }
+                }
+            }
+            // Alpha stays 1.0 (0x3F800000) so the cube can never fade content.
+            bytes[destination + 12] = 0x00
+            bytes[destination + 13] = 0x00
+            bytes[destination + 14] = 0x80
+            bytes[destination + 15] = 0x3F
+        }
+
+        bytes.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            texture.replace(
+                region: MTLRegionMake3D(0, 0, 0, cube.size, cube.size, cube.size),
+                mipmapLevel: 0,
+                slice: 0,
+                withBytes: base,
+                bytesPerRow: rowBytes,
+                bytesPerImage: rowBytes * cube.size
+            )
+        }
+        return texture
     }
 
     func render(pixelBuffer: CVPixelBuffer, params: ScreenFilterParams, in view: MTKView) {
@@ -604,13 +758,30 @@ private final class BoostRenderer {
             return
         }
         encoder.setRenderPipelineState(pipelineState)
-        var uniforms: [Float] = [
-            Float(params.brightness), Float(params.contrast),
-            Float(params.saturation), Float(params.gamma),
-            Float(params.temperature), params.invert ? 1 : 0,
-        ]
-        encoder.setFragmentBytes(&uniforms, length: uniforms.count * MemoryLayout<Float>.size, index: 0)
+
+        var uniforms = [Float](repeating: 0, count: Uniform.count)
+        uniforms[Uniform.brightness] = Float(params.brightness)
+        uniforms[Uniform.contrast] = Float(params.contrast)
+        uniforms[Uniform.saturation] = Float(params.saturation)
+        uniforms[Uniform.gamma] = Float(params.gamma)
+        uniforms[Uniform.temperature] = Float(params.temperature)
+        uniforms[Uniform.invert] = params.invert ? 1 : 0
+        uniforms[Uniform.sharpness] = Float(params.sharpness)
+        uniforms[Uniform.unsharpRadius] = Float(params.unsharpRadius)
+        uniforms[Uniform.zoom] = Float(params.zoom)
+        uniforms[Uniform.offsetX] = Float(params.offsetX)
+        uniforms[Uniform.offsetY] = Float(params.offsetY)
+        let activeLUT = lutTexture ?? identityLUT
+        uniforms[Uniform.lutEnabled] = lutTexture != nil ? 1 : 0
+
+        let uniformLength = uniforms.count * MemoryLayout<Float>.size
+        // The vertex stage needs zoom/pan from the same block.
+        encoder.setVertexBytes(&uniforms, length: uniformLength, index: 0)
+        encoder.setFragmentBytes(&uniforms, length: uniformLength, index: 0)
         encoder.setFragmentTexture(texture, index: 0)
+        if let activeLUT {
+            encoder.setFragmentTexture(activeLUT, index: 1)
+        }
         encoder.setFragmentSamplerState(sampler, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         encoder.endEncoding()

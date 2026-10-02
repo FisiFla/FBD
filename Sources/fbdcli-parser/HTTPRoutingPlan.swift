@@ -161,17 +161,16 @@ public enum HTTPRoutingPlanBuilder {
             guard let id = args.first else {
                 return .failure(HTTPRoutingError(message: "fbdcli: filter: display id required"))
             }
-            if args.count >= 2, args[1] == "off" {
+            let filterArgs = Array(args.dropFirst())
+            if filterArgs.first == "off" {
                 return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/filter", payload: ["off": true]))
             }
-            guard args.count >= 5,
-                  let contrast = Double(args[1]), let saturation = Double(args[2]),
-                  let gamma = Double(args[3]), let temperature = Double(args[4]) else {
-                return .failure(HTTPRoutingError(message: "fbdcli: filter: expected <id> <contrast> <saturation> <gamma> <temperature> [--invert] or <id> off"))
+            switch ScreenFilterArgs.parse(filterArgs) {
+            case .failure(let failure):
+                return .failure(HTTPRoutingError(message: "fbdcli: filter: \(failure.message)"))
+            case .success(let parsed):
+                return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/filter", payload: parsed.payload))
             }
-            var payload: [String: Any] = ["contrast": contrast, "saturation": saturation, "gamma": gamma, "temperature": temperature]
-            if args.contains("--invert") { payload["invert"] = true }
-            return .success(HTTPRoutingPlan(method: "POST", path: "/api/displays/\(id)/filter", payload: payload))
 
         case .virtual:
             guard let action = args.first else {

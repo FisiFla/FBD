@@ -122,6 +122,12 @@ struct SettingsView: View {
                 Text("Apple Silicon; experimental — screen goes dark while the external is connected.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if BuiltInDisconnectGuard.isAffectedHardware {
+                    Text("This Mac (base M3) may not reconnect its built-in display without a reboot.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Toggle("Allow built-in display disconnect (risky)", isOn: allowBuiltInDisconnectBinding)
+                }
                 Toggle("Layout protection", isOn: layoutProtectionBinding)
                 Text("Re-applies the saved arrangement when the display layout changes.")
                     .font(.caption)
@@ -195,6 +201,8 @@ struct SettingsView: View {
             } header: {
                 Label("Integrations", systemImage: "network")
             }
+
+            AutomationSettingsView()
 
             Section {
                 HStack(spacing: 10) {
@@ -376,6 +384,13 @@ struct SettingsView: View {
         Binding(
             get: { Settings.autoDisconnectBuiltInOnExternal },
             set: { Settings.autoDisconnectBuiltInOnExternal = $0 }
+        )
+    }
+
+    private var allowBuiltInDisconnectBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.allowBuiltInDisconnectOnAffectedMacs },
+            set: { Settings.allowBuiltInDisconnectOnAffectedMacs = $0 }
         )
     }
 

@@ -38,8 +38,12 @@ Commands:
   virtual reconnect <id-or-name>
                                 Reconnect a persisted virtual screen
   virtual disconnect-all        Disconnect all virtual screens (keep configs)
-  disable <id>                  Disable a display (black screen until re-enabled)
-  enable <id>                   Re-enable a disabled display
+  filter <id> [off]             Apply a full-screen software filter:
+                                <contrast> <saturation> <gamma> <temperature>
+                                [--invert] [--sharpness n] [--radius px]
+                                [--zoom n] [--pan x y] [--lut path.cube];
+                                'off' clears it (needs Screen Recording)
+  disable <id>                  Disable a display (black screen until re-enabled)  enable <id>                   Re-enable a disabled display
   layout save                   Save the current display arrangement
   layout restore                Restore the saved arrangement
   layout protect [on|off]       Get or set layout protection
@@ -74,7 +78,24 @@ Commands:
                                 (optional brightness/contrast/saturation, 1 =
                                 none). Streams until the window closes or a
                                 key is pressed
+  pip --window <win-id> [b] [c] [s]
+                                Stream a single window instead of a display
+  pip --app <bundle-id> [b] [c] [s]
+                                Stream every window of an application
+  pip list                      List capturable displays, windows and apps
   pip stop                      Stop the active CLI PiP stream
+  stream <src-id> <dst-id> [b] [c] [s]
+                                Redirect a display's contents onto another
+                                display, full-screen (local streaming); optional
+                                brightness/contrast/saturation, 1 = none
+  stream stop                   Stop the active CLI stream
+  automation list               List per-display automation rules
+  automation add <id|any> <connect|disconnect|sleep|wake> <shell|url> <payload…>
+                                Run a shell script or open a URL on a display
+                                event. Opt-in: nothing runs without a rule.
+  automation enable|disable|remove <rule-id>
+  automation test <rule-id>     Run a rule now and show its output
+  automation log                Show runs from this session
   osd <icon> <0-100>            Show a transient OSD HUD (e.g. sun.max,
                                 speaker.wave.2) at the given percentage
   nightshift [0-100]            Get or set Night Shift strength
@@ -180,6 +201,10 @@ func run(arguments: [String]) -> Int32 {
         return cmdSettings()
     case .pip:
         return cmdPip(controller, args: rest)
+    case .stream:
+        return cmdStream(controller, args: rest)
+    case .automation:
+        return cmdAutomation(controller, args: rest)
     case .osd:
         return cmdOSD(args: rest)
     case .nightshift:

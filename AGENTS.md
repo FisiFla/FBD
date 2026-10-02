@@ -58,7 +58,7 @@ decisions. Read both before exploring. See `docs/agents/domain.md`.
 ## Build & test
 
 - Build: `make app` (universal, produces `build/FBD.app`) or `swift build --disable-sandbox` (debug)
-- Test: `swift test --disable-sandbox` (288 unit tests) or `make test`
+- Test: `swift test --disable-sandbox` (390 unit tests) or `make test`
 - UI smoke: `make ui-smoke` (drives the real panel; needs Accessibility permission)
 - Release: `make bump-version VERSION=x.y.z` then the flow in `RELEASING.md`
 

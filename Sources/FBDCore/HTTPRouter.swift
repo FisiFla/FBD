@@ -214,10 +214,19 @@ public enum HTTPRouter {
                   let temperature = (object["temperature"] as? NSNumber)?.doubleValue else {
                 return .error(400, "expected contrast/saturation/gamma/temperature")
             }
+            func optional(_ key: String) -> Double? { (object[key] as? NSNumber)?.doubleValue }
+            // The sharpening/geometry/LUT fields are optional; their ranges are
+            // clamped by ScreenFilterParams, not here.
             return .action(.filter(ScreenFilterParams(
                 contrast: contrast, saturation: saturation,
                 gamma: gamma, temperature: temperature,
-                invert: (object["invert"] as? Bool) ?? false
+                invert: (object["invert"] as? Bool) ?? false,
+                sharpness: optional("sharpness") ?? 0,
+                unsharpRadius: optional("unsharpRadius") ?? 1,
+                zoom: optional("zoom") ?? 1,
+                offsetX: optional("offsetX") ?? 0,
+                offsetY: optional("offsetY") ?? 0,
+                lutPath: (object["lutPath"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             )))
         default:
             return .error(404, "unknown action '\(action)'")
