@@ -14,6 +14,7 @@ private let log = Logger(subsystem: "dev.fisifla.fbd", category: "PipStreamContr
 private enum PipError: Error {
     case shareableContentUnavailable
     case metalSetupFailed
+    case sourceUnavailable(String)
 }
 
 /// Video filter parameters applied in the Metal fragment shader.
@@ -30,16 +31,98 @@ public struct VideoFilter: Equatable, Sendable {
     }
 }
 
+/// What a PiP session captures.
+///
+/// ScreenCaptureKit exposes a different filter constructor per kind, so the
+/// distinction is real rather than cosmetic: a display capture excludes our own
+/// overlay windows, a window capture follows that window's content, and an
+/// application capture composites every window the app owns (BetterDisplay's
+/// "group of windows").
+public enum PiPCaptureSource: Equatable, Sendable {
+    /// A whole display, by `CGDirectDisplayID`.
+    case display(CGDirectDisplayID)
+    /// A single on-screen window, by `CGWindowID`.
+    case window(CGWindowID)
+    /// Every window belonging to an application, by bundle identifier.
+    case application(String)
+
+    /// Stable form used by the CLI, logging and equality.
+    public var identifier: String {
+        switch self {
+        case .display(let id): return "display:\(id)"
+        case .window(let id): return "window:\(id)"
+        case .application(let bundleID): return "app:\(bundleID)"
+        }
+    }
+}
+
+/// One capturable source, as offered by `PipStreamController.availableSources()`.
+public struct PiPCaptureCandidate: Equatable, Sendable {
+    public let source: PiPCaptureSource
+    /// Human-readable description for the CLI listing.
+    public let label: String
+
+    public init(source: PiPCaptureSource, label: String) {
+        self.source = source
+        self.label = label
+    }
+}
+
+/// How a capture is presented on the host display.
+public enum PiPPresentation: Equatable, Sendable {
+    /// Floating, resizable, rounded window — the classic picture-in-picture.
+    case floating
+    /// Borderless, full-screen on the host display. This is what makes the
+    /// controller serve **local streaming** (redirecting one display's contents
+    /// onto another) as well as PiP: the pipeline is identical, only the window
+    /// differs, which is why there is one controller rather than two copies of
+    /// the ScreenCaptureKit + Metal plumbing.
+    case fullScreen
+}
+
+/// Fetch the shareable content ScreenCaptureKit currently exposes.
+private func fetchShareableContent() async throws -> SCShareableContent {
+    try await withCheckedThrowingContinuation { continuation in
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { content, error in
+            if let error {
+                continuation.resume(throwing: error)
+            } else if let content {
+                continuation.resume(returning: content)
+            } else {
+                continuation.resume(throwing: PipError.shareableContentUnavailable)
+            }
+        }
+    }
+}
+
+/// Backing scale factor of the display containing a window, so a captured
+/// window is rendered at its physical pixel size rather than its point size.
+/// `SCWindow.frame` and `CGDisplayBounds` share one global top-left coordinate
+/// space, so containment is a direct test.
+private func backingScaleFactor(containing frame: CGRect) -> CGFloat {
+    let center = CGPoint(x: frame.midX, y: frame.midY)
+    for screen in NSScreen.screens {
+        guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            continue
+        }
+        if CGDisplayBounds(number.uint32Value).contains(center) {
+            return screen.backingScaleFactor
+        }
+    }
+    return NSScreen.main?.backingScaleFactor ?? 1
+}
+
 /// Picture-in-Picture streaming controller:
 ///
 /// Opens a single draggable, rounded-corner floating window (~480×270, 16:9)
-/// that live-streams a display's content through a Metal pipeline
-/// (ScreenCaptureKit, macOS 13+). A fragment shader applies
-/// brightness/contrast/saturation filters (`setFilter`); the source is
-/// aspect-fit into the window with black letterboxing.
+/// that live-streams a **display, a single window, or every window of an
+/// application** through a Metal pipeline (ScreenCaptureKit, macOS 13+). A
+/// fragment shader applies brightness/contrast/saturation filters
+/// (`setFilter`); the source is aspect-fit into the window with black
+/// letterboxing.
 ///
 /// The window is created on the main thread; capture + Metal rendering run on
-/// a per-display serial queue. Missing screen-recording permission is reported
+/// a serial queue. Missing screen-recording permission is reported
 /// synchronously via the return value — never crash, never block; async
 /// failures tear the PiP down and log.
 @MainActor
@@ -62,13 +145,30 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         session?.stop()
     }
 
-    /// Open a draggable floating PiP window streaming a display's content.
-    /// Replaces any active PiP. Returns false when screen-recording
-    /// permission is missing (or Metal is unavailable / the display has no
-    /// usable bounds); asynchronous capture failures tear the PiP down and
-    /// log — `isActive` then goes false.
+    /// Open a PiP window for a display — the original entry point.
+    /// Equivalent to `startPiP(source: .display(displayID), on: displayID, …)`,
+    /// so the window appears on the display it captures.
     @discardableResult
     public func startPiP(displayID: CGDirectDisplayID, filter: VideoFilter = .identity) -> Bool {
+        startPiP(source: .display(displayID), on: displayID, filter: filter)
+    }
+
+    /// Open a window capturing `source`.
+    ///
+    /// `on` is the display the *window* appears on; pass nil to let the source
+    /// decide (the captured display for `.display`, the main display
+    /// otherwise). `presentation` selects a floating PiP window or a
+    /// full-screen local stream. Replaces any active capture. Returns false when
+    /// screen-recording permission is missing, Metal is unavailable, or the
+    /// placement display has no usable bounds; asynchronous capture failures
+    /// tear it down and log — `isActive` then goes false.
+    @discardableResult
+    public func startPiP(
+        source: PiPCaptureSource,
+        on hostDisplayID: CGDirectDisplayID? = nil,
+        presentation: PiPPresentation = .floating,
+        filter: VideoFilter = .identity
+    ) -> Bool {
         teardownPip()
         guard CGPreflightScreenCaptureAccess() else {
             log.error("startPiP: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording")
@@ -78,16 +178,23 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
             log.error("startPiP: no Metal device available")
             return false
         }
-        let bounds = CGDisplayBounds(displayID)
+        let placementID = hostDisplayID ?? defaultHostDisplay(for: source)
+        let bounds = CGDisplayBounds(placementID)
         guard isUsable(bounds) else {
-            log.error("startPiP: no valid bounds for display \(displayID)")
+            log.error("startPiP: no valid bounds for display \(placementID)")
             return false
         }
         do {
             let renderer = try PipRenderer(device: device)
-            let (window, metalView) = makeWindow(displayID: displayID, device: device)
+            let (window, metalView) = makeWindow(
+                hostDisplayID: placementID,
+                source: source,
+                presentation: presentation,
+                device: device
+            )
             let session = PipSession(
-                displayID: displayID,
+                source: source,
+                hostDisplayID: placementID,
                 window: window,
                 metalView: metalView,
                 renderer: renderer,
@@ -102,6 +209,42 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
             log.error("startPiP: Metal pipeline setup failed: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Capturable sources right now: displays, then on-screen windows, then
+    /// applications. Empty when Screen Recording permission is missing or
+    /// ScreenCaptureKit has nothing to offer — callers report that rather than
+    /// treating it as "no sources exist".
+    public func availableSources() async -> [PiPCaptureCandidate] {
+        guard CGPreflightScreenCaptureAccess() else {
+            log.error("availableSources: screen-recording permission missing")
+            return []
+        }
+        guard let content = try? await fetchShareableContent() else { return [] }
+        var candidates: [PiPCaptureCandidate] = []
+        for display in content.displays {
+            candidates.append(PiPCaptureCandidate(
+                source: .display(display.displayID),
+                label: "display \(display.displayID) (\(display.width)×\(display.height))"
+            ))
+        }
+        for window in content.windows {
+            guard window.isOnScreen, window.frame.width >= 16, window.frame.height >= 16 else { continue }
+            let app = window.owningApplication?.applicationName ?? "?"
+            let title = (window.title?.isEmpty == false) ? window.title! : "(untitled)"
+            candidates.append(PiPCaptureCandidate(
+                source: .window(window.windowID),
+                label: "window \(window.windowID) — \(app): \(title)"
+            ))
+        }
+        for application in content.applications {
+            let bundleID = application.bundleIdentifier
+            candidates.append(PiPCaptureCandidate(
+                source: .application(bundleID),
+                label: "app \(bundleID) — \(application.applicationName)"
+            ))
+        }
+        return candidates
     }
 
     /// Update the active PiP's video filter (brightness/contrast/saturation uniforms).
@@ -164,16 +307,93 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         return CGWindowID(window.windowNumber)
     }
 
+    /// Where the PiP window goes when the caller did not say.
+    private func defaultHostDisplay(for source: PiPCaptureSource) -> CGDirectDisplayID {
+        if case .display(let id) = source { return id }
+        return CGMainDisplayID()
+    }
+
     // MARK: - Window
 
-    /// Floating PiP window (~480×270) placed near the bottom-right of the
-    /// source display: titled so it has a native close button and resize
-    /// edges, with a transparent titlebar for the compact look, draggable by
-    /// its background.
-    private func makeWindow(displayID: CGDirectDisplayID, device: MTLDevice) -> (NSWindow, MTKView) {
+    /// Build the presentation window for a capture: a floating PiP box or a
+    /// full-screen local stream. Both host the same video view, so only the
+    /// window differs.
+    private func makeWindow(
+        hostDisplayID: CGDirectDisplayID,
+        source: PiPCaptureSource,
+        presentation: PiPPresentation,
+        device: MTLDevice
+    ) -> (NSWindow, MTKView) {
+        switch presentation {
+        case .floating:
+            return makeFloatingWindow(hostDisplayID: hostDisplayID, source: source, device: device)
+        case .fullScreen:
+            return makeFullScreenWindow(hostDisplayID: hostDisplayID, source: source, device: device)
+        }
+    }
+
+    /// `MTKView` configured the same way for every presentation. Frames are
+    /// presented manually by the capture pipeline (off-main), not by MTKView's
+    /// own draw loop.
+    private func makeVideoView(device: MTLDevice, frame: NSRect) -> MTKView {
+        let view = MTKView(frame: frame, device: device)
+        view.colorPixelFormat = .bgra8Unorm
+        view.framebufferOnly = true
+        view.isPaused = true
+        view.enableSetNeedsDisplay = false
+        view.autoresizingMask = [.width, .height]
+        return view
+    }
+
+    /// Borderless full-screen window on the host display — **local streaming**.
+    ///
+    /// Floating window level, so the streamed content stays visible instead of
+    /// being buried by whatever else is on that display. No close button: the
+    /// stream is ended by its owner (`fbdcli stream stop`, or closing the PiP
+    /// window from the app).
+    private func makeFullScreenWindow(
+        hostDisplayID: CGDirectDisplayID,
+        source: PiPCaptureSource,
+        device: MTLDevice
+    ) -> (NSWindow, MTKView) {
+        let bounds = CGDisplayBounds(hostDisplayID)
+        let window = NSWindow(
+            contentRect: bounds,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = source.title
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.isOpaque = true
+        window.backgroundColor = .black
+        window.isMovableByWindowBackground = false
+        window.delegate = self
+        window.isReleasedWhenClosed = false
+        window.hasShadow = false
+
+        let container = NSView(frame: NSRect(origin: .zero, size: bounds.size))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.black.cgColor
+        let view = makeVideoView(device: device, frame: container.bounds)
+        container.addSubview(view)
+
+        window.contentView = container
+        return (window, view)
+    }
+
+    /// Floating PiP window (~480×270) placed near the bottom-right of the host
+    /// display: titled so it has a native close button and resize edges, with a
+    /// transparent titlebar for the compact look, draggable by its background.
+    private func makeFloatingWindow(
+        hostDisplayID: CGDirectDisplayID,
+        source: PiPCaptureSource,
+        device: MTLDevice
+    ) -> (NSWindow, MTKView) {
         let size = NSSize(width: 480, height: 270)
         let screen = NSScreen.screens.first {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == hostDisplayID
         } ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: size.width, height: size.height)
         let origin = NSPoint(x: visibleFrame.maxX - size.width - 24, y: visibleFrame.minY + 24)
@@ -184,7 +404,7 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "FBD PiP"
+        window.title = source.title
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.minSize = NSSize(width: 240, height: 135)
@@ -209,14 +429,7 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         container.layer?.masksToBounds = true
         container.layer?.backgroundColor = NSColor.black.cgColor
 
-        let view = MTKView(frame: container.bounds, device: device)
-        view.colorPixelFormat = .bgra8Unorm
-        view.framebufferOnly = true
-        // Frames are presented manually by the capture pipeline (off-main),
-        // not by MTKView's own draw loop.
-        view.isPaused = true
-        view.enableSetNeedsDisplay = false
-        view.autoresizingMask = [.width, .height]
+        let view = makeVideoView(device: device, frame: container.bounds)
         container.addSubview(view)
 
         window.contentView = container
@@ -228,13 +441,25 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
     }
 }
 
+private extension PiPCaptureSource {
+    /// Window title shown while the PiP is live.
+    var title: String {
+        switch self {
+        case .display(let id): return "FBD PiP — display \(id)"
+        case .window(let id): return "FBD PiP — window \(id)"
+        case .application(let bundleID): return "FBD PiP — \(bundleID)"
+        }
+    }
+}
+
 // MARK: - PiP session (capture + render pipeline)
 
 /// Owns the PiP window's capture stream and renderer. All capture/render work
 /// happens on `queue` (a serial queue); window/state mutations hop to the main
 /// thread.
 private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
-    let displayID: CGDirectDisplayID
+    let source: PiPCaptureSource
+    let hostDisplayID: CGDirectDisplayID
     let window: NSWindow
     let metalView: MTKView
     private let renderer: PipRenderer
@@ -252,18 +477,20 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     init(
-        displayID: CGDirectDisplayID,
+        source: PiPCaptureSource,
+        hostDisplayID: CGDirectDisplayID,
         window: NSWindow,
         metalView: MTKView,
         renderer: PipRenderer,
         owner: PipStreamController
     ) {
-        self.displayID = displayID
+        self.source = source
+        self.hostDisplayID = hostDisplayID
         self.window = window
         self.metalView = metalView
         self.renderer = renderer
         self.owner = owner
-        self.queue = DispatchQueue(label: "dev.fisifla.fbd.pip.\(displayID)", qos: .userInteractive)
+        self.queue = DispatchQueue(label: "dev.fisifla.fbd.pip.\(source.identifier)", qos: .userInteractive)
     }
 
     // MARK: Lifecycle
@@ -300,7 +527,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             let current = stateLock.withLock { self.stream }
             if let stream = current {
                 try? stream.removeStreamOutput(self, type: .screen)
-                stream.stopCapture(completionHandler: nil)
+                stream.stopCapture { _ in }
             }
             stateLock.lock()
             self.stream = nil
@@ -317,16 +544,8 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             // were waiting for the shareable-content query. Both this check
             // and teardown run on the main actor, so this is race-free.
             guard owner?.isCurrentPipSession(self) == true else { return }
-            guard let scDisplay = content.displays.first(where: { $0.displayID == displayID }) else {
-                fail("display \(displayID) is not available for screen capture")
-                return
-            }
-            // Never capture the PiP window itself — it would otherwise feed
-            // back into the next frame. Everything else stays included.
-            let ownWindowID = owner?.pipWindowID() ?? 0
-            let excluded = content.windows.filter { $0.windowID == ownWindowID }
-            let filter = SCContentFilter(display: scDisplay, excludingWindows: excluded)
-            let config = makeConfiguration(for: scDisplay)
+            let (filter, size) = try makeFilterAndSize(from: content)
+            let config = makeConfiguration(width: size.0, height: size.1)
             let newStream = SCStream(filter: filter, configuration: config, delegate: self)
             try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
             stateLock.withLock { stream = newStream }
@@ -345,24 +564,62 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
-    private func fetchShareableContent() async throws -> SCShareableContent {
-        try await withCheckedThrowingContinuation { continuation in
-            SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { content, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let content {
-                    continuation.resume(returning: content)
-                } else {
-                    continuation.resume(throwing: PipError.shareableContentUnavailable)
-                }
+    /// Resolve the ScreenCaptureKit filter for this session's source, plus the
+    /// capture size to request.
+    ///
+    /// Display captures keep the historical point-sized configuration;
+    /// window captures render at the window's physical pixel size so they are
+    /// not upscaled by the letterboxing renderer; application captures fill the
+    /// host display (ScreenCaptureKit composites the app's windows into it).
+    @MainActor
+    private func makeFilterAndSize(from content: SCShareableContent) throws -> (SCContentFilter, (Int, Int)) {
+        switch source {
+        case .display(let displayID):
+            guard let scDisplay = content.displays.first(where: { $0.displayID == displayID }) else {
+                throw PipError.sourceUnavailable("display \(displayID)")
             }
+            // Never capture the PiP window itself — it would otherwise feed
+            // back into the next frame. Everything else stays included.
+            let ownWindowID = owner?.pipWindowID() ?? 0
+            let excluded = content.windows.filter { $0.windowID == ownWindowID }
+            return (
+                SCContentFilter(display: scDisplay, excludingWindows: excluded),
+                (scDisplay.width, scDisplay.height)
+            )
+
+        case .window(let windowID):
+            guard let scWindow = content.windows.first(where: { $0.windowID == windowID }) else {
+                throw PipError.sourceUnavailable("window \(windowID)")
+            }
+            let scale = backingScaleFactor(containing: scWindow.frame)
+            let width = max(Int((scWindow.frame.width * scale).rounded()), 1)
+            let height = max(Int((scWindow.frame.height * scale).rounded()), 1)
+            return (SCContentFilter(desktopIndependentWindow: scWindow), (width, height))
+
+        case .application(let bundleID):
+            let applications = content.applications.filter { $0.bundleIdentifier == bundleID }
+            guard !applications.isEmpty else {
+                throw PipError.sourceUnavailable("application \(bundleID)")
+            }
+            // The application filter is still anchored to a display (the
+            // display-less variant was obsoleted in Swift), so anchor it to the
+            // display the PiP is being shown on.
+            guard let scDisplay = content.displays.first(where: { $0.displayID == hostDisplayID }) else {
+                throw PipError.sourceUnavailable("display \(hostDisplayID)")
+            }
+            let ownWindowID = owner?.pipWindowID() ?? 0
+            let excluded = content.windows.filter { $0.windowID == ownWindowID }
+            return (
+                SCContentFilter(display: scDisplay, including: applications, exceptingWindows: excluded),
+                (CGDisplayPixelsWide(hostDisplayID), CGDisplayPixelsHigh(hostDisplayID))
+            )
         }
     }
 
-    private func makeConfiguration(for display: SCDisplay) -> SCStreamConfiguration {
+    private func makeConfiguration(width: Int, height: Int) -> SCStreamConfiguration {
         let config = SCStreamConfiguration()
-        config.width = display.width
-        config.height = display.height
+        config.width = width
+        config.height = height
         config.minimumFrameInterval = CMTime(value: 1, timescale: 15) // 15 fps
         config.queueDepth = 3
         config.showsCursor = false
@@ -373,7 +630,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
 
     /// Log the failure and tear the PiP down on the main thread.
     private func fail(_ reason: String) {
-        log.error("PiP failed for display \(self.displayID): \(reason)")
+        log.error("PiP failed for \(self.source.identifier): \(reason)")
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.owner?.teardownPip(self)
@@ -394,7 +651,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
         let stopping = _isStopping
         stateLock.unlock()
         guard !stopping else { return }
-        log.error("PiP stream stopped unexpectedly for display \(self.displayID): \(error.localizedDescription)")
+        log.error("PiP stream stopped unexpectedly for \(self.source.identifier): \(error.localizedDescription)")
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.owner?.teardownPip(self)

@@ -147,6 +147,28 @@ struct DisplayOptionsMenuView: View {
             startVideoFilterWindow()
         }
 
+        // Local streaming: redirect this display onto another one, full-screen.
+        // Same target set as mirroring — the other online displays.
+        if !mirrorTargets.isEmpty {
+            Menu("Stream to") {
+                ForEach(mirrorTargets, id: \.id) { target in
+                    Button(target.name) {
+                        _ = pipController.startPiP(
+                            source: .display(display.id),
+                            on: target.id,
+                            presentation: .fullScreen,
+                            filter: .identity
+                        )
+                    }
+                }
+            }
+        }
+        if pipController.isActive {
+            Button("Stop PiP / Stream") {
+                pipController.stop()
+            }
+        }
+
         // Move Display
         Menu("Move Display") {
             Button("Set as Main Display") {
@@ -254,7 +276,7 @@ struct DisplayOptionsMenuView: View {
         }
     }
 
-    /// Other online displays available as mirror targets.
+    /// Other online displays available as mirror or stream targets.
     private var mirrorTargets: [Display] {
         DisplayController.shared.displays.filter { $0.id != display.id && $0.isOnline }
     }

@@ -3,6 +3,97 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Fixed
+- **Built-in display disconnect is refused on base-M3 MacBooks.** On Macs with the
+  base M3 chip (M3 MacBook Air, entry-level M3 MacBook Pro) Apple repurposed the
+  built-in panel's connection for clamshell two-display support, so a
+  soft-disconnected built-in display may not come back without a reboot. The
+  decision lives in `BuiltInDisconnectGuard` (pure, unit-tested) and is enforced at
+  the single `DisconnectController.setEnabled` chokepoint, so the CLI, the per-display
+  UI and the auto-disconnect path are all covered. The explicit override ships off
+  and is offered in Settings only on affected hardware.
+  (BetterDisplay ships the same guard — waydabber/BetterDisplay#4723.)
+
+## [Unreleased]
+
+### Added
+- **Full-screen filters gained sharpening, geometry and custom 3D LUTs**
+  (BetterDisplay 5 parity). `ScreenFilterParams` now carries `sharpness` +
+  `unsharpRadius`, `zoom` + `offsetX`/`offsetY`, and an optional `.cube` LUT
+  path — all clamped **in the initialiser**, so no caller (CLI, HTTP, UI or App
+  Intent) can push the Metal uniform block outside the range the shader is
+  written against. The overlay applies them in one pass: a 4-tap unsharp mask
+  on the neutral signal, zoom/pan in the vertex UV transform, and a `size³`
+  RGBA float 3D texture sampled after the colour maths.
+  - Zoom is clamped to ≥ 1 and pan to the margin the zoom leaves, so the
+    clamp-to-edge sampler can never be dragged into view as smeared borders.
+  - A LUT that fails to load is logged and the stage is skipped — a bad cube
+    never takes the overlay down with it. `fbdcli filter` validates the file up
+    front so a bad path is a clear CLI error instead.
+  - `fbdcli filter` gained `--sharpness`, `--radius`, `--zoom`, `--pan x y` and
+    `--lut path`; the same optional fields are accepted by the HTTP `filter`
+    route; the filter disclosure row has the matching controls, including a
+    LUT picker. `fbdcli help` now lists the `filter` command at all.
+- `LUTCubeParser` for Adobe `.cube` 3D LUTs: UTF-8 **text**, `LUT_3D_SIZE`
+  **2…128**, one-dimensional and mixed CUBEs rejected outright, `DOMAIN_MIN`/
+  `DOMAIN_MAX` normalisation, and a byte cap checked before any float parsing.
+  Every malformed shape yields a specific `LUTCubeError` rather than a crash or
+  a partially-applied correction — a `.cube` file is user-supplied input.
+
+### Changed
+- `ScreenFilterArgs` (in `FBDCLIParser`) is the single parser behind both
+  `fbdcli filter` and the routed HTTP plan, so the two can no longer drift.
+- 102 new unit tests: `LUTCubeTests`, `ScreenFilterParamsTests`,
+  `ScreenFilterArgsTests`, `PiPArgsTests`, `StreamArgsTests` and
+  `DisplayAutomationTests`.
+
+### Added (PiP sources + local streaming)
+- **PiP can now capture a window or an application**, not just a display
+  (BetterDisplay 5's "PiP for individual windows"). `PiPCaptureSource` carries
+  `.display` / `.window` / `.application`, mapped onto ScreenCaptureKit's three
+  filter constructors; a window is captured at its physical pixel size rather
+  than upscaled, and an application composites all of its windows. `fbdcli pip
+  list` enumerates capturable displays, windows and apps, and
+  `fbdcli pip --window <id>` / `--app <bundle-id>` select one.
+- **Local streaming** — `fbdcli stream <source-display-id> <target-display-id>`
+  redirects one display's contents onto another, full-screen. It is the same
+  capture + Metal pipeline as PiP, so it is the same controller with a
+  `PiPPresentation` (`.floating` / `.fullScreen`) rather than a third copy of
+  the ScreenCaptureKit plumbing. `fbdcli stream stop` ends it, and a
+  "Stream to ▸" submenu does the same from the display options menu.
+- Rejecting `stream <id> <id>` with the same display on both sides up front: it
+  would capture the stream's own window and feed back forever.
+
+### Added (per-display event automation)
+- **Run a shell script or open a URL when a display connects/disconnects, or
+  when the system sleeps/wakes** — BetterDisplay's per-display commands. This is
+  the one place FBD executes arbitrary code, so it is deliberately the narrowest
+  useful shape:
+  - A rule exists only because someone created one; `enabled` gates it further;
+    nothing is inferred or inherited. Off by default in the strongest sense —
+    with no rules there is nothing to run.
+  - Rules are addressed to one display's `identityKey`, or to "any display".
+    A system event only ever fires "any display" rules, since a sleep cannot be
+    attributed to a single display.
+  - Every action is killed at `AutomationLimits.timeout` (default 10s, capped at
+    120s) and rate-limited to one run per `minimumInterval` (default 5s) —
+    topology changes arrive in bursts, so without it one dock event would run
+    the same script several times.
+  - Execution is on a **serial** queue: a concurrency limit of one, so an event
+    storm cannot stampede the machine.
+  - Actions receive `FBD_EVENT`, `FBD_DISPLAY_ID`, `FBD_DISPLAY_NAME` and
+    `FBD_DISPLAY_IDENTITY` in their environment, and captured output is capped.
+  - The decision layer (`AutomationScheduler`, `AutomationCommand`) is pure and
+    the executor is an `AutomationExecuting` seam, so tests assert what *would*
+    run without ever starting a process.
+- `fbdcli automation list|add|enable|disable|remove|test|log`. Rules live in the
+  shared suite, so one added from the CLI applies to the running app — the
+  controller re-reads before each event rather than caching at launch.
+- A Settings → Automation section listing every rule with its payload shown
+  verbatim, an enable toggle, and an add form.
+
 ## [1.3.3] — 2026-08-04
 
 ### Fixed

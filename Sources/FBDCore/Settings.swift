@@ -30,6 +30,7 @@ public enum Settings {
         add("reconnectVirtualScreensOnWake", reconnectVirtualScreensOnWake)
         add("disconnectVirtualScreensOnLock", disconnectVirtualScreensOnLock)
         add("autoDisconnectBuiltInOnExternal", autoDisconnectBuiltInOnExternal)
+        add("allowBuiltInDisconnectOnAffectedMacs", allowBuiltInDisconnectOnAffectedMacs)
         add("layoutProtectionEnabled", layoutProtectionEnabled)
         add("showOfflineDisplays", showOfflineDisplays)
         add("enableDisconnectOption", enableDisconnectOption)
@@ -138,6 +139,13 @@ public enum Settings {
     @Storage(key: "autoDisconnectBuiltInOnExternal", defaultValue: false)
     public static var autoDisconnectBuiltInOnExternal: Bool
 
+    /// Explicit override allowing the built-in display to be soft-disconnected
+    /// on Macs where it may not reconnect without a reboot — the M3 MacBook Air
+    /// and entry-level M3 MacBook Pro. Off by default; see
+    /// `BuiltInDisconnectGuard`.
+    @Storage(key: "allowBuiltInDisconnectOnAffectedMacs", defaultValue: false)
+    public static var allowBuiltInDisconnectOnAffectedMacs: Bool
+
     /// Re-apply the saved display arrangement when the layout changes.
     @Storage(key: "layoutProtectionEnabled", defaultValue: false)
     public static var layoutProtectionEnabled: Bool
@@ -160,6 +168,24 @@ public enum Settings {
             return []
         }
         return configs
+    }
+
+    /// Persisted per-display automation rules (JSON-encoded). Stored through
+    /// `defaults` like every other setting, so the app and the CLI share one
+    /// copy — a rule added from `fbdcli automation add` is visible to the app.
+    private static let automationRulesKey = "automation.v1"
+
+    public static func loadAutomationRules() -> [AutomationRule] {
+        guard let data = defaults.data(forKey: automationRulesKey),
+              let rules = try? JSONDecoder().decode([AutomationRule].self, from: data) else {
+            return []
+        }
+        return rules
+    }
+
+    public static func saveAutomationRules(_ rules: [AutomationRule]) {
+        guard let data = try? JSONEncoder().encode(rules) else { return }
+        defaults.set(data, forKey: automationRulesKey)
     }
 
     public static func saveVirtualScreens(_ configs: [VirtualScreenConfig]) {

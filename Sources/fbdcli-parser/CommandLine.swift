@@ -34,6 +34,8 @@ public enum Command: String, CaseIterable {
     case authToken = "auth-token"
     case settings
     case pip
+    case stream
+    case automation
     case osd
     case nightshift
     case truetone
@@ -207,5 +209,311 @@ public enum VideoFilterArgs {
             values[index] = value
         }
         return .success(values)
+    }
+}
+
+/// Parsed `filter` arguments: the four positional colour values plus the
+/// optional sharpening / geometry / LUT flags.
+///
+/// Deliberately produces plain values instead of `ScreenFilterParams` so this
+/// library keeps its FBDCore-free dependency graph — `ScreenFilterParams`'s
+/// initialiser remains the single source of truth for the numeric ranges, and
+/// clamps whatever arrives here.
+public struct ScreenFilterArgs: Equatable, Sendable {
+    public var contrast: Double
+    public var saturation: Double
+    public var gamma: Double
+    public var temperature: Double
+    public var invert: Bool
+    public var sharpness: Double?
+    public var unsharpRadius: Double?
+    public var zoom: Double?
+    public var offsetX: Double?
+    public var offsetY: Double?
+    public var lutPath: String?
+
+    public init(
+        contrast: Double,
+        saturation: Double,
+        gamma: Double,
+        temperature: Double,
+        invert: Bool = false,
+        sharpness: Double? = nil,
+        unsharpRadius: Double? = nil,
+        zoom: Double? = nil,
+        offsetX: Double? = nil,
+        offsetY: Double? = nil,
+        lutPath: String? = nil
+    ) {
+        self.contrast = contrast
+        self.saturation = saturation
+        self.gamma = gamma
+        self.temperature = temperature
+        self.invert = invert
+        self.sharpness = sharpness
+        self.unsharpRadius = unsharpRadius
+        self.zoom = zoom
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+        self.lutPath = lutPath
+    }
+
+    /// Body for `POST /api/displays/<id>/filter`. Only the values the caller
+    /// actually supplied are sent, so an omitted flag never overwrites a
+    /// default with a stale one.
+    public var payload: [String: Any] {
+        var payload: [String: Any] = [
+            "contrast": contrast,
+            "saturation": saturation,
+            "gamma": gamma,
+            "temperature": temperature,
+        ]
+        if invert { payload["invert"] = true }
+        if let sharpness { payload["sharpness"] = sharpness }
+        if let unsharpRadius { payload["unsharpRadius"] = unsharpRadius }
+        if let zoom { payload["zoom"] = zoom }
+        if let offsetX { payload["offsetX"] = offsetX }
+        if let offsetY { payload["offsetY"] = offsetY }
+        if let lutPath { payload["lutPath"] = lutPath }
+        return payload
+    }
+
+    /// Parse the arguments that follow the display id.
+    ///
+    ///        <contrast> <saturation> <gamma> <temperature>
+    ///        [--invert] [--sharpness n] [--radius px] [--zoom n]
+    ///        [--pan x y] [--lut path.cube]
+    public static func parse(_ args: [String]) -> Result<ScreenFilterArgs, TVCommandValidation.Failure> {
+        guard args.count >= 4 else {
+            return .failure(TVCommandValidation.Failure(
+                "expected <contrast> <saturation> <gamma> <temperature> [--invert] [--sharpness n] [--radius px] [--zoom n] [--pan x y] [--lut path.cube]"
+            ))
+        }
+        guard let contrast = number(args[0]),
+              let saturation = number(args[1]),
+              let gamma = number(args[2]),
+              let temperature = number(args[3]) else {
+            return .failure(TVCommandValidation.Failure("filter values must be non-negative numbers"))
+        }
+
+        var parsed = ScreenFilterArgs(
+            contrast: contrast, saturation: saturation, gamma: gamma, temperature: temperature
+        )
+        var index = 4
+        while index < args.count {
+            let flag = args[index]
+            switch flag {
+            case "--invert":
+                parsed.invert = true
+                index += 1
+
+            case "--sharpness", "--radius", "--zoom":
+                guard let raw = token(args, at: index + 1), let value = number(raw) else {
+                    return .failure(TVCommandValidation.Failure("\(flag) expects a non-negative number"))
+                }
+                // Zooming out would drag the clamp-to-edge sampler into view.
+                if flag == "--zoom", value < 1 {
+                    return .failure(TVCommandValidation.Failure("--zoom must be at least 1 (zooming out would show smeared borders)"))
+                }
+                switch flag {
+                case "--sharpness": parsed.sharpness = value
+                case "--radius": parsed.unsharpRadius = value
+                default: parsed.zoom = value
+                }
+                index += 2
+
+            case "--pan":
+                guard let rawX = token(args, at: index + 1), let rawY = token(args, at: index + 2),
+                      let x = Double(rawX), let y = Double(rawY), x.isFinite, y.isFinite else {
+                    return .failure(TVCommandValidation.Failure("--pan expects <x> <y> numbers"))
+                }
+                parsed.offsetX = x
+                parsed.offsetY = y
+                index += 3
+
+            case "--lut":
+                guard let path = token(args, at: index + 1), !path.isEmpty else {
+                    return .failure(TVCommandValidation.Failure("--lut expects a path to a .cube file"))
+                }
+                parsed.lutPath = path
+                index += 2
+
+            default:
+                return .failure(TVCommandValidation.Failure("unknown filter option '\(flag)'"))
+            }
+        }
+        return .success(parsed)
+    }
+
+    private static func token(_ args: [String], at index: Int) -> String? {
+        index < args.count ? args[index] : nil
+    }
+
+    private static func number(_ raw: String) -> Double? {
+        guard let value = Double(raw), value.isFinite, value >= 0 else { return nil }
+        return value
+    }
+}
+
+/// Where a PiP stream gets its pixels, as plain values — this library stays
+/// free of an FBDCore dependency, and the CLI maps these onto
+/// `PiPCaptureSource`.
+public enum PiPSourceArgs: Equatable, Sendable {
+    case display(UInt32)
+    case window(UInt32)
+    case application(String)
+}
+
+/// Parsed `pip` arguments.
+public struct PiPArgs: Equatable, Sendable {
+    public enum Action: Equatable, Sendable {
+        case list
+        case stop
+        case start
+    }
+
+    public var action: Action
+    public var source: PiPSourceArgs?
+    /// brightness, contrast, saturation — 1 = no adjustment.
+    public var filter: [Double]
+
+    public init(action: Action, source: PiPSourceArgs? = nil, filter: [Double] = [1, 1, 1]) {
+        self.action = action
+        self.source = source
+        self.filter = filter
+    }
+
+    /// Parse `pip` arguments:
+    ///
+    ///     list | stop
+    ///     <display-id>  [brightness] [contrast] [saturation]
+    ///     --window <id> [brightness] [contrast] [saturation]
+    ///     --app <bundle-id> [brightness] [contrast] [saturation]
+    ///
+    /// The filter tail reuses `VideoFilterArgs`, so the one parser keeps
+    /// covering both the display form and the new source forms.
+    public static func parse(_ args: [String]) -> Result<PiPArgs, TVCommandValidation.Failure> {
+        guard let first = args.first else {
+            return .failure(TVCommandValidation.Failure(
+                "expected <display-id>, --window <id>, --app <bundle-id>, list or stop"
+            ))
+        }
+        if first == "list" || first == "stop" {
+            guard args.count == 1 else {
+                return .failure(TVCommandValidation.Failure("'\(first)' takes no further arguments"))
+            }
+            return .success(PiPArgs(action: first == "list" ? .list : .stop))
+        }
+
+        let source: PiPSourceArgs
+        let filterArgs: [String]
+        switch first {
+        case "--window", "--app":
+            guard args.count >= 2 else {
+                return .failure(TVCommandValidation.Failure("\(first) expects an identifier"))
+            }
+            let identifier = args[1]
+            guard !identifier.isEmpty else {
+                return .failure(TVCommandValidation.Failure("\(first) expects a non-empty identifier"))
+            }
+            if first == "--window" {
+                guard let windowID = UInt32(identifier) else {
+                    return .failure(TVCommandValidation.Failure("--window expects a numeric window id (got '\(identifier)')"))
+                }
+                source = .window(windowID)
+            } else {
+                source = .application(identifier)
+            }
+            filterArgs = Array(args.dropFirst(2))
+
+        default:
+            guard let displayID = UInt32(first) else {
+                return .failure(TVCommandValidation.Failure(
+                    "expected a numeric display id or --window/--app (got '\(first)')"
+                ))
+            }
+            source = .display(displayID)
+            filterArgs = Array(args.dropFirst())
+        }
+
+        switch VideoFilterArgs.parse(filterArgs) {
+        case .failure(let failure):
+            return .failure(failure)
+        case .success(let values):
+            return .success(PiPArgs(action: .start, source: source, filter: values))
+        }
+    }
+}
+
+/// Parsed `stream` arguments — **local streaming**: redirecting one display's
+/// contents onto another display, full-screen.
+public struct StreamArgs: Equatable, Sendable {
+    public enum Action: Equatable, Sendable {
+        case stop
+        case start
+    }
+
+    public var action: Action
+    public var sourceDisplayID: UInt32?
+    public var targetDisplayID: UInt32?
+    /// brightness, contrast, saturation — 1 = no adjustment.
+    public var filter: [Double]
+
+    public init(
+        action: Action,
+        sourceDisplayID: UInt32? = nil,
+        targetDisplayID: UInt32? = nil,
+        filter: [Double] = [1, 1, 1]
+    ) {
+        self.action = action
+        self.sourceDisplayID = sourceDisplayID
+        self.targetDisplayID = targetDisplayID
+        self.filter = filter
+    }
+
+    /// Parse `stream` arguments:
+    ///
+    ///     stop
+    ///     <source-display-id> <target-display-id> [brightness] [contrast] [saturation]
+    ///
+    /// Rejecting source == target up front, because redirecting a display onto
+    /// itself captures the stream's own window and would feed back forever.
+    public static func parse(_ args: [String]) -> Result<StreamArgs, TVCommandValidation.Failure> {
+        guard let first = args.first else {
+            return .failure(TVCommandValidation.Failure(
+                "expected <source-display-id> <target-display-id> or stop"
+            ))
+        }
+        if first == "stop" {
+            guard args.count == 1 else {
+                return .failure(TVCommandValidation.Failure("'stop' takes no further arguments"))
+            }
+            return .success(StreamArgs(action: .stop))
+        }
+        guard args.count >= 2 else {
+            return .failure(TVCommandValidation.Failure(
+                "expected <source-display-id> <target-display-id> [brightness] [contrast] [saturation]"
+            ))
+        }
+        guard let sourceID = UInt32(args[0]) else {
+            return .failure(TVCommandValidation.Failure("source must be a numeric display id (got '\(args[0])')"))
+        }
+        guard let targetID = UInt32(args[1]) else {
+            return .failure(TVCommandValidation.Failure("target must be a numeric display id (got '\(args[1])')"))
+        }
+        guard sourceID != targetID else {
+            return .failure(TVCommandValidation.Failure("source and target must be different displays"))
+        }
+        switch VideoFilterArgs.parse(Array(args.dropFirst(2))) {
+        case .failure(let failure):
+            return .failure(failure)
+        case .success(let values):
+            return .success(StreamArgs(
+                action: .start,
+                sourceDisplayID: sourceID,
+                targetDisplayID: targetID,
+                filter: values
+            ))
+        }
     }
 }

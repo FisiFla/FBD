@@ -22,8 +22,16 @@ public final class DisconnectController {
 
     /// Disable or re-enable a display in the layout. Black screen on disable —
     /// only auto-used for external displays / user-initiated actions.
+    ///
+    /// Disconnecting a built-in display is refused on Macs that may not bring it
+    /// back without a reboot (base-M3 MacBook Air / entry-level M3 MacBook Pro)
+    /// unless the user has set the explicit override — see `BuiltInDisconnectGuard`.
     @discardableResult
     public func setEnabled(_ enabled: Bool, displayID: CGDirectDisplayID) -> Bool {
+        if !enabled, CGDisplayIsBuiltin(displayID) != 0, !BuiltInDisconnectGuard.builtInDisconnectAllowed {
+            log.error("refusing to disconnect built-in display \(displayID): this Mac's built-in display may not reconnect without a reboot (override in Settings)")
+            return false
+        }
         do {
             try CGSAPI.setEnabled(enabled, displayID: displayID)
         } catch {

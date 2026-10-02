@@ -722,6 +722,12 @@ func requireOnlineDisplay(_ idString: String?) -> CGDirectDisplayID? {
 @MainActor
 func cmdDisableEnable(displayID: CGDirectDisplayID, enabled: Bool) -> Int32 {
     if !enabled, CGDisplayIsBuiltin(displayID) != 0 {
+        guard BuiltInDisconnectGuard.builtInDisconnectAllowed else {
+            print("fbdcli: refusing to disable the built-in display — on this Mac (base M3) it may")
+            print("        not reconnect without a reboot. Set \"Allow built-in display disconnect\"")
+            print("        in FBD's Settings if you accept that risk, then re-run.")
+            return 2
+        }
         print("warning: built-in display will go dark until re-enabled")
     }
     guard DisconnectController().setEnabled(enabled, displayID: displayID) else {
@@ -1373,82 +1379,335 @@ func cmdRotate(_ controller: DisplayController, args: [String]) -> Int32 {
 }
 
 /// `fbdcli filter <id> off` — stop the full-screen software filter.
-/// `fbdcli filter <id> <contrast> <saturation> <gamma> <temperature> [--invert]`
+/// `fbdcli filter <id> <contrast> <saturation> <gamma> <temperature> [flags]`
 /// — apply it (0.5-2 contrast, 0-2 saturation, 0.4-2.5 gamma, 0.5-1.5 temp).
+/// Flags: `--invert`, `--sharpness n`, `--radius px`, `--zoom n`,
+/// `--pan x y`, `--lut path.cube`.
 @MainActor
 func cmdFilter(_ controller: DisplayController, args: [String]) -> Int32 {
     guard let id = args.first, let display = requireDisplay(id, in: controller) else { return 1 }
-    if args.count >= 2, args[1] == "off" {
+    let filterArgs = Array(args.dropFirst())
+    if filterArgs.first == "off" {
         controller.stopScreenFilter(on: display)
         print("filter off")
         return 0
     }
-    guard args.count >= 5,
-          let contrast = Double(args[1]), let saturation = Double(args[2]),
-          let gamma = Double(args[3]), let temperature = Double(args[4]) else {
-        print("fbdcli: filter: expected <id> <contrast> <saturation> <gamma> <temperature> [--invert] or <id> off")
+    let parsed: ScreenFilterArgs
+    switch ScreenFilterArgs.parse(filterArgs) {
+    case .failure(let failure):
+        print("fbdcli: filter: \(failure.message)")
         return 1
+    case .success(let value):
+        parsed = value
     }
     let params = ScreenFilterParams(
-        contrast: contrast, saturation: saturation, gamma: gamma, temperature: temperature,
-        invert: args.contains("--invert")
+        contrast: parsed.contrast, saturation: parsed.saturation,
+        gamma: parsed.gamma, temperature: parsed.temperature,
+        invert: parsed.invert,
+        sharpness: parsed.sharpness ?? 0,
+        unsharpRadius: parsed.unsharpRadius ?? 1,
+        zoom: parsed.zoom ?? 1,
+        offsetX: parsed.offsetX ?? 0,
+        offsetY: parsed.offsetY ?? 0,
+        lutPath: parsed.lutPath
     )
+    // Check the cube here so a bad file is a clear CLI error rather than a
+    // silently-skipped correction in the overlay.
+    if let lutPath = params.lutPath {
+        do {
+            _ = try LUTCubeParser.parse(contentsOf: URL(fileURLWithPath: lutPath))
+        } catch {
+            print("fbdcli: filter: LUT '\(lutPath)' is not usable: \(error)")
+            return 1
+        }
+    }
     guard controller.setScreenFilter(params, on: display) else {
         print("fbdcli: filter: failed to apply filter (Screen Recording permission needed)")
         return 2
     }
-    print("filter applied (contrast \(contrast), saturation \(saturation), gamma \(gamma), temperature \(temperature)\(params.invert ? ", invert" : "")")
+    var summary = "contrast \(params.contrast), saturation \(params.saturation), gamma \(params.gamma), temperature \(params.temperature)"
+    if params.invert { summary += ", invert" }
+    if params.sharpness > 0 { summary += ", sharpness \(params.sharpness), radius \(params.unsharpRadius)" }
+    if params.zoom > 1 { summary += ", zoom \(params.zoom)" }
+    if params.offsetX != 0 || params.offsetY != 0 {
+        summary += ", pan \(params.offsetX) \(params.offsetY)"
+    }
+    if let lutPath = params.lutPath { summary += ", lut \(lutPath)" }
+    print("filter applied (\(summary))")
     return 0
 }
 
-/// `fbdcli pip <id> [brightness] [contrast] [saturation]` — open a PiP window
-/// streaming a display's content, with optional video-filter values (defaults
-/// 1 = none). The command keeps the window alive until it closes or a key is
-/// pressed. `fbdcli pip stop` stops the CLI's own stream (the app's PiP is
-/// owned by the app process and cannot be touched from the CLI).
+/// `fbdcli pip list` — enumerate capturable sources (displays, windows, apps).
+/// `fbdcli pip <display-id> [b] [c] [s]` — stream a display.
+/// `fbdcli pip --window <window-id> [b] [c] [s]` — stream one window.
+/// `fbdcli pip --app <bundle-id> [b] [c] [s]` — stream every window of an app.
+/// `fbdcli pip stop` — stop the CLI's own stream.
+///
+/// The command keeps the window alive until it closes or a key is pressed.
+/// The app's PiP is owned by the app process and cannot be touched from here.
 /// Process-wide PiP controller so `pip start`/`pip stop` share state.
 @MainActor
 private let cliPip = PipStreamController()
 
 @MainActor
 func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
-    if args.first == "stop" {
-        cliPip.stop()
-        print("pip stopped")
-        return 0
-    }
-    guard let display = requireDisplay(args.first, in: controller) else { return 1 }
-    let filterArgs = Array(args.dropFirst())
-    switch VideoFilterArgs.parse(filterArgs) {
+    switch PiPArgs.parse(args) {
     case .failure(let failure):
         print("fbdcli: pip: \(failure.message)")
         return 1
-    case .success(let values):
-        // One shared controller instance for start and stop — a local
-        // throwaway instance could never be stopped by `pip stop`.
-        let filter = VideoFilter(brightness: values[0], contrast: values[1], saturation: values[2])
-        guard cliPip.startPiP(displayID: display.id, filter: filter) else {
-            print("fbdcli: pip: failed to start PiP for display \(display.id) (grant Screen Recording to FBD if prompted)")
-            return 2
+    case .success(let parsed):
+        switch parsed.action {
+        case .stop:
+            cliPip.stop()
+            print("pip stopped")
+            return 0
+        case .list:
+            return cmdPipList()
+        case .start:
+            guard let sourceArgs = parsed.source else {
+                print("fbdcli: pip: no capture source")
+                return 1
+            }
+            // A display id gets the same early validation the display-only
+            // form used to do; window and app ids are resolved by
+            // ScreenCaptureKit, which reports an unknown one itself.
+            if case .display(let displayID) = sourceArgs,
+               requireDisplay(String(displayID), in: controller) == nil {
+                return 1
+            }
+            let source: PiPCaptureSource
+            switch sourceArgs {
+            case .display(let id): source = .display(id)
+            case .window(let id): source = .window(id)
+            case .application(let bundleID): source = .application(bundleID)
+            }
+            // One shared controller instance for start and stop — a local
+            // throwaway instance could never be stopped by `pip stop`.
+            let filter = VideoFilter(
+                brightness: parsed.filter[0], contrast: parsed.filter[1], saturation: parsed.filter[2]
+            )
+            guard cliPip.startPiP(source: source, filter: filter) else {
+                print("fbdcli: pip: failed to start PiP for \(source.identifier) (grant Screen Recording to FBD if prompted)")
+                return 2
+            }
+            // isActive flips true asynchronously once the capture stream starts;
+            // give it a few seconds before declaring failure.
+            let startDeadline = Date().addingTimeInterval(3)
+            while !cliPip.isActive, Date() < startDeadline {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            }
+            guard cliPip.isActive else {
+                print("fbdcli: pip: stream failed to start for \(source.identifier) (screen-recording permission?)")
+                return 2
+            }
+            print("pip streaming \(source.identifier) (brightness \(parsed.filter[0]), contrast \(parsed.filter[1]), saturation \(parsed.filter[2]))")
+            print("press any key to stop")
+            while cliPip.isActive, !stdinHasInput() {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            }
+            cliPip.stop()
+            print("pip stopped")
+            return 0
         }
-        // isActive flips true asynchronously once the capture stream starts;
-        // give it a few seconds before declaring failure.
-        let startDeadline = Date().addingTimeInterval(3)
-        while !cliPip.isActive, Date() < startDeadline {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+}
+
+/// `fbdcli pip list` — print the capturable sources. `availableSources()` is
+/// async, so the run loop is spun the same way `isActive` is awaited above.
+@MainActor
+func cmdPipList() -> Int32 {
+    var sources: [PiPCaptureCandidate] = []
+    var finished = false
+    Task { @MainActor in
+        sources = await cliPip.availableSources()
+        finished = true
+    }
+    let deadline = Date().addingTimeInterval(15)
+    while !finished, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+    guard finished else {
+        print("fbdcli: pip: listing sources timed out — is Screen Recording granted to your terminal?")
+        return 2
+    }
+    guard !sources.isEmpty else {
+        print("fbdcli: pip: no capturable sources — is Screen Recording granted to your terminal?")
+        return 2
+    }
+    for candidate in sources {
+        print("\(candidate.source.identifier)\t\(candidate.label)")
+    }
+    return 0
+}
+
+/// `fbdcli automation …` — per-display event automation: run a shell script or
+/// open a URL when a display connects/disconnects, or when the system sleeps or
+/// wakes.
+///
+/// **Opt-in**: nothing runs unless a rule exists for it. Rules are persisted in
+/// the shared suite, so one added here applies to the running app too.
+/// Process-wide controller so `add` and `test` see the same rule set.
+@MainActor
+private let cliAutomation = DisplayAutomationController()
+
+@MainActor
+func cmdAutomation(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: automation: expected list, log, add, remove, enable, disable or test")
+        return 1
+    }
+    let rest = Array(args.dropFirst())
+
+    switch sub {
+    case "list":
+        let rules = cliAutomation.allRules
+        guard !rules.isEmpty else {
+            print("no automation rules")
+            return 0
         }
-        guard cliPip.isActive else {
-            print("fbdcli: pip: stream failed to start for display \(display.id) (screen-recording permission?)")
-            return 2
+        for rule in rules {
+            let scope = rule.displayIdentityKey.isEmpty ? "any display" : rule.displayIdentityKey
+            print("\(rule.id.uuidString)  \(rule.enabled ? "on " : "off")  \(scope)  \(rule.event.token)  \(rule.kind.token)  \(rule.payload)")
         }
-        print("pip streaming display \(display.id) (brightness \(values[0]), contrast \(values[1]), saturation \(values[2]))")
-        print("press any key to stop")
-        while cliPip.isActive, !stdinHasInput() {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        }
-        cliPip.stop()
-        print("pip stopped")
         return 0
+
+    case "log":
+        let runs = cliAutomation.recentRuns()
+        guard !runs.isEmpty else {
+            print("no runs recorded in this session")
+            return 0
+        }
+        for run in runs {
+            print("\(run.ruleID.uuidString)  \(run.event.token)  exit \(run.exitCode)\(run.timedOut ? " (timed out)" : "")")
+            let output = run.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !output.isEmpty { print("  \(output)") }
+        }
+        return 0
+
+    case "add":
+        guard rest.count >= 4 else {
+            print("fbdcli: automation add: expected <display-id|any> <connect|disconnect|sleep|wake> <shell|url> <payload…>")
+            return 1
+        }
+        guard let event = AutomationEvent(token: rest[1]) else {
+            print("fbdcli: automation add: unknown event '\(rest[1])' (connect, disconnect, sleep or wake)")
+            return 1
+        }
+        guard let kind = AutomationActionKind(token: rest[2]) else {
+            print("fbdcli: automation add: unknown kind '\(rest[2])' (shell or url)")
+            return 1
+        }
+        let identityKey: String
+        if rest[0].lowercased() == "any" {
+            identityKey = ""
+        } else if let display = requireDisplay(rest[0], in: controller) {
+            identityKey = display.identityKey
+        } else {
+            return 1
+        }
+        // The payload is everything that follows, so a script may contain
+        // spaces without quoting gymnastics.
+        let payload = rest.dropFirst(3).joined(separator: " ")
+        guard !payload.isEmpty else {
+            print("fbdcli: automation add: empty payload")
+            return 1
+        }
+        let rule = cliAutomation.addRule(
+            displayIdentityKey: identityKey,
+            event: event,
+            kind: kind,
+            payload: payload
+        )
+        print("added \(rule.id.uuidString) — \(event.token) on \(identityKey.isEmpty ? "any display" : identityKey)")
+        return 0
+
+    case "remove", "enable", "disable", "test":
+        guard let raw = rest.first, let id = UUID(uuidString: raw) else {
+            print("fbdcli: automation \(sub): expected a rule id")
+            return 1
+        }
+        switch sub {
+        case "remove":
+            guard cliAutomation.removeRule(id: id) else {
+                print("fbdcli: automation remove: no rule \(raw)")
+                return 1
+            }
+            print("removed \(raw)")
+            return 0
+        case "enable", "disable":
+            guard cliAutomation.setEnabled(sub == "enable", ruleID: id) else {
+                print("fbdcli: automation \(sub): no rule \(raw)")
+                return 1
+            }
+            print("\(sub)d \(raw)")
+            return 0
+        default:
+            guard let rule = cliAutomation.rule(withID: id) else {
+                print("fbdcli: automation test: no rule \(raw)")
+                return 1
+            }
+            print("running \(rule.kind.token) rule (timeout \(Int(AutomationLimits.default.timeout))s)…")
+            let record = cliAutomation.runSynchronously(rule)
+            let output = record.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !output.isEmpty { print(output) }
+            print("exit \(record.exitCode)\(record.timedOut ? " (timed out)" : "")")
+            return record.succeeded ? 0 : 2
+        }
+
+    default:
+        print("fbdcli: automation: unknown subcommand '\(sub)'")
+        return 1
+    }
+}
+@MainActor
+func cmdStream(_ controller: DisplayController, args: [String]) -> Int32 {
+    switch StreamArgs.parse(args) {
+    case .failure(let failure):
+        print("fbdcli: stream: \(failure.message)")
+        return 1
+    case .success(let parsed):
+        switch parsed.action {
+        case .stop:
+            cliPip.stop()
+            print("stream stopped")
+            return 0
+        case .start:
+            guard let sourceID = parsed.sourceDisplayID, let targetID = parsed.targetDisplayID,
+                  let source = requireDisplay(String(sourceID), in: controller),
+                  let target = requireDisplay(String(targetID), in: controller) else {
+                return 1
+            }
+            let filter = VideoFilter(
+                brightness: parsed.filter[0], contrast: parsed.filter[1], saturation: parsed.filter[2]
+            )
+            guard cliPip.startPiP(
+                source: .display(source.id),
+                on: target.id,
+                presentation: .fullScreen,
+                filter: filter
+            ) else {
+                print("fbdcli: stream: failed to stream display \(source.id) onto \(target.id) (grant Screen Recording to FBD if prompted)")
+                return 2
+            }
+            // As with pip, isActive flips true asynchronously once the capture
+            // stream starts — give it a few seconds before declaring failure.
+            let startDeadline = Date().addingTimeInterval(3)
+            while !cliPip.isActive, Date() < startDeadline {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            }
+            guard cliPip.isActive else {
+                print("fbdcli: stream: capture did not start for display \(source.id) (screen-recording permission?)")
+                return 2
+            }
+            print("streaming display \(source.id) onto display \(target.id) (brightness \(parsed.filter[0]), contrast \(parsed.filter[1]), saturation \(parsed.filter[2]))")
+            print("press any key to stop")
+            while cliPip.isActive, !stdinHasInput() {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            }
+            cliPip.stop()
+            print("stream stopped")
+            return 0
+        }
     }
 }
 
