@@ -46,8 +46,11 @@ app:
 	fi
 	@cp Sources/FBD/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
 	@cp Sources/FBD/Resources/FBD.icns $(APP_BUNDLE)/Contents/Resources/FBD.icns
-	@codesign --force --sign - $(APP_BUNDLE) >/dev/null 2>&1 || true
+	@# Sign inside-out: nested code first, the bundle last. Signing the app and
+	@# then the framework invalidates the app's seal — `codesign --verify` then
+	@# reports "nested code is modified or invalid", and notarization would fail.
 	@codesign --force --sign - $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework >/dev/null 2>&1 || true
+	@codesign --force --sign - $(APP_BUNDLE) >/dev/null 2>&1 || true
 	@echo "Built $(APP_BUNDLE)"
 
 run: app
