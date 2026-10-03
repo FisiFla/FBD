@@ -192,6 +192,13 @@ public final class CombinedBrightness {
 
     /// Hardware ceiling in nits: the display's XDR preset slider max
     /// (via display.presets) or 100 fallback.
+    /// The display's native brightness ceiling in nits — its hardware maximum,
+    /// with no upscaling. Public so group sync can map brightness by luminance
+    /// rather than by raw slider position.
+    public func hardwareCeilingNits(for display: Display) -> Int {
+        hardwareMaxNits(for: display)
+    }
+
     private func hardwareMaxNits(for display: Display) -> Int {
         // Exclude FBD upscale slots: their slider ceiling IS the upscale target,
         // so including them would make every drag take the hardware branch and
