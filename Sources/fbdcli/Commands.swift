@@ -197,6 +197,120 @@ func cmdVolume(_ controller: DisplayController, display: Display, args: [String]
 /// `fbdcli mute <id> [on|off]` — get or set the mute state via DDC
 /// (MCCS VCP 0x8D: 1 = muted, 2 = unmuted; the controller maps on/off).
 @MainActor
+/// `fbdcli sysvolume [0-100] [--device <id|name>] [--list]` — the **Mac's own**
+/// output volume over CoreAudio (#20).
+///
+/// Distinct from `volume <id>`, which drives a *display's* speakers over DDC.
+/// Both exist because they are different devices; there is one code path per
+/// device, and this is the only path to the Mac's.
+///
+/// Not every output can be controlled: an HDMI output (a TV's speakers) exposes
+/// no software volume at all. That is reported rather than papered over, because
+/// printing "set to 30" for a write the HAL drops is worse than failing.
+func cmdSysVolume(args: [String]) -> Int32 {
+    let volume = SystemVolumeController.shared
+
+    if args.contains("--list") {
+        volume.refresh()
+        waitForOutputDevices(volume)
+        guard !volume.devices.isEmpty else {
+            print("fbdcli: sysvolume: no output devices found")
+            return 2
+        }
+        print("output devices:")
+        for device in volume.devices {
+            let control = device.hasVolumeControl ? "volume" : "no volume control"
+            let marker = device.id == volume.selectedDevice ? "  selected" : ""
+            print("  \(device.id)  \(device.name)  (\(control))\(marker)")
+        }
+        return 0
+    }
+
+    var rest = args
+    if let index = rest.firstIndex(of: "--device") {
+        guard index + 1 < rest.count else {
+            print("fbdcli: sysvolume: --device expects an id or a name")
+            return 1
+        }
+        let spec = rest[index + 1]
+        rest.removeSubrange(index...(index + 1))
+        guard let chosen = resolveOutputDevice(spec, on: volume) else { return 2 }
+        volume.select(chosen)
+    }
+
+    if let argument = rest.first {
+        guard let percent = parsePercent(argument, command: "sysvolume") else { return 1 }
+        volume.set(percent / 100.0)
+        return reportSystemVolume(volume, afterWrite: true)
+    }
+    volume.refresh()
+    return reportSystemVolume(volume, afterWrite: false)
+}
+
+/// Resolve a device spec: a numeric id, or an unambiguous name substring.
+///
+/// `AudioDeviceID` is a `UInt32`; spelled that way so the CLI does not pull in
+/// CoreAudio for a single type name.
+@MainActor
+private func resolveOutputDevice(_ spec: String, on volume: SystemVolumeController) -> UInt32? {
+    volume.refresh()
+    waitForOutputDevices(volume)
+
+    if let id = UInt32(spec), volume.devices.contains(where: { $0.id == id }) {
+        return id
+    }
+    let matches = volume.devices.filter { $0.name.localizedCaseInsensitiveContains(spec) }
+    guard let first = matches.first else {
+        print("fbdcli: sysvolume: no output device matches '\(spec)' (try --list)")
+        return nil
+    }
+    // An ambiguous name is refused rather than guessed: picking the wrong output
+    // silently would be worse than asking for an id.
+    guard matches.count == 1 else {
+        print("fbdcli: sysvolume: '\(spec)' matches \(matches.count) devices; pass an id from --list")
+        return nil
+    }
+    return first.id
+}
+
+@MainActor
+private func waitForOutputDevices(_ volume: SystemVolumeController) {
+    let deadline = Date().addingTimeInterval(2)
+    while volume.devices.isEmpty, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+    }
+}
+
+/// Wait for the deferred HAL work, then report what the device **actually**
+/// holds — not what was requested.
+@MainActor
+private func reportSystemVolume(_ volume: SystemVolumeController, afterWrite: Bool) -> Int32 {
+    if afterWrite {
+        // The write is deliberately asynchronous so a slow USB device cannot
+        // block; give it time to land before reading it back.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        volume.refresh()
+    }
+    let deadline = Date().addingTimeInterval(2)
+    while volume.deviceName == nil, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+    }
+    guard let level = volume.volume else {
+        let name = volume.deviceName.map { " '\($0)'" } ?? ""
+        print("fbdcli: sysvolume: output device\(name) exposes no software volume control — nothing changed")
+        print("       (HDMI and some USB outputs have none; use --list, then --device)")
+        return 2
+    }
+    print(String(
+        format: "system volume %.1f%% (%@)%@",
+        level * 100,
+        volume.deviceName ?? "unknown device",
+        volume.isMuted ? " — muted" : ""
+    ))
+    return 0
+}
+
+@MainActor
 func cmdMute(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
     if args.count >= 2 {
         let state: Bool

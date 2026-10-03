@@ -98,6 +98,8 @@ Commands:
   automation log                Show runs from this session
   osd <icon> <0-100>            Show a transient OSD HUD (e.g. sun.max,
                                 speaker.wave.2) at the given percentage
+  sysvolume [0-100] [--list] [--device <id|name>]
+                                Mac's own output volume (CoreAudio)
   nightshift [0-100]            Get or set Night Shift strength
   truetone [on|off]             Get or set True Tone
   tv <brand> <host> [action]    Control a TV/AVR over the network: brand is
@@ -212,6 +214,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdAutomation(controller, args: rest)
     case .osd:
         return cmdOSD(args: rest)
+    case .sysvolume:
+        return cmdSysVolume(args: rest)
     case .nightshift:
         return cmdNightShift(args: rest)
     case .truetone:

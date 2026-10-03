@@ -34,6 +34,13 @@ final class AppCore {
         // Re-apply persisted corner masks now that the display list exists. A
         // radius of 0 spawns nothing, so this is free for untouched displays.
         displayController.restoreCornerRadii()
+        // The Mac's own output volume (#20): one shared controller so the media
+        // keys, the CLI and this HUD all act on the same device handle. Refresh
+        // is asynchronous by design, so it does not delay launch.
+        SystemVolumeController.shared.onChange = { [weak self] in
+            self?.showSystemVolumeOSD()
+        }
+        SystemVolumeController.shared.refresh()
         statusItemController.install()
 
         // Tier 3 controllers: virtual screens, soft disconnect, layout protection.
@@ -237,8 +244,7 @@ final class AppCore {
 
     /// Show the HUD for the display that changed (falling back to the first
     /// display when the notification carries no id or the display is gone).
-    private func showOSD() {
-        guard Settings.customOSDEnabled else { return }
+    private func showOSD() {        guard Settings.customOSDEnabled else { return }
         let display: Display?
         if let id = pendingOSDDisplayID, let found = displayController.display(withID: id) {
             display = found
@@ -247,6 +253,21 @@ final class AppCore {
         }
         guard let display, let brightness = display.brightness else { return }
         customOSD.show(icon: "sun.max", value: brightness, displayID: display.id)
+    }
+
+    /// HUD for the Mac's own output volume (#20).
+    ///
+    /// Shown with no `displayID`, so it appears on whichever display the pointer
+    /// is on — the same place macOS puts its own volume HUD. A mute toggle shows
+    /// the slashed speaker rather than a volume of zero, so the two states are
+    /// distinguishable at a glance.
+    private func showSystemVolumeOSD() {
+        guard Settings.customOSDEnabled else { return }
+        let volume = SystemVolumeController.shared
+        customOSD.show(
+            icon: volume.isMuted ? "speaker.slash" : "speaker.wave.2",
+            value: volume.volume ?? 0
+        )
     }
 
     // MARK: - HTTP control API
