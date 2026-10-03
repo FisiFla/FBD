@@ -3,7 +3,7 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
-## [Unreleased]
+## [1.5.0] — 2026-10-03
 
 ### Fixed
 - **Built-in display disconnect is refused on base-M3 MacBooks.** On Macs with the
@@ -15,8 +15,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   UI and the auto-disconnect path are all covered. The explicit override ships off
   and is offered in Settings only on affected hardware.
   (BetterDisplay ships the same guard — waydabber/BetterDisplay#4723.)
-
-## [Unreleased]
 
 ### Added
 - **Full-screen filters gained sharpening, geometry and custom 3D LUTs**
