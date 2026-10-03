@@ -23,6 +23,13 @@ public final class DisplayController {
     private let overlay = OverlayController()
     private let brightnessObserver = BrightnessChangeObserver()
     private let combined: CombinedBrightness
+
+    /// The display's native brightness ceiling in nits (its hardware maximum,
+    /// with no upscaling). Passthrough so group sync can map brightness by
+    /// luminance rather than by raw slider position.
+    public func hardwareCeilingNits(for display: Display) -> Int {
+        combined.hardwareCeilingNits(for: display)
+    }
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayController")
 
     private var hasRegistered = false

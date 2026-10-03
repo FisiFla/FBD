@@ -71,16 +71,43 @@ public final class DisplayGroupsController {
     }
 
     /// Apply the same brightness (0…1) to every display in the group via `controller`.
-    public func syncBrightness(_ value: Double, inGroup id: String, controller: DisplayController) {
+    /// Synchronise brightness across a group **by luminance**, not by slider
+    /// position: the source value is converted to nits and re-expressed against
+    /// each member's own ceiling, so a 1600-nit XDR panel and a 300-nit monitor
+    /// end up equally bright instead of merely equally far along their sliders.
+    ///
+    /// `referenceDisplayID` is the display the value came from; nil uses the
+    /// group's first member. Writes go through `controller.setBrightness`
+    /// directly and never back through this method, so a sync cannot re-trigger
+    /// itself.
+    public func syncBrightness(
+        _ value: Double,
+        inGroup id: String,
+        controller: DisplayController,
+        referenceDisplayID: CGDirectDisplayID? = nil
+    ) {
         guard let group = groups.first(where: { $0.id == id }) else {
             log.warning("syncBrightness: no group with id \(id)")
             return
         }
         let displayIDs = group.displayIDs
         let apply: @MainActor () -> Void = {
-            for displayID in displayIDs {
-                guard let display = controller.displays.first(where: { $0.id == displayID }) else { continue }
-                controller.setBrightness(value, on: display)
+            let members = displayIDs.compactMap { displayID in
+                controller.displays.first(where: { $0.id == displayID })
+            }
+            // An empty group is a no-op, not an error: a group can outlive the
+            // displays it names.
+            guard let source = members.first(where: { $0.id == referenceDisplayID }) ?? members.first else {
+                return
+            }
+            let sourceCeiling = controller.hardwareCeilingNits(for: source)
+            for display in members {
+                let mapped = BrightnessSync.equivalentValue(
+                    value,
+                    sourceCeilingNits: sourceCeiling,
+                    targetCeilingNits: controller.hardwareCeilingNits(for: display)
+                )
+                controller.setBrightness(mapped, on: display)
             }
         }
         if Thread.isMainThread {
