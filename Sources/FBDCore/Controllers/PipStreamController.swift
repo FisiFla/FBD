@@ -151,6 +151,12 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
     /// allows it.
     private let containment = CursorContainmentController()
 
+    /// Frames delivered by the active capture; 0 when idle. Lets a caller
+    /// observe the per-stream frame-rate cap rather than only request it.
+    public var deliveredFrames: UInt64 {
+        session?.deliveredFrames ?? 0
+    }
+
     public override init() { super.init() }
 
     deinit {
@@ -495,6 +501,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
 
     private let stateLock = NSLock()
     private var _isCapturing = false
+    private var _deliveredFrames: UInt64 = 0
     /// Set before an intentional stop so didStopWithError stays quiet.
     private var _isStopping = false
     private var stream: SCStream?
@@ -683,7 +690,15 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        stateLock.withLock { _deliveredFrames += 1 }
         renderer.render(pixelBuffer: pixelBuffer, in: metalView)
+    }
+
+    /// Frames the capture has actually delivered. The frame-rate cap is the only
+    /// thing that limits this, so it is what "the cap changes the capture rate"
+    /// is measured against — as opposed to what was merely requested.
+    var deliveredFrames: UInt64 {
+        stateLock.withLock { _deliveredFrames }
     }
 
     // MARK: SCStreamDelegate
