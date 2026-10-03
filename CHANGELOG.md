@@ -92,6 +92,22 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - A Settings → Automation section listing every rule with its payload shown
   verbatim, an enable toggle, and an add form.
 
+## [1.4.0] — 2026-08-04
+
+### Added
+- **Per-Display control page** — the per-display settings tab grew into a full
+  control page (`PerDisplayCardView`), with each display's own sections rather
+  than one shared list.
+- **Drag-to-arrange display grid** — `ArrangementGridView` sets the arrangement
+  by dragging displays directly. The geometry lives in a pure `ArrangementMath`
+  (unit-tested in `ArrangementMathTests`) rather than in the view, and the path
+  uses public CoreGraphics only.
+- Two ADRs recording those decisions:
+  `0001-no-virtual-screen-software-brightness` and
+  `0002-display-arrangement-via-public-cg-api`.
+- Engineering docs: `docs/agents/domain.md`, `docs/agents/issue-tracker.md`,
+  `docs/agents/triage-labels.md`.
+
 ## [1.3.3] — 2026-08-04
 
 ### Fixed
@@ -121,8 +137,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   requireArgCount (repeated guard-and-fail blocks).
 - IPv6 URL bracketing centralized in `NetworkHost.bracketed` (+3 tests).
 - README documents the `fbd://open` URL scheme and the media-keys opt-in.
-
-## [1.4.0] — 2026-08-04
 
 ### Changed (deepening — combined brightness)
 - **One deep `CombinedBrightness` module** replaces `CombinedController` +
