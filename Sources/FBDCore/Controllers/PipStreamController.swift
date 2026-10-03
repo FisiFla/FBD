@@ -95,21 +95,31 @@ private func fetchShareableContent() async throws -> SCShareableContent {
     }
 }
 
-/// Backing scale factor of the display containing a window, so a captured
-/// window is rendered at its physical pixel size rather than its point size.
+/// The display containing a window's centre, or nil when it is off-screen.
 /// `SCWindow.frame` and `CGDisplayBounds` share one global top-left coordinate
 /// space, so containment is a direct test.
-private func backingScaleFactor(containing frame: CGRect) -> CGFloat {
+private func displayID(containing frame: CGRect) -> CGDirectDisplayID? {
     let center = CGPoint(x: frame.midX, y: frame.midY)
     for screen in NSScreen.screens {
         guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             continue
         }
         if CGDisplayBounds(number.uint32Value).contains(center) {
-            return screen.backingScaleFactor
+            return number.uint32Value
         }
     }
-    return NSScreen.main?.backingScaleFactor ?? 1
+    return nil
+}
+
+/// Backing scale factor of the display containing a window, so a captured
+/// window is rendered at its physical pixel size rather than its point size.
+private func backingScaleFactor(containing frame: CGRect) -> CGFloat {
+    guard let id = displayID(containing: frame) else {
+        return NSScreen.main?.backingScaleFactor ?? 1
+    }
+    return NSScreen.screens.first {
+        ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
+    }?.backingScaleFactor ?? 1
 }
 
 /// Picture-in-Picture streaming controller:
@@ -582,9 +592,14 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             // back into the next frame. Everything else stays included.
             let ownWindowID = owner?.pipWindowID() ?? 0
             let excluded = content.windows.filter { $0.windowID == ownWindowID }
+            // Capture at the panel's PHYSICAL pixel size. `SCDisplay.width/height`
+            // are points, so on a 2x panel a point-sized capture is half the
+            // available resolution and reads as soft, or as odd scaling once the
+            // renderer fits it to a target display — the same reason
+            // OverlayController captures pixels rather than points.
             return (
                 SCContentFilter(display: scDisplay, excludingWindows: excluded),
-                (scDisplay.width, scDisplay.height)
+                (CGDisplayPixelsWide(displayID), CGDisplayPixelsHigh(displayID))
             )
 
         case .window(let windowID):
@@ -601,17 +616,24 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             guard !applications.isEmpty else {
                 throw PipError.sourceUnavailable("application \(bundleID)")
             }
-            // The application filter is still anchored to a display (the
-            // display-less variant was obsoleted in Swift), so anchor it to the
-            // display the PiP is being shown on.
-            guard let scDisplay = content.displays.first(where: { $0.displayID == hostDisplayID }) else {
-                throw PipError.sourceUnavailable("display \(hostDisplayID)")
+            // The application filter is display-anchored — the display-less
+            // variant was obsoleted — so anchor it to the display the app's
+            // windows are ACTUALLY on. Anchoring to the host display instead
+            // captures an empty region whenever the app lives on another screen,
+            // which renders as a black PiP with no error anywhere.
+            let appWindows = content.windows.filter {
+                $0.isOnScreen && $0.owningApplication?.bundleIdentifier == bundleID
+            }
+            let anchorID = appWindows.compactMap { displayID(containing: $0.frame) }.first ?? hostDisplayID
+            guard let scDisplay = content.displays.first(where: { $0.displayID == anchorID })
+                ?? content.displays.first else {
+                throw PipError.sourceUnavailable("display for application \(bundleID)")
             }
             let ownWindowID = owner?.pipWindowID() ?? 0
             let excluded = content.windows.filter { $0.windowID == ownWindowID }
             return (
                 SCContentFilter(display: scDisplay, including: applications, exceptingWindows: excluded),
-                (CGDisplayPixelsWide(hostDisplayID), CGDisplayPixelsHigh(hostDisplayID))
+                (CGDisplayPixelsWide(anchorID), CGDisplayPixelsHigh(anchorID))
             )
         }
     }
@@ -714,7 +736,13 @@ private final class PipRenderer {
         c = c * filter.brightness;
         float l = dot(c, float3(0.2126, 0.7152, 0.0722));
         c = mix(float3(l), c, filter.saturation);
-        return float4(c, color.a);
+        // Opaque by construction. An application-filter capture carries
+        // transparency wherever the app has no window (the filter excludes the
+        // desktop and dock), and passing that alpha through composited the video
+        // away against the window's black container — a black rectangle with no
+        // error anywhere. The video quad is meant to be opaque; the letterbox
+        // around it comes from the render pass clear colour, not from the alpha.
+        return float4(c, 1.0);
     }
     """
 
