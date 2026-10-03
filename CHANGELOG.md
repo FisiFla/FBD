@@ -142,8 +142,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   brightness, Hardware ceiling, XDR upscaling, Software boost, Upscale
   state).
 
-## [Unreleased]
-
 ### Changed (deepening — virtual displays, settings persistence)
 - **Virtual displays route through the `DisplayControlling` seam** — the
   executor's virtual create/destroy/list go through one surface
@@ -178,8 +176,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   Tools menu item) — the old name was confusing since it opens a
   picture-in-picture window.
 
-## [Unreleased]
-
 ### Fixed
 - **App crashed when a second virtual screen was created** (and at launch
   when an autoConnect config reconnected after one was already active):
@@ -194,8 +190,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   Note: creating more than one SLVirtualDisplay fails on this macOS 27 —
   now a graceful error instead of a crash.
 
-## [Unreleased]
-
 ### Changed
 - **UI simplification sweep** (feedback: "confusing / overengineered / footer
   buttons do nothing"):
@@ -208,16 +202,12 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
     opens the floating window, Check for Updates and Quit work. The subtle
     scroll-jump Tools menu and the System Colors button were removed.
 
-## [Unreleased]
-
 ### Changed
 - **Image Adjustments moved out of the options menu into a card "Filters"
   disclosure** — sliders inside SwiftUI menus are fragile (they close on
   accidental clicks and are hard to hit); the disclosure matches the card's
   other sections. Verified live: dragging the saturation slider to 0 makes
   the screen measured-grayscale (colorfulness 0.0000), Reset restores it.
-
-## [Unreleased]
 
 ### Changed
 - **Adaptive panel-height experiment reverted**: fitting the panel to the
@@ -261,8 +251,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   routed path is the working one — single-driver).
 - HTTP API: POST /api/displays/<id>/rotate and /filter (+ off); router
   tests (270 total).
-
-
 
 ### Added
 - **Per-display options menu** (ellipsis in each display card): Display Mode
@@ -331,8 +319,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
     before) and the panel grows to 460×860 on settings open (top-anchored)
     and shrinks back on Back.
 
-## [Unreleased]
-
 ### Fixed
 - **XDR software boost was dead on write-protected systems** (found via live
   testing with a real Screen Recording grant): the explicit
@@ -354,8 +340,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - `GET /api/health` now reports `boostActive` (display IDs with a live
   software-boost session) — observability for the overlay.
 
-## [Unreleased]
-
 ### Fixed
 - **Panel showed "Brightness unavailable" at launch**: nothing performed an
   initial brightness read — the value only appeared after a write or an
@@ -373,8 +357,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   to the main page (650), the close × hides the panel. Button hit areas
   were verified against the live Accessibility frames.
 
-## [Unreleased]
-
 ### Fixed
 - **Settings toggles turned gray after the panel lost focus**: the panel is
   a `.nonactivatingPanel` that rarely holds key status, so SwiftUI rendered
@@ -383,8 +365,6 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   outside). The panel root now forces `controlActiveState = .key`, and the
   settings switches get an explicit `.tint(.blue)` on-state. Verified by
   pixel-sampling the switch fill while focused and unfocused (both blue).
-
-
 
 ### Added
 - AppIntents bridge (`FBDAppIntentsBridge`) so the Shortcuts actions from the
