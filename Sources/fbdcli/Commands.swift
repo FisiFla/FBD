@@ -65,6 +65,22 @@ func cmdInfo(_ display: Display, args: [String]) -> Int32 {
     } else {
         capabilities = "not read"
     }
+    // VRR / ProMotion for the CURRENT mode, queried on demand. These need a
+    // live WindowServer connection and crash a process without one, so they are
+    // asked for here — once, for one display — rather than stored on every
+    // DisplayMode where the test suite would reach them.
+    let refreshLabel: String
+    if let caps = SkyLightAPI.currentModeCapabilities(displayID: display.id) {
+        let label = SkyLightAPI.capabilityLabel(
+            minRefreshRate: caps.minRefreshRate,
+            isVRR: caps.isVRR,
+            isProMotion: caps.isProMotion,
+            maxRefreshRate: display.currentMode?.refreshRate ?? 0
+        )
+        refreshLabel = label.isEmpty ? "none reported" : label
+    } else {
+        refreshLabel = "unavailable"
+    }
     let bounds = display.bounds
     print("Display \(display.id)")
     print("  name: \(display.name)")
@@ -81,6 +97,7 @@ func cmdInfo(_ display: Display, args: [String]) -> Int32 {
     print("  ddcAvailable: \(yesno(display.ddcAvailable))")
     print("  appleBrightnessAvailable: \(yesno(display.appleBrightnessAvailable))")
     print("  capabilities: \(capabilities)")
+    print("  refresh: \(refreshLabel)")
     return 0
 }
 
