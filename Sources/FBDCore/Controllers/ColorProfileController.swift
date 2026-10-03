@@ -164,7 +164,13 @@ public final class ColorProfileController {
             log.warning("ColorSyncDeviceCopyDeviceInfo failed for display \(display.id)")
             return nil
         }
-        return info as? [String: Any]
+        // `ColorSyncDeviceCopyDeviceInfo` is a Copy function, so the +1 reference
+        // is ours to release, and the `Unmanaged` must be unwrapped before it
+        // can bridge to Swift. `info as? [String: Any]` on the Unmanaged always
+        // fails — the compiler warns as much — which silently made every profile
+        // lookup (list, apply, restore, and the UI's Color Mode menu) return
+        // nothing at all.
+        return info.takeRetainedValue() as? [String: Any]
     }
 
     /// Best available profile name: the profile's own description from its ICC

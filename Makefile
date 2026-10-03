@@ -17,31 +17,35 @@ test:
 
 # Universal (arm64 + x86_64). On Apple Silicon the macOS SDK may not ship an
 # x86_64 slice; falls back to native arch with a warning.
-# The built executable is located AFTER the build, inside the shell: SPM
-# emits it at .build/apple/Products/Release/FBD (universal) or
-# .build/<arch>-apple-macosx/release/FBD (single arch). (A make-side
-# wildcard would be expanded before the build ran and came up empty on
-# fresh checkouts.)
+# The built executable is located AFTER the build, inside the shell, by asking
+# SwiftPM where it actually put things (`--show-bin-path`). Hard-coded guesses
+# do not survive toolchain drift: `.build/release`, `.build/apple/Products/
+# Release` and `.build/out/Products/Release` have each been the truth, and a
+# wrong guess made this target fail with "built binary not found" even though
+# the build succeeded. Asking in the shell also avoids expanding a make-side
+# wildcard before the build has run.
 app:
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
 	@if swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 2>/tmp/fbd-universal.log; then \
-		BIN="$$(ls -d .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD 2>/dev/null | head -1)"; \
+		BIN="$$(swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 --show-bin-path)/FBD"; \
 	else \
 		echo "Universal build failed (see /tmp/fbd-universal.log); building native arch only."; \
 		swift build $(SWIFT_FLAGS) -c $(CONFIG) || exit 1; \
-		BIN="$$(ls -d .build/apple/Products/Release/FBD .build/arm64-apple-macosx/release/FBD .build/x86_64-apple-macosx/release/FBD 2>/dev/null | head -1)"; \
+		BIN="$$(swift build $(SWIFT_FLAGS) -c $(CONFIG) --show-bin-path)/FBD"; \
 	fi; \
-	if [ -z "$$BIN" ] || [ ! -f "$$BIN" ]; then echo "error: built binary not found"; exit 1; fi; \
-	cp "$$BIN" $(APP_BUNDLE)/Contents/MacOS/FBD
+	if [ -z "$$BIN" ] || [ ! -f "$$BIN" ]; then echo "error: built binary not found at '$$BIN'"; exit 1; fi; \
+	cp "$$BIN" $(APP_BUNDLE)/Contents/MacOS/FBD; \
+	BIN_DIR="$$(dirname "$$BIN")"; \
+	if [ -d "$$BIN_DIR/Sparkle.framework" ]; then \
+		mkdir -p $(APP_BUNDLE)/Contents/Frameworks; \
+		cp -R "$$BIN_DIR/Sparkle.framework" $(APP_BUNDLE)/Contents/Frameworks/; \
+		rm -rf $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework/_CodeSignature; \
+	else \
+		echo "warning: Sparkle.framework not found in $$BIN_DIR - the updater will be inert"; \
+	fi
 	@cp Sources/FBD/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
 	@cp Sources/FBD/Resources/FBD.icns $(APP_BUNDLE)/Contents/Resources/FBD.icns
-	# Sparkle: copy the framework (SPM binary distribution) into the bundle.
-	@if [ -d .build/apple/Products/Release/Sparkle.framework ]; then \
-		mkdir -p $(APP_BUNDLE)/Contents/Frameworks; \
-		cp -R .build/apple/Products/Release/Sparkle.framework $(APP_BUNDLE)/Contents/Frameworks/; \
-		rm -rf $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework/_CodeSignature; \
-	fi
 	@codesign --force --sign - $(APP_BUNDLE) >/dev/null 2>&1 || true
 	@codesign --force --sign - $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework >/dev/null 2>&1 || true
 	@echo "Built $(APP_BUNDLE)"
