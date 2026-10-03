@@ -85,6 +85,66 @@ public enum SkyLightAPI {
         }
     }
 
+    // MARK: - Mode capabilities
+
+    /// Minimum refresh, VRR and ProMotion for one mode, or nil when unavailable.
+    ///
+    /// **`modeNumber` is an `IODisplayModeID`** — `CGDisplayCopyDisplayMode(_:).ioDisplayModeID`,
+    /// not the CGS `displayModeNumber` that `CGSGetDisplayModeDescriptionOfLength`
+    /// reports. Handing it a CGS number yields 0/false with no error, which is
+    /// how a wrong mapping can look like a display that simply has no VRR.
+    ///
+    /// These queries need a live WindowServer connection and **crash a process
+    /// that has none** (observed: xctest, signal 11). Call them from an
+    /// on-demand path only — never from model population that tests exercise.
+    public static func modeCapabilities(
+        displayID: CGDirectDisplayID,
+        modeNumber: Int32
+    ) -> (minRefreshRate: Double, isVRR: Bool, isProMotion: Bool)? {
+        guard mainConnectionID != 0 else { return nil }
+        return (
+            Double(SLSGetDisplayModeMinRefreshRate(Int32(displayID), modeNumber)),
+            SLSIsDisplayModeVRR(Int32(displayID), modeNumber) != 0,
+            SLSIsDisplayModeProMotion(Int32(displayID), modeNumber) != 0
+        )
+    }
+
+    /// Capabilities of a display's *current* mode, resolved through
+    /// `CGDisplayCopyDisplayMode` so the mode id is one these APIs accept.
+    public static func currentModeCapabilities(
+        displayID: CGDirectDisplayID
+    ) -> (minRefreshRate: Double, isVRR: Bool, isProMotion: Bool)? {
+        guard let mode = CGDisplayCopyDisplayMode(displayID) else { return nil }
+        return modeCapabilities(displayID: displayID, modeNumber: mode.ioDisplayModeID)
+    }
+
+    /// Compact capability text, e.g. "proMotion vrr 48-120Hz". Pure, so the
+    /// formatting is unit-testable without touching the private API.
+    ///
+    /// Empty when nothing is known — printing "no vrr" for a mode that simply
+    /// answered nothing would be an assertion we cannot back up.
+    public static func capabilityLabel(
+        minRefreshRate: Double,
+        isVRR: Bool,
+        isProMotion: Bool,
+        maxRefreshRate: Double = 0
+    ) -> String {
+        var parts: [String] = []
+        if isProMotion { parts.append("proMotion") }
+        if isVRR {
+            // Only show a range when the two ends actually differ: a ProMotion
+            // panel reports min == max, and "vrr 120-120Hz" is noise, not data.
+            let hasRange = minRefreshRate > 0 && maxRefreshRate > minRefreshRate
+            parts.append(hasRange
+                ? String(format: "vrr %.0f-%.0fHz", minRefreshRate, maxRefreshRate)
+                : "vrr")
+        } else if minRefreshRate > 0, !isProMotion {
+            // A fixed mode with a reported floor but no variable refresh.
+            parts.append(String(format: "min %.0fHz", minRefreshRate))
+        }
+        return parts.joined(separator: " ")
+    }
+
     // MARK: - Presets
 
     /// Enumerate display presets (cap at 32 slots; blank slots return invalid).

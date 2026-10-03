@@ -85,6 +85,19 @@ CGError SLSSetDisplayRotation(int cid, int displayID, int rotation);
 int SLDisplayRotation(int cid, int displayID);
 CGError SLSDetectDisplays(int cid);
 
+#pragma mark - SkyLight — mode capabilities (Tier 2 → 3)
+
+/* Signatures verified empirically and then SANITY-CHECKED against known hardware:
+   the built-in ProMotion panel reports VRR + ProMotion, the external TV reports
+   neither. The mode argument is an IODisplayModeID (CGDisplayMode
+   .ioDisplayModeID), NOT a CGS mode number — passing the CGS number silently
+   yields 0/false. The queries require a live WindowServer connection: calling
+   them from a process that has none (xctest) crashes, so they must never run on
+   a path the test suite exercises. */
+float SLSGetDisplayModeMinRefreshRate(int displayID, int modeNumber);
+int SLSIsDisplayModeVRR(int displayID, int modeNumber);
+int SLSIsDisplayModeProMotion(int displayID, int modeNumber);
+
 #pragma mark - SkyLight — display presets + HDR mode (Tier 2, verified on macOS 27)
 
 /* Signatures verified empirically: CopyPresetData(display, index) confirmed by
