@@ -125,8 +125,8 @@ public final class OverlayController {
             stopScreenFilter(displayID: displayID)
             return true
         }
-        guard CGPreflightScreenCaptureAccess() else {
-            log.error("setScreenFilter: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording")
+        guard ScreenRecordingPermission.ensure() else {
+            log.error("setScreenFilter: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording, then relaunch FBD")
             return false
         }
         guard let device = MTLCreateSystemDefaultDevice() else {

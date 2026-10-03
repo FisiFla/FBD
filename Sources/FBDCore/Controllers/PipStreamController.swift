@@ -170,8 +170,8 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         filter: VideoFilter = .identity
     ) -> Bool {
         teardownPip()
-        guard CGPreflightScreenCaptureAccess() else {
-            log.error("startPiP: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording")
+        guard ScreenRecordingPermission.ensure() else {
+            log.error("startPiP: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording, then relaunch FBD")
             return false
         }
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -216,7 +216,7 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
     /// ScreenCaptureKit has nothing to offer — callers report that rather than
     /// treating it as "no sources exist".
     public func availableSources() async -> [PiPCaptureCandidate] {
-        guard CGPreflightScreenCaptureAccess() else {
+        guard ScreenRecordingPermission.ensure() else {
             log.error("availableSources: screen-recording permission missing")
             return []
         }
