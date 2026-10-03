@@ -31,6 +31,8 @@ private enum OverlayError: Error {
 public final class OverlayController {
     /// Dim overlay windows by display id.
     private var dimWindows: [CGDirectDisplayID: NSWindow] = [:]
+    /// Corner-mask overlay windows by display id (#21).
+    private var cornerWindows: [CGDirectDisplayID: NSWindow] = [:]
     /// Active capture sessions (window + stream + renderer) by display id.
     private var boostSessions: [CGDirectDisplayID: BoostSession] = [:]
     private var screenObserver: NSObjectProtocol?
@@ -53,6 +55,63 @@ public final class OverlayController {
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
         }
+    }
+
+    // MARK: - Rounded corners
+
+    /// True when a corner mask exists for the display.
+    public func isMaskingCorners(displayID: CGDirectDisplayID) -> Bool {
+        cornerWindows[displayID] != nil
+    }
+
+    /// Round a square display — or square off a panel that has rounded corners
+    /// of its own — by painting black over everything outside a rounded
+    /// rectangle of `radius`.
+    ///
+    /// A **drawn mask, not a capture**: it reuses the shared overlay-window
+    /// factory, so it needs no Screen Recording permission, ignores mouse
+    /// events, and sits at the same shielding level as the other overlays.
+    /// `radius <= 0` removes the mask outright rather than leaving a no-op
+    /// window on screen.
+    public func setCornerRadius(_ radius: Double, displayID: CGDirectDisplayID) {
+        let bounds = CGDisplayBounds(displayID)
+        guard isUsable(bounds) else {
+            removeCornerMask(for: displayID)
+            return
+        }
+        let clamped = CornerMask.clampedRadius(radius, in: bounds.size)
+        guard clamped > 0 else {
+            removeCornerMask(for: displayID)
+            return
+        }
+
+        let window: NSWindow
+        if let existing = cornerWindows[displayID] {
+            window = existing
+        } else {
+            window = makeOverlayWindow(bounds: bounds, backgroundColor: .clear)
+            let host = NSView(frame: NSRect(origin: .zero, size: bounds.size))
+            host.wantsLayer = true
+            let shape = CAShapeLayer()
+            shape.fillColor = NSColor.black.cgColor
+            // Even-odd over the full rect plus the rounded rect leaves exactly
+            // the four slivers outside the rounded shape.
+            shape.fillRule = .evenOdd
+            host.layer = shape
+            window.contentView = host
+            cornerWindows[displayID] = window
+        }
+        (window.contentView?.layer as? CAShapeLayer)?.path =
+            CornerMask.path(size: bounds.size, radius: clamped)
+        window.setFrame(bounds, display: true)
+        window.orderFrontRegardless()
+    }
+
+    private func removeCornerMask(for displayID: CGDirectDisplayID) {
+        guard let window = cornerWindows.removeValue(forKey: displayID) else { return }
+        window.contentView = nil
+        window.orderOut(nil)
+        window.close()
     }
 
     // MARK: - Dim to black
@@ -189,6 +248,7 @@ public final class OverlayController {
     /// Tear down everything for a display (dim overlay + boost stream).
     public func stop(for displayID: CGDirectDisplayID) {
         removeDim(for: displayID)
+        removeCornerMask(for: displayID)
         teardownBoost(for: displayID)
     }
 
@@ -196,6 +256,9 @@ public final class OverlayController {
     public func stopAll() {
         for id in Array(dimWindows.keys) {
             removeDim(for: id)
+        }
+        for id in Array(cornerWindows.keys) {
+            removeCornerMask(for: id)
         }
         for id in Array(boostSessions.keys) {
             teardownBoost(for: id)
