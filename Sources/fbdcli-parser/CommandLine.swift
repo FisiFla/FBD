@@ -1,3 +1,4 @@
+import FBDCore
 import Foundation
 
 /// The fbdcli command vocabulary, shared between the executable and the
@@ -365,6 +366,55 @@ public enum PiPSourceArgs: Equatable, Sendable {
 }
 
 /// Parsed `pip` arguments.
+/// Options shared by `pip` and `stream` that are not filter values (#14).
+public struct StreamOptions: Equatable, Sendable {
+    /// Requested capture rate; nil leaves the stream at `StreamFrameRate.default`.
+    public var fps: Int?
+    /// Ask for the pointer to be kept off the stream's display. Honoured only
+    /// when the experimental setting allows it.
+    public var containCursor: Bool
+
+    public init(fps: Int? = nil, containCursor: Bool = false) {
+        self.fps = fps
+        self.containCursor = containCursor
+    }
+
+    /// Strip `--fps <n>` and `--contain-cursor` out of a positional argument
+    /// list, returning them alongside whatever remains for `VideoFilterArgs`.
+    ///
+    /// An out-of-range rate is a **failure, not a clamp**: a typo should be
+    /// reported rather than silently become some other frame rate.
+    public static func extract(
+        _ args: [String]
+    ) -> Result<(options: StreamOptions, rest: [String]), TVCommandValidation.Failure> {
+        var options = StreamOptions()
+        var rest: [String] = []
+        var index = 0
+        while index < args.count {
+            switch args[index] {
+            case "--fps":
+                guard index + 1 < args.count, let fps = Int(args[index + 1]) else {
+                    return .failure(TVCommandValidation.Failure("--fps expects a whole number of frames per second"))
+                }
+                guard StreamFrameRate.range.contains(fps) else {
+                    return .failure(TVCommandValidation.Failure(
+                        "--fps must be \(StreamFrameRate.range.lowerBound)...\(StreamFrameRate.range.upperBound) (got \(fps))"
+                    ))
+                }
+                options.fps = fps
+                index += 2
+            case "--contain-cursor":
+                options.containCursor = true
+                index += 1
+            default:
+                rest.append(args[index])
+                index += 1
+            }
+        }
+        return .success((options, rest))
+    }
+}
+
 public struct PiPArgs: Equatable, Sendable {
     public enum Action: Equatable, Sendable {
         case list
@@ -376,19 +426,31 @@ public struct PiPArgs: Equatable, Sendable {
     public var source: PiPSourceArgs?
     /// brightness, contrast, saturation — 1 = no adjustment.
     public var filter: [Double]
+    /// Requested capture rate; nil leaves the stream at `StreamFrameRate.default`.
+    public var fps: Int?
+    /// Ask for the pointer to be kept off the captured display.
+    public var containCursor: Bool
 
-    public init(action: Action, source: PiPSourceArgs? = nil, filter: [Double] = [1, 1, 1]) {
+    public init(
+        action: Action,
+        source: PiPSourceArgs? = nil,
+        filter: [Double] = [1, 1, 1],
+        fps: Int? = nil,
+        containCursor: Bool = false
+    ) {
         self.action = action
         self.source = source
         self.filter = filter
+        self.fps = fps
+        self.containCursor = containCursor
     }
 
     /// Parse `pip` arguments:
     ///
     ///     list | stop
-    ///     <display-id>  [brightness] [contrast] [saturation]
-    ///     --window <id> [brightness] [contrast] [saturation]
-    ///     --app <bundle-id> [brightness] [contrast] [saturation]
+    ///     <display-id>  [brightness] [contrast] [saturation] [--fps N] [--contain-cursor]
+    ///     --window <id> [brightness] [contrast] [saturation] [--fps N]
+    ///     --app <bundle-id> [brightness] [contrast] [saturation] [--fps N]
     ///
     /// The filter tail reuses `VideoFilterArgs`, so the one parser keeps
     /// covering both the display form and the new source forms.
@@ -436,11 +498,22 @@ public struct PiPArgs: Equatable, Sendable {
             filterArgs = Array(args.dropFirst())
         }
 
-        switch VideoFilterArgs.parse(filterArgs) {
+        switch StreamOptions.extract(filterArgs) {
         case .failure(let failure):
             return .failure(failure)
-        case .success(let values):
-            return .success(PiPArgs(action: .start, source: source, filter: values))
+        case .success(let extracted):
+            switch VideoFilterArgs.parse(extracted.rest) {
+            case .failure(let failure):
+                return .failure(failure)
+            case .success(let values):
+                return .success(PiPArgs(
+                    action: .start,
+                    source: source,
+                    filter: values,
+                    fps: extracted.options.fps,
+                    containCursor: extracted.options.containCursor
+                ))
+            }
         }
     }
 }
@@ -458,23 +531,31 @@ public struct StreamArgs: Equatable, Sendable {
     public var targetDisplayID: UInt32?
     /// brightness, contrast, saturation — 1 = no adjustment.
     public var filter: [Double]
+    /// Requested capture rate; nil leaves the stream at `StreamFrameRate.default`.
+    public var fps: Int?
+    /// Ask for the pointer to be kept off the target display (experimental).
+    public var containCursor: Bool
 
     public init(
         action: Action,
         sourceDisplayID: UInt32? = nil,
         targetDisplayID: UInt32? = nil,
-        filter: [Double] = [1, 1, 1]
+        filter: [Double] = [1, 1, 1],
+        fps: Int? = nil,
+        containCursor: Bool = false
     ) {
         self.action = action
         self.sourceDisplayID = sourceDisplayID
         self.targetDisplayID = targetDisplayID
         self.filter = filter
+        self.fps = fps
+        self.containCursor = containCursor
     }
 
     /// Parse `stream` arguments:
     ///
     ///     stop
-    ///     <source-display-id> <target-display-id> [brightness] [contrast] [saturation]
+    ///     <source-display-id> <target-display-id> [brightness] [contrast] [saturation] [--fps N] [--contain-cursor]
     ///
     /// Rejecting source == target up front, because redirecting a display onto
     /// itself captures the stream's own window and would feed back forever.
@@ -504,16 +585,23 @@ public struct StreamArgs: Equatable, Sendable {
         guard sourceID != targetID else {
             return .failure(TVCommandValidation.Failure("source and target must be different displays"))
         }
-        switch VideoFilterArgs.parse(Array(args.dropFirst(2))) {
+        switch StreamOptions.extract(Array(args.dropFirst(2))) {
         case .failure(let failure):
             return .failure(failure)
-        case .success(let values):
-            return .success(StreamArgs(
-                action: .start,
-                sourceDisplayID: sourceID,
-                targetDisplayID: targetID,
-                filter: values
-            ))
+        case .success(let extracted):
+            switch VideoFilterArgs.parse(extracted.rest) {
+            case .failure(let failure):
+                return .failure(failure)
+            case .success(let values):
+                return .success(StreamArgs(
+                    action: .start,
+                    sourceDisplayID: sourceID,
+                    targetDisplayID: targetID,
+                    filter: values,
+                    fps: extracted.options.fps,
+                    containCursor: extracted.options.containCursor
+                ))
+            }
         }
     }
 }

@@ -34,6 +34,7 @@ public enum Settings {
         add("layoutProtectionEnabled", layoutProtectionEnabled)
         add("showOfflineDisplays", showOfflineDisplays)
         add("enableDisconnectOption", enableDisconnectOption)
+        add("experimentalCursorContainment", experimentalCursorContainment)
         add("virtualDisplayIDs", virtualDisplayIDs)
         add("httpServerEnabled", httpServerEnabled)
         add("httpServerPort", httpServerPort)
@@ -158,6 +159,13 @@ public enum Settings {
     /// controls are offered in the UI.
     @Storage(key: "enableDisconnectOption", defaultValue: true)
     public static var enableDisconnectOption: Bool
+
+    /// Keep the pointer off a streamed display so it never appears in the
+    /// stream (#14). **Experimental** upstream (BetterDisplay 5.0.4+), and it
+    /// moves the user's pointer, so it defaults to OFF and is honoured only
+    /// when a stream explicitly asks for it.
+    @Storage(key: "experimentalCursorContainment", defaultValue: false)
+    public static var experimentalCursorContainment: Bool
 
     /// Persisted virtual screen configurations (JSON-encoded).
     private static let virtualScreensKey = "virtualScreens.v1"
