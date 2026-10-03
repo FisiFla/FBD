@@ -1525,13 +1525,28 @@ func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
                 print("fbdcli: pip: stream failed to start for \(source.identifier) (screen-recording permission?)")
                 return 2
             }
+            let startFrames = cliPip.deliveredFrames
+            let startTime = Date()
             print("pip streaming \(source.identifier) (brightness \(parsed.filter[0]), contrast \(parsed.filter[1]), saturation \(parsed.filter[2]))")
             print("press any key to stop")
             while cliPip.isActive, !stdinHasInput() {
                 RunLoop.main.run(until: Date().addingTimeInterval(0.1))
             }
+            // Report the observed rate, not the requested one: the frame-rate
+            // cap is only verified by counting what actually arrived. Read
+            // before the teardown disposes of the session.
+            let elapsed = Date().timeIntervalSince(startTime)
+            let delivered = cliPip.deliveredFrames &- startFrames
             cliPip.stop()
-            print("pip stopped")
+            if elapsed >= 0.5 {
+                print(String(
+                    format: "pip stopped — %d frames in %.1fs = %.1f fps (requested %@)",
+                    Int(delivered), elapsed, Double(delivered) / elapsed,
+                    StreamFrameRate.label(fps: parsed.fps)
+                ))
+            } else {
+                print("pip stopped")
+            }
             return 0
         }
     }
