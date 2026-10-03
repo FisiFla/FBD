@@ -38,6 +38,7 @@ public enum Command: String, CaseIterable {
     case stream
     case automation
     case osd
+    case sysvolume
     case nightshift
     case truetone
     case tv

@@ -14,6 +14,14 @@ public enum HTTPRoute: Equatable {
     case virtualList
     case virtualCreate(VirtualCreateRequest)
     case virtualDestroy(id: String)
+    /// The Mac's **own** audio (#20), not a display's.
+    ///
+    /// `systemVolume(device:value:)`: a nil `value` is a read, a value is a
+    /// write, and a nil `device` means whatever the system default is.
+    /// `AudioDeviceID` is a `UInt32`, spelled that way so this file needs no
+    /// CoreAudio import.
+    case systemVolume(device: UInt32?, value: Double?)
+    case systemAudioDevices
 }
 
 /// Validated display-control action (POST /api/displays/<id>/<action>).
@@ -96,6 +104,8 @@ public enum HTTPRouter {
             return routeDisplays(method: method, components: components, body: body)
         case "virtual":
             return routeVirtual(method: method, components: components, body: body)
+        case "system":
+            return routeSystem(method: method, components: components, body: body)
         default:
             return .error(status: 404, message: "not found")
         }
@@ -247,8 +257,42 @@ public enum HTTPRouter {
 
     // MARK: - /api/virtual
 
-    private static func routeVirtual(method: String, components: [String], body: String?) -> HTTPRouteResult {
-        if components.count == 2, method == "GET" {
+    /// `/api/system/...` — the Mac's own audio (#20).
+    ///
+    /// Deliberately not under `/api/displays`: this controls the Mac's output,
+    /// not a display's speakers. They are different devices reached by different
+    /// mechanisms (CoreAudio HAL vs DDC), and conflating them is exactly what the
+    /// issue asked to avoid.
+    private static func routeSystem(method: String, components: [String], body: String?) -> HTTPRouteResult {
+        guard components.count == 3 else {
+            return .error(status: 404, message: "not found")
+        }
+        switch components[2] {
+        case "audio-devices":
+            guard method == "GET" else { return .error(status: 404, message: "not found") }
+            return .route(.systemAudioDevices)
+
+        case "volume":
+            if method == "GET" {
+                return .route(.systemVolume(device: nil, value: nil))
+            }
+            guard method == "POST" else { return .error(status: 404, message: "not found") }
+            guard let body, let object = HTTPJSON.parse(body),
+                  let value = (object["value"] as? NSNumber)?.doubleValue,
+                  (0...1).contains(value) else {
+                return .error(status: 400, message: "value must be a number between 0 and 1")
+            }
+            // An explicit device lets a caller target the built-in speakers when
+            // the system default is an HDMI output with no volume control.
+            let device = (object["device"] as? NSNumber).flatMap { UInt32(exactly: $0.uint32Value) }
+            return .route(.systemVolume(device: device, value: value))
+
+        default:
+            return .error(status: 404, message: "not found")
+        }
+    }
+
+    private static func routeVirtual(method: String, components: [String], body: String?) -> HTTPRouteResult {        if components.count == 2, method == "GET" {
             return .route(.virtualList)
         }
         guard components.count == 3, method == "POST" else {

@@ -143,12 +143,16 @@ public final class HotkeyController {
 
         // Pure routing decision (unit-tested in MediaKeyRouterTests); the
         // event is only consumed when an action is returned.
-        let action = MediaKeyRouter.route(
+        let decision = MediaKeyRouter.decide(
             keyCode: keyCode,
             interceptEnabled: Settings.interceptMediaKeys,
             targetHasControlPath: targetDisplay.appleBrightnessAvailable || targetDisplay.ddcAvailable,
-            targetHasDDC: targetDisplay.ddcAvailable
+            targetHasDDC: targetDisplay.ddcAvailable,
+            // The Mac's own output volume is the fallback route for volume keys
+            // when the display has no DDC (#20).
+            systemVolumeAvailable: SystemVolumeController.shared.isControllable
         )
+        let action = decision.action
 
         let step = MediaKeyRouter.step
 
@@ -166,23 +170,32 @@ public final class HotkeyController {
             displayController.setBrightness(max(current - step, 0.0), on: targetDisplay)
             return true
 
-        case .volumeUp:
-            let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
-            displayController.setVolume(min(current + step, 1.0), on: targetDisplay)
-            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
-            return true
-
-        case .volumeDown:
-            let current = displayController.readDDCControls(for: targetDisplay).volume ?? 0.5
-            displayController.setVolume(max(current - step, 0.0), on: targetDisplay)
-            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
-            return true
-
-        case .toggleMute:
-            let muted = displayController.readDDCControls(for: targetDisplay).muted
-            let newMuted = muted == false
-            displayController.setMuted(newMuted, on: targetDisplay)
-            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id])
+        case .volumeUp, .volumeDown, .toggleMute:
+            // Which path the key takes is the router's decision, not this
+            // switch's: DDC when the display has it, otherwise the Mac's own
+            // output (#20).
+            guard let volumeTarget = decision.volumeTarget else { return false }
+            switch volumeTarget {
+            case .display:
+                let controls = displayController.readDDCControls(for: targetDisplay)
+                switch action {
+                case .volumeUp:
+                    displayController.setVolume(min((controls.volume ?? 0.5) + step, 1.0), on: targetDisplay)
+                case .volumeDown:
+                    displayController.setVolume(max((controls.volume ?? 0.5) - step, 0.0), on: targetDisplay)
+                default:
+                    displayController.setMuted(controls.muted == false, on: targetDisplay)
+                }
+                NotificationCenter.default.post(
+                    name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id]
+                )
+            case .system:
+                switch action {
+                case .volumeUp: SystemVolumeController.shared.adjust(by: step)
+                case .volumeDown: SystemVolumeController.shared.adjust(by: -step)
+                default: SystemVolumeController.shared.toggleMute()
+                }
+            }
             return true
         }
     }

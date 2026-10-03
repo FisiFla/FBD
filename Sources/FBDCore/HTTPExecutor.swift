@@ -162,6 +162,45 @@ public enum HTTPExecutor {
                 controller.stopScreenFilter(on: display)
                 return (200, HTTPJSON.encode(["ok": true]))
             }
+        case .systemAudioDevices:
+            let audio = SystemVolumeController.shared
+            audio.refresh()
+            return (200, HTTPJSON.encode([
+                "devices": audio.devices.map {
+                    ["id": Int($0.id), "name": $0.name, "hasVolumeControl": $0.hasVolumeControl]
+                },
+            ]))
+
+        case .systemVolume(let device, let value):
+            let audio = SystemVolumeController.shared
+            if let device {
+                // select() re-reads that device, so a caller can name an output
+                // instead of acting on whatever the default happens to be.
+                audio.select(device)
+            }
+            guard let value else {
+                // The HAL read is asynchronous by design, so this reports the
+                // last known state rather than blocking the request on a device
+                // that may take hundreds of milliseconds to answer.
+                var payload: [String: Any] = [
+                    "muted": audio.isMuted,
+                    "controllable": audio.isControllable,
+                ]
+                if let level = audio.volume { payload["volume"] = level }
+                if let name = audio.deviceName { payload["device"] = name }
+                if let selected = audio.selectedDevice { payload["selected"] = Int(selected) }
+                return (200, HTTPJSON.encode(payload))
+            }
+            // A device we have already read and know has no software volume
+            // cannot accept this. A 409 says so; replying "ok" for a write the
+            // HAL drops would be a lie. Before the first read we do not know, so
+            // the write is passed through and the GET is the source of truth.
+            if audio.deviceName != nil, !audio.isControllable {
+                return (409, HTTPJSON.error("output device exposes no software volume control"))
+            }
+            audio.set(value)
+            return (200, HTTPJSON.encode(["ok": true, "requested": value]))
+
         case .virtualList:
             let screens = controller.virtualScreens.map { ["id": $0.id, "name": $0.config.name, "displayID": $0.displayID] }
             let configs = controller.virtualConfigs.map { ["id": $0.id, "name": $0.name] }
