@@ -1506,7 +1506,12 @@ func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
             let filter = VideoFilter(
                 brightness: parsed.filter[0], contrast: parsed.filter[1], saturation: parsed.filter[2]
             )
-            guard cliPip.startPiP(source: source, filter: filter) else {
+            guard cliPip.startPiP(
+                source: source,
+                filter: filter,
+                fps: parsed.fps,
+                containCursor: parsed.containCursor
+            ) else {
                 print("fbdcli: pip: failed to start PiP for \(source.identifier) (grant Screen Recording to FBD if prompted)")
                 return 2
             }
@@ -1704,7 +1709,9 @@ func cmdStream(_ controller: DisplayController, args: [String]) -> Int32 {
                 source: .display(source.id),
                 on: target.id,
                 presentation: .fullScreen,
-                filter: filter
+                filter: filter,
+                fps: parsed.fps,
+                containCursor: parsed.containCursor
             ) else {
                 print("fbdcli: stream: failed to stream display \(source.id) onto \(target.id) (grant Screen Recording to FBD if prompted)")
                 return 2

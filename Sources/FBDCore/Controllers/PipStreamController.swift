@@ -146,6 +146,10 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     /// The active capture session (window + stream + renderer); at most one.
     private var session: PipSession?
+    /// Keeps the pointer off a streamed display while containment is requested
+    /// (#14). Idle unless a stream asks for it *and* the experimental setting
+    /// allows it.
+    private let containment = CursorContainmentController()
 
     public override init() { super.init() }
 
@@ -177,7 +181,9 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         source: PiPCaptureSource,
         on hostDisplayID: CGDirectDisplayID? = nil,
         presentation: PiPPresentation = .floating,
-        filter: VideoFilter = .identity
+        filter: VideoFilter = .identity,
+        fps: Int? = nil,
+        containCursor: Bool = false
     ) -> Bool {
         teardownPip()
         guard ScreenRecordingPermission.ensure() else {
@@ -213,7 +219,14 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
             self.window = window
             self.session = session
             window.orderFrontRegardless()
-            session.start(filter: filter)
+            session.start(filter: filter, fps: fps)
+            // Containment only makes sense for a display capture — a window or
+            // application has no single display to keep the pointer off, and it
+            // is opt-in twice over: the stream must ask, and the experimental
+            // setting must allow it.
+            if containCursor, Settings.experimentalCursorContainment, case .display(let capturedID) = source {
+                containment.start(keepingPointerOff: capturedID)
+            }
             return true
         } catch {
             log.error("startPiP: Metal pipeline setup failed: \(error.localizedDescription)")
@@ -291,6 +304,7 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
     /// Remove the active PiP (window + stream). Runs on the main actor, so it
     /// cannot race the async capture setup (which re-checks `isCurrentPipSession`).
     private func teardownPip() {
+        containment.stop()
         guard let session else { return }
         self.session = nil
         window = nil
@@ -475,6 +489,9 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
     private let renderer: PipRenderer
     private let queue: DispatchQueue
     private weak var owner: PipStreamController?
+    /// Per-stream capture rate (#14); nil means `StreamFrameRate.default`. Set
+    /// before `runCapture` reads it, on the main actor.
+    private var fps: Int?
 
     private let stateLock = NSLock()
     private var _isCapturing = false
@@ -505,7 +522,8 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
 
     // MARK: Lifecycle
 
-    func start(filter: VideoFilter) {
+    func start(filter: VideoFilter, fps: Int? = nil) {
+        self.fps = fps
         queue.async { [weak self] in
             self?.renderer.setFilter(filter)
         }
@@ -555,7 +573,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             // and teardown run on the main actor, so this is race-free.
             guard owner?.isCurrentPipSession(self) == true else { return }
             let (filter, size) = try makeFilterAndSize(from: content)
-            let config = makeConfiguration(width: size.0, height: size.1)
+            let config = makeConfiguration(width: size.0, height: size.1, fps: fps)
             let newStream = SCStream(filter: filter, configuration: config, delegate: self)
             try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
             stateLock.withLock { stream = newStream }
@@ -638,11 +656,13 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
-    private func makeConfiguration(width: Int, height: Int) -> SCStreamConfiguration {
+    private func makeConfiguration(width: Int, height: Int, fps: Int?) -> SCStreamConfiguration {
         let config = SCStreamConfiguration()
         config.width = width
         config.height = height
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 15) // 15 fps
+        // Per-stream rate (#14). The value FBD used before this was configurable
+        // is now only the default, applied when a stream does not ask for one.
+        config.minimumFrameInterval = StreamFrameRate.interval(forFPS: StreamFrameRate.resolved(fps: fps))
         config.queueDepth = 3
         config.showsCursor = false
         config.pixelFormat = OSType(kCVPixelFormatType_32BGRA)
