@@ -179,7 +179,12 @@ func run(arguments: [String]) -> Int32 {
         guard let displayID = requireOnlineDisplay(rest.first) else { return 1 }
         return cmdDisableEnable(displayID: displayID, enabled: false)
     case .enable:
-        guard let displayID = requireOnlineDisplay(rest.first) else { return 1 }
+        // Deliberately NOT requireOnlineDisplay: bringing a display back is
+        // exactly the case where it is offline. A soft-disabled *external*
+        // display leaves the online list entirely on this OS, so requiring
+        // online-ness here made `disable` a one-way trip with no way back from
+        // the CLI.
+        guard let rawID = rest.first, let displayID = requireDisplayID(rawID) else { return 1 }
         return cmdDisableEnable(displayID: displayID, enabled: true)
     case .layout:
         return cmdLayout(args: rest)

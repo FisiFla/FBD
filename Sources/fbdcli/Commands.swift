@@ -699,9 +699,12 @@ func cmdVirtualDisconnectAll() -> Int32 {
 
 // MARK: - disable / enable
 
-/// Parse a display id and require it to be online (a soft-disabled display
-/// stays online, so `enable` can find it after `disable` removed it from the
-/// active list). Prints a message and returns nil on failure (caller exits 1).
+/// Parse a display id, requiring the display to be **online**; prints a message
+/// and returns nil on failure (caller exits 1).
+///
+/// Only for commands that need a live display. `enable` must not use this: a
+/// soft-disabled external display leaves the online list entirely on this OS,
+/// so requiring online-ness there turned `disable` into a one-way trip.
 func requireOnlineDisplay(_ idString: String?) -> CGDirectDisplayID? {
     guard let idString, !idString.isEmpty else {
         print("fbdcli: missing display id")
