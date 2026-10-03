@@ -215,7 +215,19 @@ public enum HTTPRouter {
                 return .error(400, "expected contrast/saturation/gamma/temperature")
             }
             func optional(_ key: String) -> Double? { (object[key] as? NSNumber)?.doubleValue }
-            // The sharpening/geometry/LUT fields are optional; their ranges are
+            // A LUT that cannot be parsed is refused outright. The overlay would
+            // otherwise log the failure and skip the stage, leaving the caller
+            // believing the colour correction had been applied — a silent
+            // degrade on the one path where the input is user-supplied.
+            let lutPath = (object["lutPath"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            if let lutPath {
+                do {
+                    _ = try LUTCubeParser.parse(contentsOf: URL(fileURLWithPath: lutPath))
+                } catch {
+                    return .error(400, "LUT '\(lutPath)' is not usable: \(error)")
+                }
+            }
+            // The sharpening/geometry fields are optional; their ranges are
             // clamped by ScreenFilterParams, not here.
             return .action(.filter(ScreenFilterParams(
                 contrast: contrast, saturation: saturation,
@@ -226,7 +238,7 @@ public enum HTTPRouter {
                 zoom: optional("zoom") ?? 1,
                 offsetX: optional("offsetX") ?? 0,
                 offsetY: optional("offsetY") ?? 0,
-                lutPath: (object["lutPath"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                lutPath: lutPath
             )))
         default:
             return .error(404, "unknown action '\(action)'")

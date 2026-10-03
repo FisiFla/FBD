@@ -309,6 +309,18 @@ enum HTTPRouting {
     }
 
     private static func routedFilter(_ args: [String]) -> Int32 {
+        // Validate the LUT here too, not just in `cmdFilter`: this route never
+        // reaches the direct path when the app is running, and the app's own 400
+        // would only surface as a generic "failed to apply" message.
+        if case .success(let parsed) = ScreenFilterArgs.parse(Array(args.dropFirst())),
+           let lutPath = parsed.lutPath {
+            do {
+                _ = try LUTCubeParser.parse(contentsOf: URL(fileURLWithPath: lutPath))
+            } catch {
+                print("fbdcli: filter: LUT '\(lutPath)' is not usable: \(error)")
+                return 1
+            }
+        }
         guard let plan = planFor(.filter, args) else { return 1 }
         guard let id = args.first else { return 1 }
         guard postOK(plan.path, plan.payload ?? [:]) else {
