@@ -296,6 +296,22 @@ public enum Settings {
     @Storage(key: "showRosettaWarning", defaultValue: true)
     public static var showRosettaWarning: Bool
 
+    /// Persisted rounded-corner radius per display identity (#21). 0 means "no
+    /// mask" and is the default, so a display the user never touched never
+    /// spawns an overlay.
+    public static func cornerRadius(for identity: String) -> Double {
+        defaults.double(forKey: "cornerRadius.\(identity)")
+    }
+
+    public static func setCornerRadius(_ radius: Double, for identity: String) {
+        let key = "cornerRadius.\(identity)"
+        if radius > 0 {
+            defaults.set(radius, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     /// Per-display persisted DDC feature availability (VCP codes), keyed by display identity.
     public static func ddcFeatures(for identity: String) -> Set<UInt8> {
         let key = "ddcFeatures.\(identity)"

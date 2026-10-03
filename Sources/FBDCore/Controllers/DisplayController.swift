@@ -30,6 +30,31 @@ public final class DisplayController {
     public func hardwareCeilingNits(for display: Display) -> Int {
         combined.hardwareCeilingNits(for: display)
     }
+
+    /// Apply and persist the rounded-corner radius for a display (#21).
+    ///
+    /// A radius of 0 removes the mask and never spawns a window. This is a
+    /// *drawn* mask in the existing overlay, not a capture, so it costs no
+    /// Screen Recording grant and holds nothing open.
+    public func setCornerRadius(_ radius: Double, on display: Display) {
+        Settings.setCornerRadius(radius, for: display.identityKey)
+        overlay.setCornerRadius(radius, displayID: display.id)
+    }
+
+    /// Re-apply persisted corner radii — called at launch and when displays
+    /// change, so a mask the user set last session comes back.
+    ///
+    /// Idempotent, and reads through Settings each time: a display whose radius
+    /// is 0 (the default, for every display the user never touched) spawns no
+    /// overlay at all.
+    public func restoreCornerRadii() {
+        for display in displays {
+            overlay.setCornerRadius(
+                Settings.cornerRadius(for: display.identityKey),
+                displayID: display.id
+            )
+        }
+    }
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayController")
 
     private var hasRegistered = false

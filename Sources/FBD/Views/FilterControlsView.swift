@@ -14,9 +14,28 @@ struct FilterControlsView: View {
     @ObservedObject var display: Display
 
     @State private var filterParams = ScreenFilterParams.neutral
+    @State private var cornerRadius: Double = 0
 
     var body: some View {
         filterControls
+            .onAppear {
+                // Persisted per display; 0 (the default, for any display the
+                // user never touched) spawns no mask at all.
+                cornerRadius = Settings.cornerRadius(for: display.identityKey)
+            }
+    }
+
+    /// Rounded-corner mask radius. Persisted per display identity, and 0 removes
+    /// the mask outright rather than leaving an empty window on screen. Drawn,
+    /// not captured — so it needs no Screen Recording grant.
+    private var cornerRadiusBinding: Binding<Double> {
+        Binding(
+            get: { cornerRadius },
+            set: { value in
+                cornerRadius = value
+                DisplayController.shared.setCornerRadius(value, on: display)
+            }
+        )
     }
 
     private var filterActiveBinding: Binding<Bool> {
@@ -223,6 +242,16 @@ struct FilterControlsView: View {
                     .controlSize(.small)
                 }
             }
+
+            Divider()
+            Slider(value: cornerRadiusBinding, in: 0...120, step: 1) {
+                Text("Rounded Corners")
+            } minimumValueLabel: {
+                Text("Off")
+            } maximumValueLabel: {
+                Text("\(Int(cornerRadius))px")
+            }
+            .font(.caption)
 
             Button("Reset") {
                 resetScreenFilter()

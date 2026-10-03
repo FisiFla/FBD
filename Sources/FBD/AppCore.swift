@@ -31,6 +31,9 @@ final class AppCore {
         }
 
         displayController.start()
+        // Re-apply persisted corner masks now that the display list exists. A
+        // radius of 0 spawns nothing, so this is free for untouched displays.
+        displayController.restoreCornerRadii()
         statusItemController.install()
 
         // Tier 3 controllers: virtual screens, soft disconnect, layout protection.
