@@ -78,6 +78,11 @@ struct DDCPanelView: View {
                     applyInputSource()
                 }
                 .controlSize(.small)
+                // Disabled rather than silently doing nothing: `applyInputSource`
+                // used to `guard ... else { return }`, so a typo produced no
+                // feedback at all.
+                .disabled(parsedInputSource == nil)
+                .help("Enter a DDC input source (VCP 0x60) between 1 and 15")
             }
 
             Button {
@@ -123,9 +128,17 @@ struct DDCPanelView: View {
         }
     }
 
-    private func applyInputSource() {
+    /// The entered VCP 0x60 value, or nil when the field holds no usable one.
+    /// Drives the Apply button's disabled state so the field cannot be submitted
+    /// into a no-op.
+    private var parsedInputSource: UInt16? {
         let trimmed = inputSource.trimmingCharacters(in: .whitespaces)
-        guard let value = UInt16(trimmed), value > 0 else { return }
+        guard let value = UInt16(trimmed), value > 0 else { return nil }
+        return value
+    }
+
+    private func applyInputSource() {
+        guard let value = parsedInputSource else { return }
         DisplayController.shared.setInputSource(value, on: display)
     }
 }

@@ -126,7 +126,9 @@ struct DisplayOptionsMenuView: View {
 
         Divider()
 
-        // Mirror Display
+        // Mirror Display. With no other online display there is nothing to
+        // mirror onto, and the menu opened empty — a dead affordance. Disable it
+        // and say why instead.
         Menu("Mirror Display") {
             if CGDisplayIsInMirrorSet(display.id) != 0 {
                 Button("Unmirror") {
@@ -140,6 +142,10 @@ struct DisplayOptionsMenuView: View {
                 }
             }
         }
+        .disabled(mirrorTargets.isEmpty && CGDisplayIsInMirrorSet(display.id) == 0)
+        .help(mirrorTargets.isEmpty
+              ? "Connect another display to mirror onto"
+              : "Mirror this display onto another display")
 
         // Picture in Picture (the old "Stream Display" twin was removed —
         // both called the same function).
@@ -188,9 +194,11 @@ struct DisplayOptionsMenuView: View {
             }
         }
 
-        // Configuration Protection
-        Toggle("Configuration Protection", isOn: configProtectionBinding)
-            .help("Re-apply this display's saved mode/brightness/preset on reconnect")
+        // Configuration Protection. The setting is GLOBAL (one flag in Settings)
+        // even though enabling it snapshots THIS display's state, so the label
+        // and help say so rather than implying an independent per-display switch.
+        Toggle("Configuration Protection (all displays)", isOn: configProtectionBinding)
+            .help("One setting for every display. Enabling it here saves this display's current mode, brightness and preset to re-apply on reconnect; displays you have not enabled it from have nothing saved.")
 
         // Manage Display
         Menu("Manage Display") {
@@ -207,7 +215,10 @@ struct DisplayOptionsMenuView: View {
                     }
                 }
             }
-            Button("Show in Settings") {
+            // Opens Settings, but cannot land on this display: SettingsView has
+            // no target-display concept (only an Overview / Per-Display tab), so
+            // the old "Show in Settings" label promised navigation it never did.
+            Button("Open Settings") {
                 NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
             }
         }

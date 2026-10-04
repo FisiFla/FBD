@@ -48,10 +48,10 @@ struct DisplayListView: View {
             // the bar instead of floating above it.
             if showingSettings {
                 settingsTopBar
-                    .transition(reduceMotion ? .opacity : .opacity)
+                    .transition(.opacity)
             } else {
                 mainTopBar
-                    .transition(reduceMotion ? .opacity : .opacity)
+                    .transition(.opacity)
             }
 
             Group {
@@ -289,7 +289,7 @@ struct DisplayListView: View {
     private var toolsFooter: some View {
         HStack(spacing: 12) {
             Button("Virtual Screens") {
-                withAnimation(FBDTheme.animationSpring) {
+                withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
                     virtualScreensExpanded.toggle()
                 }
             }
@@ -298,7 +298,7 @@ struct DisplayListView: View {
             .foregroundStyle(virtualScreensExpanded ? Color.accentColor : .secondary)
 
             Button("Groups") {
-                withAnimation(FBDTheme.animationSpring) {
+                withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
                     groupsExpanded.toggle()
                 }
             }
