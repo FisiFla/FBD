@@ -11,13 +11,13 @@ Updates via Sparkle (optional).**
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-All feature tiers are implemented (390 unit tests, CI green per push). Apple locks down
+All feature tiers are implemented (477 unit tests, CI green per push). Apple locks down
 private display APIs differently per macOS release; FBD degrades gracefully (feature off,
 UI notes it) when a path is unavailable.
 
 ## Feature matrix by macOS version
 
-| Feature | macOS 13–15 | macOS 26 | macOS 27 (beta) |
+| Feature | macOS 13–15 | macOS 26 | macOS 27 |
 |---|---|---|---|
 | Apple brightness / resolution | ✅ | ✅ | ✅ |
 | DDC/CI (external displays, Apple Silicon) | ✅ | ✅ | ✅ |
