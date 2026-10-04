@@ -3,7 +3,7 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
-## [Unreleased]
+## [1.6.0] — 2026-10-04
 
 ### Added
 - **A feedback layer.** There was no loading or error state anywhere in the UI
