@@ -78,7 +78,10 @@ struct ArrangementGridView: View {
             .overlay(
                 Text(display.name)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.white)
+                    // `.white` failed badly on the 25%-opacity accent fill the
+                    // main display gets (white on pale blue in light mode ≈1.5:1).
+                    // `.primary` adapts to the appearance and clears both.
+                    .foregroundStyle(isDragging ? Color.white : Color.primary)
                     .lineLimit(1)
                     .padding(3)
                     .frame(maxWidth: .infinity, alignment: .leading),

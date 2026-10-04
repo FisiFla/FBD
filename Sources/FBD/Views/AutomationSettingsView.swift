@@ -55,7 +55,9 @@ struct AutomationSettingsView: View {
 
     private func ruleRow(_ rule: AutomationRule) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Toggle("", isOn: Binding(
+            // A real (visually hidden) label: `Toggle("")` leaves VoiceOver with
+            // no name for this control at all.
+            Toggle("Enabled", isOn: Binding(
                 get: { rule.enabled },
                 set: { enabled in
                     _ = controller.setEnabled(enabled, ruleID: rule.id)
@@ -63,7 +65,7 @@ struct AutomationSettingsView: View {
                 }
             ))
             .labelsHidden()
-            .controlSize(.mini)
+            .controlSize(.small)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(scopeLabel(rule)) · \(rule.event.label) · \(rule.kind.token)")
@@ -84,26 +86,27 @@ struct AutomationSettingsView: View {
             .buttonStyle(.borderless)
             .controlSize(.small)
             .help("Remove this rule")
+            .accessibilityLabel("Remove rule")
         }
     }
 
     private var addRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Picker("", selection: $scope) {
+                Picker("Display", selection: $scope) {
                     Text("Any display").tag("")
                     ForEach(displays, id: \.identityKey) { display in
                         Text(display.name).tag(display.identityKey)
                     }
                 }
                 .labelsHidden()
-                Picker("", selection: $event) {
+                Picker("Event", selection: $event) {
                     ForEach(AutomationEvent.allCases, id: \.self) { option in
                         Text(option.label).tag(option)
                     }
                 }
                 .labelsHidden()
-                Picker("", selection: $kind) {
+                Picker("Action", selection: $kind) {
                     ForEach(AutomationActionKind.allCases, id: \.self) { option in
                         Text(option.token).tag(option)
                     }
