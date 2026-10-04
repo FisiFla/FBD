@@ -172,34 +172,63 @@ public final class DDCController {
     /// 256-byte reads are attempted and concatenated.
     public func readCapabilities(for display: Display) -> DDC.DDCCapabilities? {
         guard isAvailable(for: display) else { return nil }
-        return queue(for: display).sync {
-            guard external.writeI2C(DDC.i2cAddress, data: Data(DDC.capabilitiesRequest), for: display) else {
-                log.warning("readCapabilities: request write failed for \(display.id)")
-                return nil
-            }
-            Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
-            var collected = Data()
-            for _ in 0..<3 {
-                guard let chunk = external.readI2C(DDC.i2cAddress, length: 256, for: display) else { break }
-                collected.append(chunk)
-                if let text = DDC.parseCapabilitiesText(collected),
-                   // Only accept a *complete* reply: a truncated first chunk
-                   // can already contain "vcp(" — require the group to be
-                   // closed so we keep collecting until the full blob arrives.
-                   // Sub-values are single-level parens: vcp(10 12(01 02) 60).
-                   text.range(of: #"vcp\((?:[0-9A-Fa-f ]|\([0-9A-Fa-f ]*\))*\)"#, options: .regularExpression) != nil {
-                    let caps = DDC.parseCapabilities(text)
-                    lock.lock()
-                    liveCapabilitiesChecked.remove(display.identityKey)
-                    lock.unlock()
-                    return caps
-                }
-                if collected.count >= 256 + 256 { break }
-                Thread.sleep(forTimeInterval: 0.02)
-            }
-            log.warning("readCapabilities: no valid reply for \(display.id)")
+        return queue(for: display).sync { self.capabilitiesResult(for: display) }
+    }
+
+    /// The same probe, run on the per-display queue **without blocking the caller**.
+    ///
+    /// The synchronous form above blocks whatever thread calls it: it sleeps for
+    /// the DDC settle interval and then does up to three I2C reads. Its only
+    /// caller is `DisplayController`, which is `@MainActor`, so the whole probe
+    /// used to run on the main actor and froze the UI — with no way to show
+    /// progress, because a `ProgressView` cannot draw while the thread it lives on
+    /// is blocked. This variant keeps the caller responsive and hands the result
+    /// back on the main actor.
+    public func readCapabilities(
+        for display: Display,
+        completion: @escaping @MainActor (DDC.DDCCapabilities?) -> Void
+    ) {
+        guard isAvailable(for: display) else {
+            // Deferred like the main path, so the caller always resolves on the
+            // main actor and never synchronously inside the call.
+            Task { @MainActor in completion(nil) }
+            return
+        }
+        queue(for: display).async { [weak self] in
+            let capabilities = self?.capabilitiesResult(for: display)
+            Task { @MainActor in completion(capabilities) }
+        }
+    }
+
+    /// The probe itself. **Must run on the display's queue** — both entry points
+    /// above arrange that.
+    private func capabilitiesResult(for display: Display) -> DDC.DDCCapabilities? {
+        guard external.writeI2C(DDC.i2cAddress, data: Data(DDC.capabilitiesRequest), for: display) else {
+            log.warning("readCapabilities: request write failed for \(display.id)")
             return nil
         }
+        Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
+        var collected = Data()
+        for _ in 0..<3 {
+            guard let chunk = external.readI2C(DDC.i2cAddress, length: 256, for: display) else { break }
+            collected.append(chunk)
+            if let text = DDC.parseCapabilitiesText(collected),
+               // Only accept a *complete* reply: a truncated first chunk
+               // can already contain "vcp(" — require the group to be
+               // closed so we keep collecting until the full blob arrives.
+               // Sub-values are single-level parens: vcp(10 12(01 02) 60).
+               text.range(of: #"vcp\((?:[0-9A-Fa-f ]|\([0-9A-Fa-f ]*\))*\)"#, options: .regularExpression) != nil {
+                let caps = DDC.parseCapabilities(text)
+                lock.lock()
+                liveCapabilitiesChecked.remove(display.identityKey)
+                lock.unlock()
+                return caps
+            }
+            if collected.count >= 256 + 256 { break }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        log.warning("readCapabilities: no valid reply for \(display.id)")
+        return nil
     }
 
     /// Read capabilities, persist the VCP feature set per display identity,

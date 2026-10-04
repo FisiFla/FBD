@@ -189,16 +189,21 @@ struct DisplayOptionsMenuView: View {
         Menu("Screen Rotation") {
             ForEach([0, 90, 180, 270], id: \.self) { angle in
                 Button("\(angle)°") {
-                    _ = DisplayController.shared.setRotation(angle, on: display)
+                    // Rotation genuinely fails on displays that do not support it
+                    // (both of this project's own displays refuse it), and the
+                    // result used to be discarded, so the menu item closed and
+                    // looked dead.
+                    if DisplayController.shared.setRotation(angle, on: display) == nil {
+                        FBDNotice.shared.report("This display would not rotate to \(angle)°.")
+                    }
                 }
             }
         }
 
-        // Configuration Protection. The setting is GLOBAL (one flag in Settings)
-        // even though enabling it snapshots THIS display's state, so the label
-        // and help say so rather than implying an independent per-display switch.
-        Toggle("Configuration Protection (all displays)", isOn: configProtectionBinding)
-            .help("One setting for every display. Enabling it here saves this display's current mode, brightness and preset to re-apply on reconnect; displays you have not enabled it from have nothing saved.")
+        // Configuration Protection used to live here, as a per-display toggle over
+        // one GLOBAL flag: it read as an independent per-display switch while
+        // enabling it saved only this display. It is in Settings now, where its
+        // scope is unambiguous and it snapshots every display.
 
         // Manage Display
         Menu("Manage Display") {
@@ -215,11 +220,19 @@ struct DisplayOptionsMenuView: View {
                     }
                 }
             }
-            // Opens Settings, but cannot land on this display: SettingsView has
-            // no target-display concept (only an Overview / Per-Display tab), so
-            // the old "Show in Settings" label promised navigation it never did.
-            Button("Open Settings") {
-                NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
+            // This used to promise navigation it never performed: it posted no
+            // payload and SettingsView had no target-display concept at all, so
+            // the menu closed and you landed on the Overview page. It now opens
+            // the Per-Display tab and scrolls to this display.
+            Button("Show in Settings") {
+                NotificationCenter.default.post(
+                    name: .fbdOpenSettings,
+                    object: nil,
+                    userInfo: [
+                        "tab": SettingsView.SettingsTab.perDisplay.rawValue,
+                        "displayID": NSNumber(value: display.id),
+                    ]
+                )
             }
         }
     }
@@ -254,22 +267,6 @@ struct DisplayOptionsMenuView: View {
         )
     }
 
-    private var configProtectionBinding: Binding<Bool> {
-        Binding(
-            get: { Settings.configProtectionEnabled },
-            set: { on in
-                Settings.configProtectionEnabled = on
-                if on {
-                    ConfigProtectionController().saveCurrentState(
-                        for: display,
-                        resolution: ResolutionController(),
-                        controller: DisplayController.shared
-                    )
-                }
-            }
-        )
-    }
-
     /// Unique refresh rates from the display's modes, ascending.
     private var refreshRates: [Double] {
         let rates = Set(display.modes.map(\.refreshRate))
@@ -299,19 +296,27 @@ struct DisplayOptionsMenuView: View {
         if let existing = groups.groups.first(where: {
             $0.displayIDs == [display.id, target.id] || $0.displayIDs == [target.id, display.id]
         }) {
-            _ = groups.mirror(inGroup: existing.id)
+            reportIfNeeded(groups.mirror(inGroup: existing.id), "mirror \(display.name) onto \(target.name)")
             return
         }
         groups.createGroup(name: "Mirror \(display.name) → \(target.name)", displayIDs: [display.id, target.id])
         if let group = groups.groups.last {
-            _ = groups.mirror(inGroup: group.id)
+            reportIfNeeded(groups.mirror(inGroup: group.id), "mirror \(display.name) onto \(target.name)")
         }
+    }
+
+    /// Surface a refused display-groups operation instead of discarding it. The
+    /// result was previously thrown away, so a refused mirror looked like a dead
+    /// menu item.
+    private func reportIfNeeded(_ succeeded: Bool, _ action: String) {
+        guard !succeeded else { return }
+        FBDNotice.shared.report("Could not \(action).")
     }
 
     private func unmirrorDisplay() {
         let groups = DisplayGroupsController()
         for group in groups.groups where group.displayIDs.contains(display.id) {
-            _ = groups.unmirror(inGroup: group.id)
+            reportIfNeeded(groups.unmirror(inGroup: group.id), "unmirror \(display.name)")
         }
     }
 
