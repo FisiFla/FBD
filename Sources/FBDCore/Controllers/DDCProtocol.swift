@@ -212,6 +212,21 @@ public enum DDC {
         }
         return values
     }
+
+    /// The DDC panel's read-back values, gathered in one pass.
+    ///
+    /// A value type crossing a queue boundary, hence `Sendable`.
+    public struct DDCState: Equatable, Sendable {
+        public var contrast: Double?
+        public var volume: Double?
+        public var muted: Bool?
+
+        public init(contrast: Double? = nil, volume: Double? = nil, muted: Bool? = nil) {
+            self.contrast = contrast
+            self.volume = volume
+            self.muted = muted
+        }
+    }
 }
 
 /// High-level DDC controls FBD exposes, mapped to VCP codes.

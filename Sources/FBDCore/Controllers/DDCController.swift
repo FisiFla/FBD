@@ -79,20 +79,27 @@ public final class DDCController {
     /// (some monitors only answer on the 2nd–3rd try). Returns nil on failure.
     public func readVCP(_ code: UInt8, for display: Display) -> DDC.DDCValue? {
         guard isAvailable(for: display) else { return nil }
+        return queue(for: display).sync { self.vcpValueOnQueue(code, for: display) }
+    }
+
+    /// The retry loop, for callers already running on the display's queue.
+    ///
+    /// `readVCP` wraps this in `queue.sync`. A caller that is *already* on that
+    /// queue must call this directly, because `queue.sync` from inside it is a
+    /// deadlock rather than a nested call.
+    private func vcpValueOnQueue(_ code: UInt8, for display: Display) -> DDC.DDCValue? {
         let attempts = max(1, Settings.ddcReadRetries + 1)
-        return queue(for: display).sync {
-            for attempt in 1...attempts {
-                if let value = attemptVCPRead(code, for: display) {
-                    return value
-                }
-                if attempt < attempts {
-                    log.debug("readVCP: attempt \(attempt)/\(attempts) failed for \(display.id) (code \(String(format: "0x%02X", code))) — retrying")
-                    Thread.sleep(forTimeInterval: 0.05)
-                }
+        for attempt in 1...attempts {
+            if let value = attemptVCPRead(code, for: display) {
+                return value
             }
-            log.warning("readVCP: all \(attempts) attempts failed for \(display.id) (code \(String(format: "0x%02X", code)))")
-            return nil
+            if attempt < attempts {
+                log.debug("readVCP: attempt \(attempt)/\(attempts) failed for \(display.id) (code \(String(format: "0x%02X", code))) — retrying")
+                Thread.sleep(forTimeInterval: 0.05)
+            }
         }
+        log.warning("readVCP: all \(attempts) attempts failed for \(display.id) (code \(String(format: "0x%02X", code)))")
+        return nil
     }
 
     /// One request → settle → reply → parse cycle (see `readVCP` for retries).
@@ -143,6 +150,38 @@ public final class DDCController {
             return value.normalized
         }
         return Double(value.currentValue)
+    }
+
+    /// `getFeature`'s body, for a caller already on the display's queue.
+    private func featureValueOnQueue(_ feature: DDCFeature, for display: Display) -> Double? {
+        guard let value = vcpValueOnQueue(feature.vcpCode, for: display) else { return nil }
+        return feature.isContinuous ? value.normalized : Double(value.currentValue)
+    }
+
+    /// Read the DDC panel's three read-back values in **one** pass on the
+    /// display's queue, returning on the main actor.
+    ///
+    /// The synchronous accessors each do their own `queue.sync`, so refreshing the
+    /// panel blocked the main actor three times over — the same problem the
+    /// capabilities probe had. This reads all three while already on the queue,
+    /// which is also why it calls `featureValueOnQueue` rather than `getFeature`.
+    public func readState(
+        for display: Display,
+        completion: @escaping @MainActor (DDC.DDCState) -> Void
+    ) {
+        guard isAvailable(for: display) else {
+            Task { @MainActor in completion(DDC.DDCState()) }
+            return
+        }
+        queue(for: display).async { [weak self] in
+            guard let self else { return }
+            let state = DDC.DDCState(
+                contrast: self.featureValueOnQueue(.contrast, for: display),
+                volume: self.featureValueOnQueue(.volume, for: display),
+                muted: self.featureValueOnQueue(.mute, for: display).map { $0 <= 1.5 }
+            )
+            Task { @MainActor in completion(state) }
+        }
     }
 
     /// High-level feature write: continuous features scale `value` (0…1)

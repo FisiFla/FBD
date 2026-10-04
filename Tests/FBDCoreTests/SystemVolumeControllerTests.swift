@@ -6,7 +6,7 @@ import XCTest
 /// provoked deliberately — above all a **slow USB device** and an **HDMI output
 /// with no software volume**, which is what the machine FBD was developed on
 /// actually has as its default output.
-private final class FakeHAL: CoreAudioHAL {
+private final class FakeHAL: CoreAudioHAL, @unchecked Sendable {
     struct Device {
         var id: AudioDeviceID
         var name: String
@@ -14,35 +14,79 @@ private final class FakeHAL: CoreAudioHAL {
         var muted = false
     }
 
-    var devices: [Device] = [Device(id: 42, name: "Fake USB DAC", value: 0.5)]
-    var defaultID: AudioDeviceID? = 42
+    /// A lock rather than bare stored properties: the controller reads this HAL
+    /// from its own serial queue while the test drives it from the main actor, so
+    /// the state genuinely is shared. The lock is what makes `@unchecked Sendable`
+    /// an honest claim — without it the annotation would merely silence a warning
+    /// over a real race.
+    private let lock = NSLock()
+    private var _devices: [Device] = [Device(id: 42, name: "Fake USB DAC", value: 0.5)]
+    private var _defaultID: AudioDeviceID? = 42
+    private var _writeDelay: TimeInterval = 0
+    private var _refusesWrites = false
+    private var _writes = 0
+
+    var devices: [Device] {
+        get { lock.withLock { _devices } }
+        set { lock.withLock { _devices = newValue } }
+    }
+
+    var defaultID: AudioDeviceID? {
+        get { lock.withLock { _defaultID } }
+        set { lock.withLock { _defaultID = newValue } }
+    }
+
     /// Simulates a device that takes its time answering.
-    var writeDelay: TimeInterval = 0
+    var writeDelay: TimeInterval {
+        get { lock.withLock { _writeDelay } }
+        set { lock.withLock { _writeDelay = newValue } }
+    }
+
     /// A device that accepts the call but settles somewhere else — the "stuck at
     /// ~50%" case. Deterministic, unlike racing a real read-back.
-    var refusesWrites = false
-    private(set) var writes = 0
+    var refusesWrites: Bool {
+        get { lock.withLock { _refusesWrites } }
+        set { lock.withLock { _refusesWrites = newValue } }
+    }
 
-    private func index(of id: AudioDeviceID) -> Int? { devices.firstIndex { $0.id == id } }
+    var writes: Int { lock.withLock { _writes } }
 
-    func defaultOutputDevice() -> AudioDeviceID? { defaultID }
-    func outputDeviceIDs() -> [AudioDeviceID] { devices.map(\.id) }
-    func name(of device: AudioDeviceID) -> String? { index(of: device).map { devices[$0].name } }
-    func volume(of device: AudioDeviceID) -> Double? { index(of: device).flatMap { devices[$0].value } }
+    /// Caller must already hold `lock`.
+    private func indexUnlocked(of id: AudioDeviceID) -> Int? { _devices.firstIndex { $0.id == id } }
+
+    func defaultOutputDevice() -> AudioDeviceID? { lock.withLock { _defaultID } }
+
+    func outputDeviceIDs() -> [AudioDeviceID] { lock.withLock { _devices.map(\.id) } }
+
+    func name(of device: AudioDeviceID) -> String? {
+        lock.withLock { indexUnlocked(of: device).map { _devices[$0].name } }
+    }
+
+    func volume(of device: AudioDeviceID) -> Double? {
+        lock.withLock { indexUnlocked(of: device).flatMap { _devices[$0].value } }
+    }
 
     @discardableResult
     func setVolume(_ value: Double, on device: AudioDeviceID) -> Bool {
-        if writeDelay > 0 { Thread.sleep(forTimeInterval: writeDelay) }
-        if !refusesWrites, let index = index(of: device) { devices[index].value = value }
-        writes += 1
+        // The sleep happens OUTSIDE the lock deliberately: holding it across the
+        // delay would serialise the very write the "slow device" test exists to
+        // overlap with the caller.
+        let delay = lock.withLock { _writeDelay }
+        if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+        lock.withLock {
+            if !_refusesWrites, let index = indexUnlocked(of: device) { _devices[index].value = value }
+            _writes += 1
+        }
         return true
     }
 
-    func isMuted(_ device: AudioDeviceID) -> Bool? { index(of: device).map { devices[$0].muted } }
+    func isMuted(_ device: AudioDeviceID) -> Bool? {
+        lock.withLock { indexUnlocked(of: device).map { _devices[$0].muted } }
+    }
 
     @discardableResult
     func setMuted(_ muted: Bool, on device: AudioDeviceID) -> Bool {
-        if let index = index(of: device) { devices[index].muted = muted }
+        lock.withLock { if let index = indexUnlocked(of: device) { _devices[index].muted = muted } }
         return true
     }
 }
