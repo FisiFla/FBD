@@ -153,6 +153,65 @@ public enum DDC {
         }
         return DDCCapabilities(mccsVersion: mccsVersion, vcpCodes: codes, raw: text)
     }
+
+    /// Name for a well-known MCCS input-source value (VCP 0x60).
+    ///
+    /// The standard assigns these, but vendors disagree often enough that a fixed
+    /// list is not safe to present on its own — which is why callers offer only
+    /// the values the *display itself* reports (see `capabilityValues(for:in:)`),
+    /// and fall back to the raw number for anything unnamed here.
+    public static func inputSourceName(for value: UInt16) -> String? {
+        switch value {
+        case 0x01: return "Analog 1"
+        case 0x02: return "Analog 2"
+        case 0x03: return "Digital 1"
+        case 0x04: return "Digital 2"
+        case 0x05: return "Composite 1"
+        case 0x06: return "Composite 2"
+        case 0x07: return "S-Video 1"
+        case 0x08: return "S-Video 2"
+        case 0x09: return "Tuner 1"
+        case 0x0A: return "Tuner 2"
+        case 0x0B: return "Tuner 3"
+        case 0x0C: return "Component 1"
+        case 0x0D: return "Component 2"
+        case 0x0E: return "Component 3"
+        case 0x0F: return "DisplayPort 1"
+        case 0x10: return "DisplayPort 2"
+        case 0x11: return "HDMI 1"
+        case 0x12: return "HDMI 2"
+        default: return nil
+        }
+    }
+
+    /// The values a display reports for one VCP code, from its capabilities text.
+    ///
+    /// The grammar encloses them in single-level parens after the code:
+    /// `vcp(10 12 60(0F 10 11 12))`. An **empty** result means the display lists
+    /// the code with no value set, which is common and means "supported, but we
+    /// cannot know which inputs" — callers must not substitute a guess.
+    ///
+    /// The code must start its own token, so `60(` cannot match inside `160(`.
+    public static func capabilityValues(for code: UInt8, in text: String) -> [UInt16] {
+        let hex = String(format: "%02X", code)
+        let pattern = "(?:^|[^0-9A-Fa-f])\(hex)\\(([0-9A-Fa-f ]*)\\)"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+        let whole = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: whole),
+              match.numberOfRanges > 1,
+              let inner = Range(match.range(at: 1), in: text) else { return [] }
+
+        // Preserve the display's own ordering, and drop duplicates.
+        var seen = Set<UInt16>()
+        var values: [UInt16] = []
+        for token in text[inner].split(separator: " ") {
+            guard let value = UInt16(token, radix: 16), seen.insert(value).inserted else { continue }
+            values.append(value)
+        }
+        return values
+    }
 }
 
 /// High-level DDC controls FBD exposes, mapped to VCP codes.

@@ -7,6 +7,10 @@ DerivedData/
 xcuserdata/
 .sparkle/
 
+# Impeccable design-review snapshots — tool state, like .sparkle/. Kept locally
+# so $impeccable polish can read the backlog; not repository content.
+.impeccable/
+
 # Stray compiler artifacts (root-level .o/.swiftdeps from CLI builds)
 *.o
 *.swiftdeps

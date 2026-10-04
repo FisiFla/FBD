@@ -39,6 +39,10 @@ struct DisplayListView: View {
     @State private var newGroupName = ""
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var notice = FBDNotice.shared
+    /// What `.fbdOpenSettings` asked Settings to open on, if anything.
+    @State private var settingsInitialTab: SettingsView.SettingsTab = .overview
+    @State private var settingsTargetDisplayID: CGDirectDisplayID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,9 +58,16 @@ struct DisplayListView: View {
                     .transition(.opacity)
             }
 
+            // Failures from the menus land here — a menu dismisses on selection,
+            // so a status line inside it would never be read.
+            FBDNoticeBanner(notice: notice)
+
             Group {
                 if showingSettings {
-                    SettingsView()
+                    SettingsView(
+                        targetDisplayID: settingsTargetDisplayID,
+                        initialTab: settingsInitialTab
+                    )
                         .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                 } else {
                     mainContent
@@ -87,13 +98,19 @@ struct DisplayListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .fbdVirtualScreensChanged)) { _ in
             virtualScreensTick += 1
         }
-        .onReceive(NotificationCenter.default.publisher(for: .fbdOpenSettings)) { _ in
-            withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
+        .onReceive(NotificationCenter.default.publisher(for: .fbdOpenSettings)) { notification in
+            // A caller can ask Settings to open on a given tab, and to reveal a
+            // given display. Without this a per-display action landed on the
+            // Overview page with no sign of the display it was about.
+            settingsInitialTab = (notification.userInfo?["tab"] as? String)
+                .flatMap(SettingsView.SettingsTab.init(rawValue:)) ?? .overview
+            settingsTargetDisplayID = (notification.userInfo?["displayID"] as? NSNumber)?.uint32Value
+            withAnimation(reduceMotion ? nil : FBDTheme.animationPanel) {
                 showingSettings = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .fbdSettingsClosed)) { _ in
-            withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
+            withAnimation(reduceMotion ? nil : FBDTheme.animationPanel) {
                 showingSettings = false
             }
         }
@@ -120,7 +137,7 @@ struct DisplayListView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: FBDTheme.spacingM) {
                     if rosettaWarningVisible {
                         RosettaWarningView()
                             .padding(.horizontal, 12)
@@ -130,7 +147,7 @@ struct DisplayListView: View {
                     if displays.isEmpty {
                         emptyState
                     } else {
-                        VStack(spacing: 8) {
+                        VStack(spacing: FBDTheme.spacingM) {
                             ForEach(displays) { display in
                                 DisplayRowView(display: display)
                                     .padding(.horizontal, 12)
@@ -194,6 +211,7 @@ struct DisplayListView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Settings")
                 .help("Settings")
+                .fbdIconButton()
 
                 Button {
                     NotificationCenter.default.post(name: .fbdPanelCloseRequested, object: nil)
@@ -205,6 +223,7 @@ struct DisplayListView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Close FBD panel")
                 .help("Close")
+                .fbdIconButton()
             }
             .padding(.horizontal, 14)
             .padding(.top, 7)
@@ -223,7 +242,7 @@ struct DisplayListView: View {
                 .frame(height: 24)
                 .accessibilityHidden(true)
 
-            HStack(spacing: 8) {
+            HStack(spacing: FBDTheme.spacingM) {
                 Button {
                     NotificationCenter.default.post(name: .fbdSettingsClosed, object: nil)
                 } label: {
@@ -249,6 +268,7 @@ struct DisplayListView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Close FBD panel")
                 .help("Close")
+                .fbdIconButton()
             }
             .padding(.horizontal, 14)
             .padding(.top, 7)
@@ -261,7 +281,7 @@ struct DisplayListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: FBDTheme.spacingM) {
             Image(systemName: "display")
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
@@ -287,9 +307,9 @@ struct DisplayListView: View {
     /// updates, or quit. (The earlier scroll-jump menu felt like it "did
     /// nothing"; expand-toggles are immediate.)
     private var toolsFooter: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: FBDTheme.spacingL) {
             Button("Virtual Screens") {
-                withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
+                withAnimation(reduceMotion ? nil : FBDTheme.animationPanel) {
                     virtualScreensExpanded.toggle()
                 }
             }
@@ -298,7 +318,7 @@ struct DisplayListView: View {
             .foregroundStyle(virtualScreensExpanded ? Color.accentColor : .secondary)
 
             Button("Groups") {
-                withAnimation(reduceMotion ? nil : FBDTheme.animationSpring) {
+                withAnimation(reduceMotion ? nil : FBDTheme.animationPanel) {
                     groupsExpanded.toggle()
                 }
             }
@@ -360,7 +380,7 @@ struct DisplayListView: View {
                 }
 
                 if !pendingAutoConnectConfigs.isEmpty || !virtualScreens.screens.isEmpty {
-                    HStack(spacing: 8) {
+                    HStack(spacing: FBDTheme.spacingM) {
                         if !pendingAutoConnectConfigs.isEmpty {
                             Button("Reconnect all") {
                                 virtualScreens.reconnectAuto()
@@ -391,21 +411,14 @@ struct DisplayListView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .padding(FBDTheme.spacingL)
+        .fbdCard()
         .padding(.horizontal, 12)
     }
 
     private var createVirtualScreenRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            HStack(spacing: FBDTheme.spacingM) {
                 TextField("Name", text: $newScreenName)
                     .textFieldStyle(.roundedBorder)
                 Picker("Resolution", selection: $newScreenPreset) {
@@ -417,7 +430,7 @@ struct DisplayListView: View {
                 .frame(minWidth: 90, idealWidth: 120, maxWidth: .infinity)
                 .controlSize(.small)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: FBDTheme.spacingM) {
                 Stepper(value: $newScreenRefresh, in: 30...120, step: 10) {
                     Text("\(Int(newScreenRefresh)) Hz")
                         .monospacedDigit()
@@ -437,9 +450,9 @@ struct DisplayListView: View {
     }
 
     private var activeVirtualScreens: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingXS) {
             ForEach(virtualScreens.screens) { screen in
-                HStack(spacing: 6) {
+                HStack(spacing: FBDTheme.spacingS) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(screen.config.name)
                             .font(.caption)
@@ -502,8 +515,8 @@ struct DisplayListView: View {
 
     private var displayGroupsSection: some View {
         DisclosureGroup(isExpanded: $groupsExpanded) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: FBDTheme.spacingM) {
+                HStack(spacing: FBDTheme.spacingM) {
                     TextField("Group name", text: $newGroupName)
                         .textFieldStyle(.roundedBorder)
                     Button("New group") {
@@ -529,21 +542,14 @@ struct DisplayListView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .padding(FBDTheme.spacingL)
+        .fbdCard()
         .padding(.horizontal, 12)
     }
 
     private func groupRow(_ group: DisplayGroup) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingXS) {
+            HStack(spacing: FBDTheme.spacingS) {
                 Text(group.name)
                     .font(.caption)
                     .lineLimit(1)
@@ -570,6 +576,7 @@ struct DisplayListView: View {
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.mini)
+                .fbdIconButton()
             }
             if !memberNames(for: group).isEmpty {
                 Text(memberNames(for: group).joined(separator: ", "))

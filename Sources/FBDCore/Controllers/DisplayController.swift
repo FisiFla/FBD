@@ -403,6 +403,27 @@ public final class DisplayController {
         display.updateDDCStatus(available: true, capabilities: caps)
     }
 
+    /// Asynchronous capabilities read, reporting whether the display answered.
+    ///
+    /// The synchronous form above is `@MainActor` and the DDC probe underneath it
+    /// blocks (settle sleep + up to three I2C reads), so calling it froze the UI
+    /// for the duration. This one keeps the caller responsive so it can show
+    /// progress, and reports the outcome instead of only logging it.
+    public func readCapabilities(
+        for display: Display,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        ddc.readCapabilities(for: display) { capabilities in
+            guard let capabilities else {
+                self.log.warning("readCapabilities failed for \(display.id)")
+                completion(false)
+                return
+            }
+            display.updateDDCStatus(available: true, capabilities: capabilities)
+            completion(true)
+        }
+    }
+
     // MARK: - Modes
 
     /// Apply a resolution/refresh-rate mode.

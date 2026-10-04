@@ -30,7 +30,27 @@ enum FBDTheme {
     // MARK: Motion
 
     static let animationFast = Animation.easeOut(duration: 0.12)
-    static let animationSpring = Animation.spring(response: 0.28, dampingFraction: 0.7)
+
+    /// Panel-level state changes: opening Settings, expanding a footer section.
+    ///
+    /// Replaces `spring(response: 0.28, dampingFraction: 0.7)` — 280 ms *with*
+    /// bounce. This is a tool the user is mid-task with, so a transition should
+    /// confirm the state change and get out of the way: inside the 150–250 ms
+    /// band, eased out, no bounce or elastic.
+    static let animationPanel = Animation.easeOut(duration: 0.22)
+}
+
+extension View {
+    /// Give an icon-only control a hit target of at least 28×28 pt — the macOS
+    /// convention — without enlarging the glyph.
+    ///
+    /// A bare `Image(systemName:)` inside a borderless button is only as large as
+    /// its glyph (roughly 12–16 pt for the symbols used here), which is a hard
+    /// target to hit deliberately and easy to miss mid-movement.
+    func fbdIconButton() -> some View {
+        frame(minWidth: 28, minHeight: 28)
+            .contentShape(Rectangle())
+    }
 }
 
 /// The display-kind visual identity: glyph + tint used by the card header

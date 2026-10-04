@@ -54,7 +54,7 @@ struct AutomationSettingsView: View {
     // MARK: - Rows
 
     private func ruleRow(_ rule: AutomationRule) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: FBDTheme.spacingM) {
             // A real (visually hidden) label: `Toggle("")` leaves VoiceOver with
             // no name for this control at all.
             Toggle("Enabled", isOn: Binding(
@@ -91,8 +91,8 @@ struct AutomationSettingsView: View {
     }
 
     private var addRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            HStack(spacing: FBDTheme.spacingS) {
                 Picker("Display", selection: $scope) {
                     Text("Any display").tag("")
                     ForEach(displays, id: \.identityKey) { display in

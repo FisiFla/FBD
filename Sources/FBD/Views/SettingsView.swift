@@ -17,13 +17,51 @@ struct SettingsView: View {
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
 
     /// Settings tabs: the overview form, or per-display settings.
-    private enum SettingsTab: String, CaseIterable, Identifiable {
+    ///
+    /// Not private: a caller that wants to reveal a specific display passes the
+    /// tab to open on.
+    enum SettingsTab: String, CaseIterable, Identifiable {
         case overview = "Overview"
         case perDisplay = "Per-Display"
         var id: String { rawValue }
     }
 
-    @State private var settingsTab: SettingsTab = .overview
+    /// The display a caller asked Settings to reveal, if any. Set from the
+    /// `.fbdOpenSettings` userInfo so a per-display action lands on that display
+    /// rather than at the top of the list.
+    private let targetDisplayID: CGDirectDisplayID?
+
+    @State private var settingsTab: SettingsTab
+
+    init(targetDisplayID: CGDirectDisplayID? = nil, initialTab: SettingsTab = .overview) {
+        self.targetDisplayID = targetDisplayID
+        _settingsTab = State(initialValue: initialTab)
+    }
+
+    private var configProtectionBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.configProtectionEnabled },
+            set: { enabled in
+                Settings.configProtectionEnabled = enabled
+                if enabled { saveConfigurationSnapshot() }
+            }
+        )
+    }
+
+    /// Snapshot every online display's current state when protection is enabled.
+    ///
+    /// This previously saved only the display whose menu the toggle was flipped
+    /// from, so switching on a global setting left every other display with
+    /// nothing stored — protection that covered one display and silently missed
+    /// the rest.
+    private func saveConfigurationSnapshot() {
+        let controller = DisplayController.shared
+        let protection = ConfigProtectionController()
+        let resolution = ResolutionController()
+        for display in controller.displays where display.isOnline {
+            protection.saveCurrentState(for: display, resolution: resolution, controller: controller)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,7 +103,7 @@ struct SettingsView: View {
             }
 
             Section {
-                HStack(spacing: 8) {
+                HStack(spacing: FBDTheme.spacingM) {
                     Text("Cooldown between writes")
                     Spacer()
                     Stepper(value: cooldownBinding, in: 0...10_000, step: 100) {
@@ -94,7 +132,7 @@ struct SettingsView: View {
                 Text("Entitlement-gated on macOS 26+; has no effect there.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
+                HStack(spacing: FBDTheme.spacingM) {
                     Text("XDR upscale target")
                     Spacer()
                     Stepper(value: xdrTarget, in: 100...1600, step: 100) {
@@ -132,7 +170,7 @@ struct SettingsView: View {
                 Text("Re-applies the saved arrangement when the display layout changes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
+                HStack(spacing: FBDTheme.spacingM) {
                     Button("Save current arrangement") {
                         layoutProtection.saveCurrentArrangement()
                         hasSavedArrangement = layoutProtection.hasSavedArrangement
@@ -144,6 +182,16 @@ struct SettingsView: View {
                     .controlSize(.small)
                     .disabled(!hasSavedArrangement)
                 }
+
+                // Moved here from the per-display menu. It is ONE global flag, and
+                // in a display's own menu it read as an independent per-display
+                // switch. It now also snapshots every display, where it previously
+                // saved only the display whose menu it was flipped from — leaving
+                // the others apparently protected with nothing stored.
+                Toggle("Configuration protection", isOn: configProtectionBinding)
+                Text("Saves each display's current mode, brightness and preset, and re-applies them when the display reconnects.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } header: {
                 Label("Virtual Displays & Layout", systemImage: "rectangle.3.group")
             }
@@ -167,7 +215,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("HTTP API", isOn: httpAPIEnabledBinding)
-                HStack(spacing: 8) {
+                HStack(spacing: FBDTheme.spacingM) {
                     Text("Port")
                     Spacer()
                     Stepper(value: httpPortBinding, in: 1024...65535) {
@@ -182,7 +230,7 @@ struct SettingsView: View {
                 Text("Shows a brightness HUD when the display brightness changes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
+                HStack(spacing: FBDTheme.spacingM) {
                     Text("Night Shift strength")
                     Spacer()
                     Text("\(Int((nightShift.strength() ?? 0) * 100))%")
@@ -250,23 +298,39 @@ struct SettingsView: View {
         let shown = Settings.showOfflineDisplays
             ? displays
             : displays.filter(\.isOnline)
-        return ScrollView {
-            VStack(spacing: 8) {
-                if shown.isEmpty {
-                    Text("No displays")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 24)
-                }
-                // Display arrangement grid (System Settings-style drag to move).
-                ArrangementGridView()
-                    .padding(.horizontal, 12)
-                ForEach(shown) { display in
-                    perDisplayCard(display)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: FBDTheme.spacingM) {
+                    if shown.isEmpty {
+                        Text("No displays")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 24)
+                    }
+                    // Display arrangement grid (System Settings-style drag to move).
+                    ArrangementGridView()
                         .padding(.horizontal, 12)
+                    ForEach(shown) { display in
+                        perDisplayCard(display)
+                            .padding(.horizontal, 12)
+                            // Scroll target for a caller that asked Settings to
+                            // reveal this display.
+                            .id(display.id)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .onAppear {
+                guard let targetDisplayID,
+                      shown.contains(where: { $0.id == targetDisplayID }) else { return }
+                // One runloop turn, so the cards exist before we scroll to one.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                    withAnimation(FBDTheme.animationFast) {
+                        proxy.scrollTo(targetDisplayID, anchor: .top)
+                    }
                 }
             }
-            .padding(.vertical, 8)
         }
     }
 

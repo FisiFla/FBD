@@ -33,6 +33,12 @@ struct DisplayRowView: View {
             }
             if display.ddcAvailable {
                 DDCPanelView(display: display, refreshRequest: ddcRefreshRequest)
+            } else {
+                // Without this the section simply was not there, which reads as a
+                // bug rather than "this display has no DDC/CI".
+                Text("This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             DisplaySectionsView(
                 display: display,
@@ -42,14 +48,7 @@ struct DisplayRowView: View {
             disableRow
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .fbdCard()
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplayUpdated)) { note in
             if let id = note.userInfo?["displayID"] as? CGDirectDisplayID, id == display.id {
                 refreshTick += 1

@@ -152,7 +152,7 @@ struct FilterControlsView: View {
     }
 
     private var filterControls: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
             Toggle("Apply to Display", isOn: filterActiveBinding)
             Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
                 Text("Contrast")
@@ -229,7 +229,7 @@ struct FilterControlsView: View {
             }
 
             Divider()
-            HStack(spacing: 8) {
+            HStack(spacing: FBDTheme.spacingM) {
                 Button(filterParams.lutPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Choose LUT…") {
                     chooseLUT()
                 }
