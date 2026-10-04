@@ -62,13 +62,15 @@ public class WebSocketDisplayController {
                 return
             }
             self.initCompletion = completion
+            // The URL is built purely to validate host+port; the connection is
+            // configured from `params` below, so test it rather than binding it.
             guard let port = NWEndpoint.Port(rawValue: port),
-                  let url = self.makeURL(host: host, port: port.rawValue) else {
+                  self.makeURL(host: host, port: port.rawValue) != nil else {
                 self.failInit("invalid host or port")
                 return
             }
 
-            var params = NWParameters.tcp
+            let params = NWParameters.tcp
             let wsOptions = NWProtocolWebSocket.Options()
             wsOptions.autoReplyPing = true
             params.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)

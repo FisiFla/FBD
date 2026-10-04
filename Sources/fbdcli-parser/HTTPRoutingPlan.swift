@@ -190,7 +190,19 @@ public enum HTTPRoutingPlanBuilder {
                 guard dims.count == 2, let width = UInt32(dims[0]), let height = UInt32(dims[1]) else {
                     return .failure(HTTPRoutingError(message: "fbdcli: virtual create: expected <W>x<H>[@<hz>] (got '\(spec)')"))
                 }
-                let hz = parts.count > 1 ? Double(parts[1]) : 60
+                // Validated rather than left optional: `Double(parts[1])` returns
+                // nil for a non-numeric rate, and coercing that into the payload's
+                // Any sends something JSONSerialization cannot encode — a confusing
+                // runtime failure instead of a message naming the bad argument.
+                let hz: Double
+                if parts.count > 1 {
+                    guard let parsed = Double(parts[1]) else {
+                        return .failure(HTTPRoutingError(message: "fbdcli: virtual create: hz must be a number (got '\(parts[1])')"))
+                    }
+                    hz = parsed
+                } else {
+                    hz = 60
+                }
                 var payload: [String: Any] = ["name": name, "width": width, "height": height, "hz": hz]
                 if args.contains("--hdr") { payload["isHDR"] = true }
                 return .success(HTTPRoutingPlan(method: "POST", path: "/api/virtual/create", payload: payload))

@@ -213,7 +213,7 @@ private func fbdHotkeyTapCallback(
     switch type {
     case .tapDisabledByTimeout:
         // The tap's run-loop source runs on the main run loop.
-        MainActor.assumeIsolated { HotkeyController.shared.reenableTap() }
+        _ = MainActor.assumeIsolated { HotkeyController.shared.reenableTap() }
         return nil
     case .tapDisabledByUserInput:
         MainActor.assumeIsolated { HotkeyController.shared.handleTapDisabledByUser() }
