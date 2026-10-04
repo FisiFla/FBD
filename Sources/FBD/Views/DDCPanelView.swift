@@ -41,14 +41,13 @@ struct DDCPanelView: View {
     /// (some DDC monitors ignore reads).
     private func refreshDDCState() {
         guard display.ddcAvailable else { return }
-        if let value = DisplayController.shared.readContrast(for: display) {
-            contrast = value
-        }
-        if let value = DisplayController.shared.readVolume(for: display) {
-            volume = value
-        }
-        if let value = DisplayController.shared.readMuted(for: display) {
-            muted = value
+        // Three blocking reads used to run here on the main actor, one per value,
+        // each doing its own `queue.sync`. They now happen together on the
+        // display's queue and arrive back on the main actor.
+        DisplayController.shared.readDDCState(for: display) { state in
+            if let value = state.contrast { contrast = value }
+            if let value = state.volume { volume = value }
+            if let value = state.muted { muted = value }
         }
     }
 

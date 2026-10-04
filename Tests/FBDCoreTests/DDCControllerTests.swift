@@ -55,6 +55,33 @@ final class DDCControllerTests: XCTestCase {
         DDCController(external: mock, isPlatformSupported: { true })
     }
 
+    // MARK: - Async reads (queue re-entry)
+
+    /// `readState` runs on the display's queue and must not re-enter it.
+    ///
+    /// `readVCP` does `queue.sync` internally, so a wrapper that called it from
+    /// inside `queue.async` would deadlock: the callback would never fire and the
+    /// display's queue would never drain. That failure is silent — the DDC panel
+    /// would simply stop updating rather than report anything — and the compiler
+    /// cannot catch it, which is exactly why this asserts the callback arrives.
+    func testReadStateCompletesRatherThanDeadlocking() {
+        let mock = MockExternal()
+        mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        let controller = makeController(mock: mock)
+
+        let answered = expectation(description: "readState returned")
+        controller.readState(for: display) { state in
+            // Firing at all is the assertion. The scripted packet is a brightness
+            // reply, so the individual values are not meaningful for this test.
+            _ = state
+            answered.fulfill()
+        }
+        // A deadlock fails here after the timeout instead of hanging the suite.
+        wait(for: [answered], timeout: 5)
+
+        XCTAssertGreaterThan(mock.writeCalls, 0, "the reads should have reached the transport")
+    }
+
     // MARK: - Read retries
 
     func testReadVCPSucceedsOnFirstAttempt() {

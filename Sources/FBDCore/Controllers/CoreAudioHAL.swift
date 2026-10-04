@@ -4,7 +4,10 @@ import Foundation
 /// The CoreAudio HAL surface, behind a protocol so the caching, clamping and
 /// non-blocking behaviour of `SystemVolumeController` can be tested without an
 /// audio device — and without a slow USB device to wait for.
-public protocol CoreAudioHAL: AnyObject {
+/// `Sendable` because `SystemVolumeController` calls this from its own serial
+/// queue: the reference crosses a concurrency boundary, and declaring that is
+/// what lets the compiler check the real conformance instead of warning about it.
+public protocol CoreAudioHAL: AnyObject, Sendable {
     /// The current default output device, or nil when there is none.
     func defaultOutputDevice() -> AudioDeviceID?
     /// Devices with at least one output stream.

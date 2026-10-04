@@ -3,6 +3,85 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+### Added
+- **A feedback layer.** There was no loading or error state anywhere in the UI
+  (`grep -rn ProgressView Sources/FBD/` returned nothing).
+  - `FBDStatus` + `FBDStatusLine`: an inline working/failed/succeeded line with a
+    single combined VoiceOver announcement.
+  - `FBDNotice` + `FBDNoticeBanner`: an app-level surface for menu-initiated
+    actions, which need one because a menu dismisses on selection and a status
+    line inside it would never be read.
+  - The DDC panel shows a spinner while probing, then a checkmark or an explicit
+    "No reply from the display".
+- **DDC inputs are offered by name.** When a display reports which inputs it has
+  (the VCP 0x60 value list in its capabilities reply), the panel offers those by
+  name — "HDMI 1", "DisplayPort 2" — and shows anything outside the MCCS table as
+  `Input 0xNN` rather than attaching a plausible-looking wrong label. Only values
+  that the display itself reports are offered, and the raw field remains as a
+  manual override.
+- `FBDCard` — the display-card surface, previously copied byte-identically into
+  four views.
+- `fbdIconButton()` — a 28pt hit target for icon-only controls, applied to seven
+  of them. A bare `Image(systemName:)` in a borderless button is only as large as
+  its glyph (roughly 12–16pt), which is easy to miss deliberately.
+
+### Changed
+- **A design-review pass over the whole UI**, driven by an Impeccable critique
+  (24/40 on Nielsen's heuristics, run as two isolated assessments: a design
+  review and a technical/accessibility evidence pass).
+- **Motion now matches the product register.** `FBDTheme.animationSpring` was a
+  280ms spring with `dampingFraction 0.7` — i.e. bounce — where a tool the user
+  is mid-task with should use 150–250ms eased and no bounce. Renamed to
+  `animationPanel`, since it no longer described itself correctly.
+- 32 spacing/padding literals routed through `FBDTheme` tokens, value-identically.
+
+### Fixed
+- **`Read capabilities` froze the UI while it ran.** The DDC probe blocks (a
+  settle sleep plus up to three I2C reads) and its only caller was `@MainActor`,
+  so the main thread stalled for the whole probe. A spinner would have been a
+  lie, because SwiftUI cannot draw while that thread is blocked — so the read now
+  runs on the per-display queue and reports back on the main actor. The same
+  blocking applied to the panel's contrast/volume/mute read-back.
+- **Controls that silently did nothing now say so.** The DDC panel's input
+  "Apply" returned early on an invalid value with no feedback of any kind; it is
+  disabled until the field holds a usable value, with help text naming the range.
+  Rotation and mirror/unmirror results were discarded, so a refused action closed
+  the menu and looked dead; both now surface.
+- **`Configuration Protection` misrepresented its own scope.** It was a
+  per-display menu toggle over one *global* flag, and enabling it saved only the
+  display whose menu it was flipped from — leaving every other display apparently
+  protected with nothing stored. It lives in Settings now, beside Layout
+  protection, and snapshots every online display.
+- **`Show in Settings` promised navigation it never performed.** It posted no
+  payload and Settings had no target-display concept, so it landed on the
+  Overview page showing nothing about the display. It now opens the Per-Display
+  tab and scrolls to that display.
+- **`Mirror Display` opened empty on a single-display Mac**, because its targets
+  are other *online* displays. It is disabled with a reason instead.
+- **A display with no DDC/CI now says so** rather than silently omitting the
+  panel, which read as a bug rather than as an absent capability.
+- **The arrangement grid's display names were unreadable in light mode** — 9pt
+  white on a 25%-opacity accent fill, roughly 1.5:1. Non-dragging tiles use
+  `.primary`, which adapts to the appearance.
+- **`release.yml` looked for the wrong CHANGELOG heading.** It searched for the
+  tag form while headings are written without the `v` — so every release after
+  1.4.0 would have shipped with empty release notes. The search is now anchored to
+  the start of a line, because an unanchored pattern also matches a passing
+  mention of a heading inside prose and then the notes begin mid-sentence.
+
+### Accessibility
+- **Four controls had no accessible name.** The automation rule toggle and its
+  three pickers were built as `Toggle("")` / `Picker("")` with `.labelsHidden()`
+  — which hides a label *visually* but still exposes it, so an empty one left
+  VoiceOver with nothing to announce. They now carry real hidden names, and the
+  rule's remove button has an accessible label alongside its tooltip.
+- **Reduce Motion was bypassed in two places.** The footer's expanders animated
+  regardless of the setting, in a file that already guards four other animations.
+  A `reduceMotion ? .opacity : .opacity` ternary had identical branches, so it
+  did nothing while appearing to handle the setting.
+
 ## [1.5.0] — 2026-10-03
 
 ### Fixed

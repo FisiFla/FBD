@@ -76,7 +76,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          NOTES=$(sed -n "/## \[$TAG\]/,/^## /p" CHANGELOG.md | head -n -1)
+          # The git tag is v1.5.0 but the CHANGELOG heading is [1.5.0]. Without
+          # stripping the prefix the sed below matches nothing, so every release
+          # ships with empty notes.
+          VERSION="${TAG#v}"
+          # Anchored to the start of a line: an unanchored pattern also matches a
+          # passing mention of a heading inside prose, and the notes then begin in
+          # the middle of a sentence.
+          NOTES=$(sed -n "/^## \[$VERSION\]/,/^## /p" CHANGELOG.md | head -n -1)
           gh release create "$TAG" build/FBD.zip \
             --title "FBD $TAG" --notes "$NOTES"
 

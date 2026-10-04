@@ -368,6 +368,18 @@ public final class DisplayController {
         return raw <= 1.5
     }
 
+    /// Read the DDC panel's read-back values in one pass, off the main actor.
+    ///
+    /// The three synchronous accessors above each block their caller, and the only
+    /// caller is `@MainActor`, so refreshing the panel used to stall the UI three
+    /// times over.
+    public func readDDCState(
+        for display: Display,
+        completion: @escaping @MainActor (DDC.DDCState) -> Void
+    ) {
+        ddc.readState(for: display, completion: completion)
+    }
+
     /// Mute/unmute the display's speakers via DDC/CI. Returns whether the write was accepted.
     @discardableResult
     public func setMuted(_ muted: Bool, on display: Display) -> Bool {
