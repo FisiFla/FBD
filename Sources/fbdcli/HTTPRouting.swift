@@ -322,7 +322,7 @@ enum HTTPRouting {
             }
         }
         guard let plan = planFor(.filter, args) else { return 1 }
-        guard let id = args.first else { return 1 }
+        guard !args.isEmpty else { return 1 }
         guard postOK(plan.path, plan.payload ?? [:]) else {
             print("fbdcli: filter: failed to apply filter (via app)")
             return 2

@@ -449,15 +449,17 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
             let newStream = SCStream(filter: filter, configuration: config, delegate: self)
             try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
             stream = newStream
-            newStream.startCapture { [weak self] error in
-                guard let self else { return }
-                if let error {
-                    self.fail("startCapture failed: \(error.localizedDescription)")
-                } else {
-                    self.stateLock.lock()
-                    self._isCapturing = true
-                    self.stateLock.unlock()
-                }
+            // The async variant rather than the completion one: it is not
+            // deprecated, and it drops the @Sendable completion that forced a
+            // non-Sendable self capture across the concurrency boundary.
+            do {
+                try await newStream.startCapture()
+                // Scoped locking: lock()/unlock() are unavailable from an async
+                // context (an error in Swift 6), and a scoped critical section is
+                // what that diagnostic asks for.
+                self.stateLock.withLock { self._isCapturing = true }
+            } catch {
+                self.fail("startCapture failed: \(error.localizedDescription)")
             }
         } catch {
             fail(error.localizedDescription)

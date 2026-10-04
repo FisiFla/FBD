@@ -254,6 +254,8 @@ public final class CombinedBrightness {
     /// OverlayController is @MainActor; CombinedBrightness is driven from the
     /// main thread (DisplayController). Satisfies the isolation checker on
     /// main and hops defensively when called off main.
+    /// Marked discardable: several callers invoke it purely for the side effect.
+    @discardableResult
     private func withOverlay<T>(_ body: @MainActor (OverlayControlling) -> T) -> T {
         if Thread.isMainThread {
             return MainActor.assumeIsolated { body(overlay) }

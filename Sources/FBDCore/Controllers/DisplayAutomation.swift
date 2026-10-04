@@ -189,7 +189,12 @@ public struct AutomationRunRecord: Equatable, Sendable {
 
 /// Runs one action. Injected so the controller's decision-making is testable
 /// without ever starting a process, and so a fake can observe what *would* run.
-public protocol AutomationExecuting: AnyObject {
+/// `Sendable` because `DisplayAutomationController` calls this from its own
+/// serial queue: the reference crosses a concurrency boundary, and declaring
+/// that is what lets the compiler check the real conformance rather than warn.
+/// The shipped executor is a final class with no stored properties, so it
+/// satisfies this as written.
+public protocol AutomationExecuting: AnyObject, Sendable {
     func execute(
         _ invocation: AutomationInvocation,
         timeout: TimeInterval

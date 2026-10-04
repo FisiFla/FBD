@@ -856,7 +856,7 @@ private final class PipRenderer {
         let viewAspect = layer.drawableSize.width / layer.drawableSize.height
         let quadY = min(CGFloat(1), viewAspect / sourceAspect)
         let quadX = quadY * sourceAspect / viewAspect
-        var fitScale = SIMD2<Float>(Float(quadX), Float(quadY))
+        let fitScale = SIMD2<Float>(Float(quadX), Float(quadY))
         fitScaleBuffer.contents().storeBytes(of: fitScale, as: SIMD2<Float>.self)
 
         var cvTexture: CVMetalTexture?
