@@ -41,3 +41,30 @@ jobs:
           name: FBD-app
           path: build/FBD.app
           if-no-files-found: error
+
+  build-test-arm64:
+    name: Build & test (macOS, Apple Silicon / DDC path)
+    # Apple Silicon runner: exercises the IOAVService DDC path and other
+    # arm64-only private-API surfaces that the Intel runner skips.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: |
+            .build
+            Package.resolved
+          key: ${{ runner.os }}-arm64-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-spm-
+
+      - name: Build (debug)
+        run: swift build --disable-sandbox
+
+      - name: Run tests
+        run: swift test --disable-sandbox
+
+      - name: Build release app bundle
+        run: make app
