@@ -104,6 +104,9 @@ supported on Intel Macs.
 
 - `fbd://open` opens the settings panel (handy for Shortcuts / quick-launch
   tools; `fbd://open` is also what the CLI's `http` status hints at).
+- `fbd://brightness/<displayID>/<value>` (0…1) changes brightness, but now
+  requires the local API token as `?token=<httpAPIToken>` (see above). Writes
+  without a matching token are refused.
 - Media-key interception (F1/F2, F10–F12 mapped to external-display
   brightness/volume) is **off by default** — enable it explicitly in
   Settings → General ("Intercept media keys"). It requires Accessibility

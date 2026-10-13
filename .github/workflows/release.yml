@@ -87,12 +87,16 @@ jobs:
           gh release create "$TAG" build/FBD.zip \
             --title "FBD $TAG" --notes "$NOTES"
 
+      - name: Zip unsigned artifact
+        if: steps.check.outputs.has_cert != 'true'
+        run: ditto -c -k --keepParent build/FBD.app build/FBD-unsigned.zip
+
       - name: Upload unsigned artifact
         if: steps.check.outputs.has_cert != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: FBD-unsigned
-          path: build/FBD.app
+          path: build/FBD-unsigned.zip
           if-no-files-found: error
 
       - name: Warn about missing secrets

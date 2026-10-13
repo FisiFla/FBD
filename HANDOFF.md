@@ -1,10 +1,10 @@
 # HANDOFF — FBD
 
-Last updated: 2026-08-04 (v1.4.0 released)
+Last updated: 2026-10-04 (v1.6.0 released)
 
 ## Verify conditions (before declaring any task done)
 
-- `swift test --disable-sandbox` — all suites green (288 tests as of v1.4.0)
+- `swift test --disable-sandbox` — all suites green (477 tests as of v1.6.0)
 - `make app` builds cleanly
 - `make ui-smoke` — 5/5 (needs Accessibility; may be flaky headless)
 - Live-verify any touched control path via `fbdcli` (direct + routed) and the
@@ -12,9 +12,8 @@ Last updated: 2026-08-04 (v1.4.0 released)
 
 ## Current state
 
-- v1.4.0 live: Per-Display control page, drag-to-arrange grid, seams from the
-  architecture pass (CombinedBrightness, HTTPExecutor/DisplayControlling).
-- 288 tests, ui-smoke 5/5, appcast + assets verified on every release.
+- v1.6.0 live: full feature parity roadmap items through phase 4; 477 tests,
+  ui-smoke 5/5, appcast + assets verified on every release.
 - Known constraints (ADRs): one virtual display per process on macOS 27;
   virtual screens are not dimmable/resizable (ADR-0001); arrangement uses the
   public CG API (ADR-0002).

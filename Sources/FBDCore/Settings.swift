@@ -45,8 +45,8 @@ public enum Settings {
         add("configProtectionEnabled", configProtectionEnabled)
         add("launchAtLogin", launchAtLogin)
         add("showRosettaWarning", showRosettaWarning)
-        add("httpAPIToken", mask(httpAPIToken))
-        add("tvLGClientKey", mask(tvLGClientKey))
+        add("httpAPIToken", "****")
+        add("tvLGClientKey", "****")
         return lines.sorted().joined(separator: "\n")
     }
 
@@ -233,9 +233,12 @@ public enum Settings {
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
             // Extremely unlikely; fall back to a time-seeded token rather
-            // than failing closed on a localhost-only API.
+            // than failing closed on a localhost-only API. Persist it so the
+            // app and CLI agree on the token instead of regenerating it.
             let seed = "\(Date().timeIntervalSince1970)-\(ProcessInfo.processInfo.processIdentifier)"
-            return Data(seed.utf8).base64EncodedString()
+            let token = Data(seed.utf8).base64EncodedString()
+            defaults.set(token, forKey: "httpAPIToken")
+            return token
         }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
         defaults.set(token, forKey: "httpAPIToken")
