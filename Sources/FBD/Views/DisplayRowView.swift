@@ -38,8 +38,9 @@ struct DisplayRowView: View {
                 detail
             }
         }
-        .padding(12)
-        .fbdCard()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .fbdPanelBand()
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplayUpdated)) { note in
             if let id = note.userInfo?["displayID"] as? CGDirectDisplayID, id == display.id {
                 refreshTick += 1

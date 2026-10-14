@@ -136,7 +136,9 @@ struct DisplayListView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: FBDTheme.spacingM) {
+                // Bands, not cards: the stack contributes no gaps, because the bands and their
+                // hairlines do the separating. See `fbdPanelBand()`.
+                VStack(spacing: 0) {
                     if rosettaWarningVisible {
                         RosettaWarningView()
                             .padding(.horizontal, 12)
@@ -146,10 +148,10 @@ struct DisplayListView: View {
                     if displays.isEmpty {
                         emptyState
                     } else {
-                        VStack(spacing: FBDTheme.spacingM) {
+                        VStack(spacing: 0) {
                             ForEach(displays) { display in
                                 DisplayRowView(display: display)
-                                    .padding(.horizontal, 12)
+                                Divider().opacity(0.5)
                             }
                         }
                     }
@@ -416,9 +418,9 @@ struct DisplayListView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .padding(FBDTheme.spacingL)
-        .fbdCard()
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .fbdPanelBand()
     }
 
     private var createVirtualScreenRow: some View {
@@ -550,9 +552,9 @@ struct DisplayListView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .padding(FBDTheme.spacingL)
-        .fbdCard()
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .fbdPanelBand()
     }
 
     private func groupRow(_ group: DisplayGroup) -> some View {

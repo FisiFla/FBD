@@ -95,11 +95,11 @@ sources linked. Paraphrased, the rules that bear on FBD:
 | 1 · no glass-on-glass | ✅ fixed — `fbdChromeBand()`; was violated at `DisplayListView.swift:232`, `:277`, `:361` |
 | 2 · checkmark lists | partial — the panel's mode/refresh/colour live in a `.menu` picker (two clicks) |
 | 3 · sliders, not typing | mostly ✅; the nits ranges are typed |
-| 4 · icons all-or-none | mixed — `DesignSystem` has chips, but rows are inconsistent |
+| 4 · icons all-or-none | ✅ uniform — every section row carries an icon at the same font and tint; checked against the rendered panel, not just the source |
 | 5 · expand in place | ✅ `More controls` disclosure; but folded content also pushes to Settings |
-| 6 · one editor at a time | not verified |
+| 6 · one editor at a time | ✅ not applicable — the panel has no inline *forms*, so there is nothing for the rule to sequence. Verified by looking at the rendered panel and by grepping for editor state |
 | 7 · centred empty states | ✅ already centred (`DisplayListView.swift:283`) |
-| 8 · shaded band, not a card | partial — content uses `FBDCard` inside the panel |
+| 8 · shaded band, not a card | ✅ fixed — `fbdPanelBand()`; rows and sections were floating rounded cards *inside* the panel until now, and the expanded detail is part of the row's band |
 
 ## Plan, in value order
 

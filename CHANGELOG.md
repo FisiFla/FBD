@@ -260,6 +260,14 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   resolution change moves every open window.
 
 ### Changed
+- **The panel is one surface now: rows are bands, not cards.** The three rounded cards that floated
+  inside the panel — the display row, Virtual Screens and Display Groups — each carried their own
+  fill and a hairline border, which is the glass-on-glass stacking the chrome fix was about, one
+  level down. They are full-width bands of `Color.primary.opacity(0.035)` (`fbdPanelBand()`)
+  separated by hairlines, so the expanded detail region sits *in* the panel's surface rather than on
+  a card inside it. `fbdCard()` remains for Settings, where a group genuinely is its own surface.
+  Checked against the rendered panel rather than the source: no rounded corners remain on rows, and
+  the expanded detail reads as part of the band.
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom
   centre), a continuous or a segmented bar, a dark HUD or one that follows the system
   appearance, a shadow toggle, and a corner-radius slider. The defaults reproduce the
