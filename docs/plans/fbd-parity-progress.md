@@ -264,6 +264,20 @@ separate commit on the same branch.
 
   `NetworkDeviceRegistryTests` (20 cases) covers validation, dedup, the size bound and corrupt-blob
   handling. FBDCoreTests 649, FBDCLIParserTests 136 — **785 tests, 0 failures**.
+- **Fixed: the keyboard control target was a dead setting.** `Settings.keyboardControlTarget` was
+  written by the Settings UI and by `fbdcli config keytarget`, and displayed back, but nothing ever
+  read it: `HotkeyController.handleMediaKey` still called the old `MediaKeyRouter.decide(...)` with a
+  display chosen purely from the pointer position. The new `MediaKeyRouter.resolve(...)` seam existed
+  and was unit-tested, but no live path called it — so the setting changed nothing while appearing to
+  work. This is the same failure mode as the lock-dim controller that was never started; both were
+  found by reading the call sites rather than by a failing test, which is the lesson worth keeping.
+
+  `handleMediaKey` now resolves the target screen through `Settings.keyboardControlTarget` and acts on
+  every screen that resolves (`.allSuitableScreens` is genuinely multi-screen). `.mouseScreen` — the
+  default — reproduces the previous behaviour exactly, and the old fallback chain is retained so a
+  press is never silently swallowed. `focusedDisplayID` is derived from `NSScreen.main` by frame.
+
+  Still not wired: the HTTP API has no route for these surfaces.
 
 
 
