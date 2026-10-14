@@ -10,6 +10,11 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard
+  Control Target` and `Sync Display Group` join the existing display actions, so the
+  new features are scriptable from Shortcuts as well as from `fbdcli` and the app.
+  `Sync Display Group` runs the same tested planner as the Settings page's "Sync now",
+  and each action validates its input and names the valid values when it refuses.
 - **The HTTP API covers the parity settings.** `GET /api/config` reports the new
   settings — lock dim, the keyboard control target (with the valid values), the
   brightness model and configuration protection; `POST /api/config/lockdim` and
@@ -100,7 +105,6 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 ### Not in this change
 - The menu-bar quick menu was **not** restructured to mirror BetterDisplay's
   grouped layout; only Settings was. Recorded as open.
-- The Shortcuts intents were not extended to the new surfaces.
 - The HTTP API covers lock dim and the keyboard control target, but not the other
   new surfaces: resolution favourites, group *sync apply*, connection management,
   the per-display protection-property selection and the saved-device registry are
