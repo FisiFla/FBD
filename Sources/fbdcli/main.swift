@@ -126,7 +126,9 @@ Commands:
                                 <group> [policy], group-enabled <group> [on|off],
                                 group-sync <group> <0-100>, connections
                                 connect-all|disconnect-all-but-main|swap-identical,
-                                model <key> [value], device list|add|remove
+                                model <key> [value], device list|add|remove,
+                                identity [method], transfer <from-id> <to-id>
+                                [--overwrite]
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.

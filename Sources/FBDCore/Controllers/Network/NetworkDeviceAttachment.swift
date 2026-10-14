@@ -85,6 +85,33 @@ public enum NetworkDeviceAttachment {
             .sorted()
     }
 
+    /// Re-key a display's attachment.
+    ///
+    /// Used when a display's stored settings are transferred to another display,
+    /// and when its identity key changes because the identity method did — the
+    /// attachment lives inside one shared blob, so it cannot be moved by copying
+    /// a key and would otherwise be left behind, pointing at an identity nothing
+    /// resolves to any more.
+    ///
+    /// Unlike `attach`, this does not consult the registry: the value being moved
+    /// was validated when it was stored, and re-validating would make a transfer
+    /// fail for a device the user happened to delete afterwards.
+    @discardableResult
+    public static func move(
+        from source: String,
+        to destination: String,
+        overwrite: Bool = false,
+        defaults: UserDefaults = Settings.defaults
+    ) -> Bool {
+        guard !source.isEmpty, !destination.isEmpty, source != destination else { return false }
+        var current = attachments(defaults: defaults)
+        guard let device = current[source] else { return false }
+        if !overwrite, current[destination] != nil { return false }
+        current[destination] = device
+        save(current, defaults: defaults)
+        return true
+    }
+
     private static func save(_ attachments: [String: String], defaults: UserDefaults) {
         guard let data = try? JSONEncoder().encode(attachments) else { return }
         defaults.set(data, forKey: Settings.networkDeviceAttachmentsKey)

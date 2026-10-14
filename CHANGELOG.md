@@ -142,6 +142,16 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   hiding the item with no other way in would strand the user, so the policy fails
   closed instead. Choosing an icon that cannot be resolved falls back to the
   default rather than leaving the button blank.
+- **`fbdcli config identity` and `config transfer`.** Which key a display's
+  stored settings are filed under is now a choice — vendor+model+serial (the
+  default), vendor+model, serial alone, or the display's name — and one display's
+  settings can be copied onto another. The default reproduces the historical key
+  byte for byte, so an existing install keeps every per-display setting attached;
+  switching is an explicit step and the transfer is separate rather than a silent
+  re-key. The copy handles both storage shapes: the per-display key families *and*
+  the network-device attachment, which lives inside one shared blob and would
+  otherwise be left pointing at nothing. It refuses to overwrite settings the
+  destination already has unless `--overwrite` is passed.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom
