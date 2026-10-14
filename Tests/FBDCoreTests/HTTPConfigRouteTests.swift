@@ -284,4 +284,61 @@ final class HTTPConfigRouteTests: XCTestCase {
         XCTAssertEqual(status, 400)
         XCTAssertTrue(message.contains("remove"), "should name the valid actions, got: \(message)")
     }
+
+    // MARK: - Resolution favourites
+
+    func testFavouriteList() {
+        XCTAssertEqual(
+            route("POST", "/api/config/favourite", body: #"{"display":1,"action":"list"}"#),
+            .route(.configFavourite(displayID: 1, action: .list))
+        )
+    }
+
+    /// Slot 1 is valid, and the number 1 also satisfies `is Bool` through
+    /// NSNumber's bridging — so this is the same trap as the display-id one.
+    func testFavouriteAcceptsSlotOne() {
+        XCTAssertEqual(
+            route("POST", "/api/config/favourite", body: #"{"display":1,"action":"save","slot":1}"#),
+            .route(.configFavourite(displayID: 1, action: .save(slot: 1)))
+        )
+    }
+
+    func testFavouriteAcceptsTheLastSlot() {
+        XCTAssertEqual(
+            route("POST", "/api/config/favourite", body: #"{"display":1,"action":"apply","slot":5}"#),
+            .route(.configFavourite(displayID: 1, action: .apply(slot: 5)))
+        )
+    }
+
+    func testFavouriteRejectsAnOutOfRangeSlot() {
+        for slot in ["0", "6", "-1"] {
+            guard case .error(let status, _) = route(
+                "POST", "/api/config/favourite",
+                body: #"{"display":1,"action":"apply","slot":\#(slot)}"#
+            ) else { return XCTFail("expected an error for slot \(slot)") }
+            XCTAssertEqual(status, 400)
+        }
+    }
+
+    func testFavouriteRejectsABooleanSlot() {
+        guard case .error(let status, _) = route(
+            "POST", "/api/config/favourite", body: #"{"display":1,"action":"save","slot":true}"#
+        ) else { return XCTFail("expected an error for a boolean slot") }
+        XCTAssertEqual(status, 400)
+    }
+
+    func testFavouriteRequiresTheSlotForSaveAndApply() {
+        guard case .error(let status, _) = route(
+            "POST", "/api/config/favourite", body: #"{"display":1,"action":"save"}"#
+        ) else { return XCTFail("expected an error when slot is absent") }
+        XCTAssertEqual(status, 400)
+    }
+
+    func testFavouriteRejectsAnUnknownAction() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/favourite", body: #"{"display":1,"action":"nope"}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("apply"), "should name the valid actions, got: \(message)")
+    }
 }

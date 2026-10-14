@@ -346,6 +346,34 @@ separate commit on the same branch.
   Still not exposed over HTTP: resolution favourites, group *sync apply*, connection management, the
   per-display protection-property selection and the saved-device registry. Those are actions against
   hardware or per-display state, each needing its own validation and error contract.
+- **The remaining HTTP surfaces, and two bugs the work exposed.** `POST /api/config/connections`,
+  `POST /api/config/protection`, `POST /api/config/device` and `POST /api/config/favourite` now cover
+  connection management, the per-display protection selection, the saved-device registry and resolution
+  favourites (list / record the current mode / recall). Only group *sync apply* is left, and its reason is
+  structural rather than effort: it matches brightness in nits, so the executor's `DisplayControlling`
+  seam would need `hardwareCeilingNits` added, or the endpoint would quietly skip the luminance matching
+  the CLI performs.
+
+  **Bug one, caught by the tests.** The guard I first wrote to reject a JSON boolean used `value is Bool`.
+  That is true for `NSNumber(1)` — and `NSNumber(0)` — because Swift bridges NSNumber to Bool. So
+  `{"display": 1}` was rejected while `{"display": "7"}` worked, and display 1 is usually the main
+  display. The same flawed guard was already in the `targetPercent` check from the earlier lockdim work,
+  where it wrongly rejected `{"targetPercent": 1}`. Both now compare the CoreFoundation type id, which is
+  exact, and both have regression tests asserting the numbers 0 and 1 are accepted while a real boolean is
+  refused. A grep confirmed no other instance of the pattern in the codebase.
+
+  **Bug two, and a mistake of mine worth recording.** To check that a written favourite could be undone I
+  backed the value up with `defaults read` and restored it afterwards — but **`defaults read` truncates
+  long `Data` with a `...` in the middle**. My capture was 16 bytes of a 125-byte value, my "byte-for-byte"
+  check compared the truncated value against itself and passed, and writing it back destroyed a real
+  recorded favourite. It was recoverable because the API's own `list` output described the lost entry
+  (slot 1, 1728x1117 at 120 Hz, not HiDPI — the current mode), so recreating it through the app produced a
+  value of exactly the original 125 bytes with identical content, confirmed by the API and by the stored
+  length.
+
+  Two lessons: never round-trip preference values through `defaults read` — export the plist, or compare
+  lengths and content instead of trusting the hex; and a file that survived the inspect step proves nothing
+  unless the check could have failed.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a

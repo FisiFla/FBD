@@ -43,6 +43,16 @@ public enum HTTPRoute: Equatable {
     /// The saved TV / AVR registry — the one surface here that touches no
     /// display at all.
     case configDevice(DeviceAction)
+    /// Resolution favourites: list them, record the current mode into a slot, or
+    /// recall one. Recall reports an unmatched favourite rather than guessing.
+    case configFavourite(displayID: CGDirectDisplayID, action: FavouriteAction)
+}
+
+/// The favourite operations, so one route case carries them.
+public enum FavouriteAction: Equatable {
+    case list
+    case save(slot: Int)
+    case apply(slot: Int)
 }
 
 /// The registry operations, so one route case carries them rather than three
@@ -426,6 +436,32 @@ public enum HTTPRouter {
                 return .error(status: 400, message: "properties may only contain: \(allowed)")
             }
             return .route(.configProtection(displayID: displayID, properties: properties))
+
+        case "favourite":
+            guard let displayID = displayID(from: object) else {
+                return .error(status: 400, message: "display is required")
+            }
+            guard let raw = object["action"] as? String else {
+                return .error(status: 400, message: "action must be list, save or apply")
+            }
+            switch raw {
+            case "list":
+                return .route(.configFavourite(displayID: displayID, action: .list))
+            case "save", "apply":
+                // `isJSONBoolean` and not `is Bool`: slot 1 is valid, and the
+                // number 1 also satisfies `is Bool` through NSNumber's bridging.
+                guard let rawSlot = object["slot"], !isJSONBoolean(rawSlot),
+                      let slot = (rawSlot as? NSNumber)?.intValue,
+                      ModeFavourites.validSlots.contains(slot) else {
+                    return .error(status: 400, message: "slot must be between 1 and \(ModeFavourites.slotCount)")
+                }
+                return .route(.configFavourite(
+                    displayID: displayID,
+                    action: raw == "save" ? .save(slot: slot) : .apply(slot: slot)
+                ))
+            default:
+                return .error(status: 400, message: "action must be list, save or apply")
+            }
 
         case "device":
             guard let raw = object["action"] as? String else {

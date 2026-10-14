@@ -10,12 +10,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
-- **The HTTP API covers three more of the parity settings.** `POST
+- **The HTTP API covers four more of the parity settings.** `POST
   /api/config/connections` runs the connection planner through the same guarded
   disconnect chokepoint the Settings buttons use; `POST /api/config/protection` sets a
   display's protected-property selection (the display may be a number or the string
-  `/api/displays` returned); and `POST /api/config/device` lists, adds or removes a saved
-  TV/AVR. Each validates its input and names the valid values when it refuses.
+  `/api/displays` returned); `POST /api/config/device` lists, adds or removes a saved
+  TV/AVR; and `POST /api/config/favourite` lists resolution favourites, records the
+  current mode into a slot, or recalls one. Each validates its input and names the valid
+  values when it refuses, and a favourite whose mode is gone is reported rather than
+  approximated.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard
   Control Target` and `Sync Display Group` join the existing display actions, so the
   new features are scriptable from Shortcuts as well as from `fbdcli` and the app.
@@ -111,13 +114,10 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 ### Not in this change
 - The menu-bar quick menu was **not** restructured to mirror BetterDisplay's
   grouped layout; only Settings was. Recorded as open.
-- The HTTP API covers lock dim, the keyboard control target, connection management, the
-  per-display protection-property selection and the saved-device registry, but not
-  resolution favourites or group *sync apply*. Both are reachable from `fbdcli` and the
-  app UI; exposing them needs more than a route (favourites to pick a mode out of the
-  display's list, group sync to match brightness in nits, which the executor's
-  `DisplayControlling` seam does not expose), so they are a deliberate follow-up rather
-  than a silent omission.
+- The HTTP API stops short of group *sync apply*: it is reachable from `fbdcli` and the
+  app UI, but exposing it needs more than a route. Group sync matches brightness in nits,
+  which means the executor's `DisplayControlling` seam would need `hardwareCeilingNits`
+  added, otherwise the endpoint would silently skip the luminance matching the CLI does.
 - No new private API was introduced, so `docs/PRIVATE_APIS.md` does not change.
 
 ## [1.6.0] — 2026-10-04
