@@ -5,7 +5,9 @@ import SwiftUI
 /// every disclosure (Filters, Resolutions, XDR/HDR, EDID) renders alike.
 func disclosureSection<Content: View>(
     icon: String,
-    title: String,
+    /// `LocalizedStringKey`, not `String`: `Label(String, systemImage:)` renders verbatim, so the
+    /// section titles were unreachable by translation until this changed.
+    title: LocalizedStringKey,
     @ViewBuilder content: @escaping () -> Content
 ) -> some View {
     DisclosureGroup {

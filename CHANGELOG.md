@@ -24,10 +24,18 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   `.lproj/Localizable.strings` beside the icon in `Sources/FBD/Resources`, copied into the bundle by
   `make app`, which is where macOS looks for them — no SwiftPM resource bundle, and **no code
   change**, because SwiftUI already resolves `Text("Display Mode")` against the app bundle. The
-  panel's own surface is translated (37 strings); everything else falls back to English, which is
-  what "scaffolded" means here. A test stops the three files drifting: the languages must agree on
-  every key, and every key must still appear in the source, since a renamed string would otherwise
-  silently stop resolving and look like "not translated yet" rather than broken. Two things worth
+  225 strings now cover the panel, the Settings pages and the filters/automation views. That last
+  round turned up the real defect rather than a missing translation: `SettingsRow`,
+  `SettingsSliderRow` and `disclosureSection` took `title: String`, and `Text(String)` is *verbatim*
+  — SwiftUI only looks a key up through a `LocalizedStringKey` — so every settings title and every
+  section header, the panel's included, was invisible to these files no matter how many translations
+  were added. All call sites pass literals, so the parameters became `LocalizedStringKey` and the
+  titles started resolving: verified live in the app's accessibility tree, where "Connect all" now
+  reads 全部连接. A test stops the three files drifting: the languages must agree on every key, and
+  every key must still appear in the source, since a renamed string would otherwise silently stop
+  resolving and look like "not translated yet" rather than broken. Still English, and recorded as
+  such: the Settings sidebar labels, which are built at runtime (`"\(item.rawValue) settings"`) and
+  so cannot be a literal key — they need a format key. Two things worth
   recording — `Sources/FBD/Resources` is `exclude`d from the SwiftPM target (which is why Info.plist
   lives there and is copied by hand), so the `.lproj` directories have to be copied by the Makefile;
   and `CFBundleLocalizations` must **not** sit alongside real `.lproj` directories, because it made

@@ -53,7 +53,7 @@ FBD should rely on, so nothing is taken from it beyond "this feature exists".
 | Notch hiding | ✅ | ✅ | ✗ — a dead Notch toggle was **deliberately removed** | deliberate; revisit only if wanted |
 | Launch at login | ✅ | ✅ | ✅ | — |
 | Combined brightness, auto-brightness, ambient-light toggle | ✅ | ✅ | ✅ | — |
-| **Localisation** | — | ✅ en · 简体中文 · 繁體中文 | ✅ en · 简体中文 · 繁體中文, the panel first | — |
+| **Localisation** | — | ✅ en · 简体中文 · 繁體中文 | ✅ en · 简体中文 · 繁體中文 — the panel, the Settings pages and the filter/automation views, 225 keys each; the sidebar labels stay English because they are runtime strings | — |
 | PiP / streaming | ✗ (declared out) | ✗ | ✅ | **FBD ahead** |
 | Automation, TV/AVR/network devices, HTTP API, `fbdcli` | ✗ | partial (`crispctl`) | ✅ | **FBD ahead** |
 | EDID override | ✗ (needs SIP off) | — | ✅ | **FBD ahead** |
@@ -134,13 +134,15 @@ sources linked. Paraphrased, the rules that bear on FBD:
    A flat list of all 132 modes would have been a wall, not a list.
 6. **Uniform section chips** (rule 4).
 7. **Named display presets with icons**, plus the App Intent to apply one.
-8. **Localisation** — **done, for the panel.** en · 简体中文 · 繁體中文, the same three Crisp ships.
-   Three `.lproj/Localizable.strings` sit beside the icon and the Makefile copies them into the
-   bundle, which is where macOS looks; **no code change was needed**, because SwiftUI already
-   resolves the literals against the app bundle. 37 strings cover the panel's own surface — the
-   display list, the per-display menu, the sections, the DDC panel and the chrome — and the rest
-   falls back to English. That is what "scaffold" means here, and the drift test that keeps the
-   three files in step is what makes adding the remaining strings safe.
+8. **Localisation** — **done for the panel and Settings.** en · 简体中文 · 繁體中文, the same three
+   Crisp ships, at 225 keys each. Three `.lproj/Localizable.strings` sit beside the icon and the
+   Makefile copies them into the bundle, with a drift test keeping the languages in agreement and
+   every key present in the source. The larger part of the work was not translation but a defect:
+   `SettingsRow`, `SettingsSliderRow` and `disclosureSection` took `title: String`, and
+   `Text(String)` is verbatim, so no settings title or section header could ever be looked up. They
+   take `LocalizedStringKey` now, and the app's accessibility tree shows those titles in Chinese.
+   Still English: the Settings sidebar labels, built at runtime from `item.rawValue` (a format key is
+   the fix), and any interpolated string.
 9. **Edge-crossing pointer** for displays whose edges do not line up.
 10. **Smooth scaling / the HiDPI-crisp flow** — the highest value and the highest
     risk: it needs a new display mode, which FBD has not identified a safe API for
