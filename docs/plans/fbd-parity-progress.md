@@ -278,6 +278,28 @@ separate commit on the same branch.
   press is never silently swallowed. `focusedDisplayID` is derived from `NSScreen.main` by frame.
 
   Still not wired: the HTTP API has no route for these surfaces.
+- **Audited every new setting for a live consumer.** After two dead-UI bugs found by reading rather than by
+  a failing test, each new setting was traced to its live call site rather than to its test. Result —
+  all live: `lockDimEnabled`/`lockDimTargetPercent` (`lockDim.start()` at AppCore:72, and
+  `LockDimStateMachine` re-reads the policy on every event, so a settings write takes effect at once);
+  `BrightnessPreferences` (`CombinedBrightness.swift:76`, `injectedPreferences ?? Settings.brightnessPreferences`);
+  `ProtectedProperties` (`ConfigProtectionController.restoreIfNeeded` gates every restore step on
+  `applicableProperties(for:)`, so the per-property selection is genuinely consulted);
+  `SafeMode` (the AppCore gate); the group enabled flag and activation policy (read by `syncPlan`);
+  `ModeFavourites` (the per-display menu and the CLI); `NetworkDeviceRegistry` (the CLI).
+- **Fixed: group sync could be configured in the UI but never triggered from it.** The audit's one real
+  finding. The Settings page exposed the enabled flag and the activation policy, and the Mirror/Unmirror
+  buttons, but nothing in the app could perform a synchronised apply — only `fbdcli config group-sync`.
+  A user could set group sync up entirely in the UI and have no way to use it there.
+
+  `DisplayGroupsController.syncValue(inGroup:connectedIDs:currentBrightness:)` is the pure half: it returns
+  the first *connected* member's brightness together with the display that value came from, so the plan's
+  luminance matching converts from the right panel rather than from whichever member sorts first. It
+  returns nil rather than guessing when the group is unknown or disabled, nothing is connected, or the
+  value cannot be read. The Settings page's new **Sync now** button reads brightness once up front and
+  hands the controller a plain dictionary lookup, so no DDC traffic happens off a button press.
+  `DisplayGroupsSyncValueTests` (7 cases) covers all six nil paths and the source-selection rule.
+  FBDCoreTests 656.
 
 
 

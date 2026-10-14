@@ -326,6 +326,10 @@ struct GroupsSettingsPage: View {
                         Text("\(group.displayIDs.count) display\(group.displayIDs.count == 1 ? "" : "s")")
                             .foregroundStyle(.secondary)
                         Spacer()
+                        Button("Sync now") { syncNow(group) }
+                            .controlSize(.small)
+                            .disabled(group.displayIDs.count < 2 || !controller.isEnabled(groupID: group.id))
+                            .help("Propagate the first connected member's current brightness to the rest of the group.")
                         Button("Mirror") { _ = controller.mirror(inGroup: group.id) }
                             .controlSize(.small)
                             .disabled(group.displayIDs.count < 2)
@@ -359,6 +363,37 @@ struct GroupsSettingsPage: View {
         Binding(
             get: { controller.activationPolicy(forGroup: group.id) },
             set: { controller.setActivationPolicy($0, forGroup: group.id) }
+        )
+    }
+
+    /// Propagate the group's reference display's current brightness to the rest
+    /// of the group, through the same tested planner an explicit value uses.
+    ///
+    /// This was the missing half of group sync: the enabled flag and the
+    /// activation policy were configurable here, but nothing in the app could
+    /// actually trigger a sync — only `fbdcli config group-sync` could.
+    private func syncNow(_ group: DisplayGroup) {
+        let displays = DisplayController.shared.displays
+        // Read every member's brightness once, up front, so the closure handed to
+        // the controller is a plain lookup: it touches no DDC bus and no actor.
+        var brightnessByID: [CGDirectDisplayID: Double] = [:]
+        for display in displays {
+            if let value = display.brightness ?? DisplayController.shared.getBrightness(for: display) {
+                brightnessByID[display.id] = value
+            }
+        }
+        guard let reading = controller.syncValue(
+            inGroup: group.id,
+            connectedIDs: Set(displays.map { $0.id }),
+            currentBrightness: { brightnessByID[$0] }
+        ) else {
+            return
+        }
+        _ = controller.applyGroupSync(
+            reading.value,
+            inGroup: group.id,
+            controller: .shared,
+            referenceDisplayID: reading.sourceDisplayID
         )
     }
 
