@@ -122,6 +122,10 @@ public final class ColorProfileController {
         )
         if !ok {
             log.warning("applyProfile failed for display \(display.id): \(url.path)")
+        } else {
+            // The current profile cannot be read back, so what FBD applied is the only
+            // record — and what configuration protection restores.
+            Settings.setStoredColourProfile(url.path, for: display.identityKey)
         }
         return ok
     }

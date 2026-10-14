@@ -52,6 +52,14 @@ public final class ConfigProtectionController {
         var isHDRModeEnabled: Bool?
         /// Whether the display was the main display.
         var isMain: Bool?
+        /// Rotation FBD last applied, in degrees (nil when it never applied one).
+        ///
+        /// Taken from `Settings.storedRotation` because rotation cannot be read back, so what
+        /// FBD applied is the only value there is to protect.
+        var rotationDegrees: Int?
+        /// The colour profile FBD last applied, by path (nil when it never applied one).
+        /// Same reasoning as `rotationDegrees`.
+        var colourProfilePath: String?
     }
 
     /// Same suite selection as Settings: the app bundle's standard domain IS
@@ -109,7 +117,11 @@ public final class ConfigProtectionController {
             brightness: display.brightness ?? controller.getBrightness(for: display),
             activePresetIndex: display.activePresetIndex,
             isHDRModeEnabled: display.isHDRModeCapable ? display.isHDRModeEnabled : nil,
-            isMain: CGDisplayIsMain(display.id) != 0
+            isMain: CGDisplayIsMain(display.id) != 0,
+            // Neither of these can be read from the display, so the saved state captures what
+            // FBD itself last applied — see `Settings.storedRotation`.
+            rotationDegrees: Settings.storedRotation(for: display.identityKey),
+            colourProfilePath: Settings.storedColourProfile(for: display.identityKey)
         )
         guard let data = try? JSONEncoder().encode(state) else {
             log.warning("saveCurrentState: encode failed for \(display.identityKey)")
@@ -163,6 +175,20 @@ public final class ConfigProtectionController {
 
         if applicable.contains(.mainStatus), state.isMain == true, CGDisplayIsMain(display.id) == 0 {
             _ = controller.setAsMainDisplay(display)
+        }
+
+        if applicable.contains(.rotation), let degrees = state.rotationDegrees {
+            if controller.setRotation(degrees, on: display) == nil {
+                log.warning("restore: rotation \(degrees) refused for \(display.identityKey)")
+            }
+        }
+
+        if applicable.contains(.colourProfile),
+           let path = state.colourProfilePath,
+           !path.isEmpty {
+            if !ColorProfileController().applyProfile(URL(fileURLWithPath: path), for: display) {
+                log.warning("restore: colour profile \(path) refused for \(display.identityKey)")
+            }
         }
 
         if applicable.contains(.brightness), let brightness = state.brightness {

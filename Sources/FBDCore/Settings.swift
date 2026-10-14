@@ -377,6 +377,55 @@ public enum Settings {
         }
     }
 
+    /// The rotation FBD last applied to a display, keyed by identity.
+    ///
+    /// Recorded because rotation cannot be **read**: there is no public API for it and no
+    /// getter in the ledger, so what FBD applied is the only record of it — and therefore
+    /// the only thing configuration protection can restore. A rotation applied by some
+    /// other tool is invisible here, which is a real limitation and not a bug.
+    public static func storedRotation(
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) -> Int? {
+        defaults.object(forKey: "storedRotation.\(identity)") as? Int
+    }
+
+    public static func setStoredRotation(
+        _ degrees: Int?,
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        if let degrees {
+            defaults.set(degrees, forKey: "storedRotation.\(identity)")
+        } else {
+            defaults.removeObject(forKey: "storedRotation.\(identity)")
+        }
+    }
+
+    /// The colour profile FBD last applied, by path, keyed by identity.
+    ///
+    /// Stored as the profile's path rather than a URL object so the plist stays readable and
+    /// a blob written elsewhere still decodes. Same reasoning as `storedRotation`: the
+    /// current profile cannot be read back, so what FBD applied is the record.
+    public static func storedColourProfile(
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) -> String? {
+        defaults.string(forKey: "storedColourProfile.\(identity)")
+    }
+
+    public static func setStoredColourProfile(
+        _ path: String?,
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        if let path {
+            defaults.set(path, forKey: "storedColourProfile.\(identity)")
+        } else {
+            defaults.removeObject(forKey: "storedColourProfile.\(identity)")
+        }
+    }
+
     /// Persisted layout anchors (JSON-encoded).
     private static let layoutAnchorsKey = "layoutAnchors.v1"
 

@@ -8,10 +8,13 @@ import Foundation
 /// things that need testing — which properties a given display exposes, and
 /// how a user-supplied name maps to a flag — are testable without a display.
 ///
-/// BetterDisplay protects nine properties. FBD can observe and re-apply six of
-/// them through seams it already owns; the SDR/HDR *colour mode* pair is not
-/// represented because FBD has no connection-mode/colour-mode path (see
-/// `docs/plans/fbd-gap-matrix.md` #23 — new-private, not identified). The gap is
+/// BetterDisplay protects nine properties. FBD re-applies eight of them: the six it
+/// can observe directly, plus rotation and the colour profile, which it can *apply*
+/// but not **read** — so those two are restored from the value FBD itself last
+/// applied (`Settings.storedRotation` / `Settings.storedColourProfile`), and one set
+/// by another tool is invisible to it. The SDR/HDR *colour mode* pair is still not
+/// represented, because FBD has no connection-mode/colour-mode path at all (see
+/// `docs/plans/fbd-gap-matrix.md` #23 — new-private, not identified). Each gap is
 /// deliberate and visible rather than silently collapsed into another flag.
 public struct ProtectedProperties: OptionSet, Codable, Equatable {
     public let rawValue: Int
@@ -23,9 +26,12 @@ public struct ProtectedProperties: OptionSet, Codable, Equatable {
     public static let preset      = ProtectedProperties(rawValue: 1 << 3)
     public static let hdrMode     = ProtectedProperties(rawValue: 1 << 4)
     public static let mainStatus  = ProtectedProperties(rawValue: 1 << 5)
+    public static let rotation    = ProtectedProperties(rawValue: 1 << 6)
+    public static let colourProfile = ProtectedProperties(rawValue: 1 << 7)
 
     public static let all: ProtectedProperties = [
         .resolution, .refreshRate, .brightness, .preset, .hdrMode, .mainStatus,
+        .rotation, .colourProfile,
     ]
 
     /// What protection covered before per-property selection existed (mode,
@@ -42,6 +48,8 @@ public struct ProtectedProperties: OptionSet, Codable, Equatable {
         ("preset", .preset),
         ("hdrMode", .hdrMode),
         ("mainStatus", .mainStatus),
+        ("rotation", .rotation),
+        ("colourProfile", .colourProfile),
         ("brightness", .brightness),
     ]
 
@@ -89,6 +97,15 @@ public struct ProtectedProperties: OptionSet, Codable, Equatable {
         }
         if display.isHDRModeCapable {
             result.insert(.hdrMode)
+        }
+        // Rotation and the colour profile are offered for any display FBD can enumerate,
+        // because **neither can be probed**: there is no readable rotation and no readable
+        // current profile, so there is no capability to test for. Both restore steps are
+        // individually guarded, so selecting one on a display that cannot take it logs and
+        // does nothing rather than forcing an invalid state.
+        if display.currentMode != nil {
+            result.insert(.rotation)
+            result.insert(.colourProfile)
         }
         return result
     }
