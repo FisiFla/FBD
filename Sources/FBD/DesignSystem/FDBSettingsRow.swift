@@ -45,20 +45,28 @@ struct SettingsSliderRow: View {
     let onChange: (Double) -> Void
 
     var body: some View {
+        // The slider sits on the title line rather than on its own line below it.
+        // It has to: a Form row here is handed a fixed ~37pt regardless of its
+        // content (verified — pinning the slider's height changed nothing at all,
+        // and the app was confirmed to be running the changed code), while a
+        // three-line row (title 16 + slider 20 + caption 13 + gaps) needs 53pt.
+        // The caption below was therefore drawn on top of the *next* row's title.
+        // This shape matches `SettingsRow` — label left, control right — which is
+        // why every other row in Settings was already fine.
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: FBDTheme.spacingM) {
                 Text(title)
-                Spacer(minLength: 8)
+                Slider(value: Binding(get: { value }, set: onChange), in: range)
+                    // The label and the value are siblings of the slider, so both
+                    // have to be attached for VoiceOver to say what the slider
+                    // controls and where it currently sits.
+                    .accessibilityLabel(title)
+                    .accessibilityValue(format(value))
                 Text(format(value))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
+                    .frame(minWidth: 34, alignment: .trailing)
             }
-            Slider(value: Binding(get: { value }, set: onChange), in: range)
-                // The label and the value above are siblings of the slider, so
-                // both have to be attached for VoiceOver to say what the slider
-                // controls and where it currently sits.
-                .accessibilityLabel(title)
-                .accessibilityValue(format(value))
             if let caption {
                 Text(caption)
                     .font(.caption)
