@@ -331,6 +331,48 @@ public enum HTTPExecutor {
                 }
                 return (200, HTTPJSON.encode(["ok": true]))
             }
+
+        case .configFavourite(let displayID, let action):
+            guard let display = controller.display(withID: displayID) else {
+                return (404, HTTPJSON.error("display not found"))
+            }
+            // Favourites are stored per display *identity*, not per display id, so
+            // they survive a reconnect that renumbers the display.
+            let identity = display.identityKey
+            switch action {
+            case .list:
+                let stored: [[String: Any]] = ModeFavourites.favourites(for: identity).map { favourite in
+                    [
+                        "slot": favourite.slot,
+                        "width": Int(favourite.width),
+                        "height": Int(favourite.height),
+                        "refreshRate": favourite.refreshRate,
+                        "isHiDPI": favourite.isHiDPI,
+                    ]
+                }
+                return (200, HTTPJSON.encode(["favourites": stored]))
+
+            case .save(let slot):
+                guard let mode = display.currentMode else {
+                    return (409, HTTPJSON.error("this display reports no current mode"))
+                }
+                guard ModeFavourites.save(mode, into: slot, for: identity) else {
+                    return (400, HTTPJSON.error("slot must be between 1 and \(ModeFavourites.slotCount)"))
+                }
+                return (200, HTTPJSON.encode(["ok": true, "slot": slot]))
+
+            case .apply(let slot):
+                let recall = ModeFavourites.recall(slot: slot, for: identity, against: display.modes)
+                // A favourite whose mode is gone is reported, never approximated:
+                // applying a near-miss resolution is worse than doing nothing.
+                guard let mode = recall.displayMode else {
+                    return (404, HTTPJSON.error("favourite \(slot) has no matching mode on this display"))
+                }
+                guard controller.applyMode(mode, to: display) else {
+                    return (500, HTTPJSON.error("the display refused that mode"))
+                }
+                return (200, HTTPJSON.encode(["ok": true, "slot": slot, "modeNumber": Int(mode.modeNumber)]))
+            }
         }
     }
 }
