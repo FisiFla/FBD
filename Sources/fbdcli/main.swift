@@ -92,11 +92,13 @@ Commands:
                                 brightness/contrast/saturation, 1 = none
   stream stop                   Stop the active CLI stream
   automation list               List per-display automation rules
-  automation add <id|any> <connect|disconnect|sleep|wake> <shell|url> <payload…>
-                                Run a shell script or open a URL on a display
-                                event. Opt-in: nothing runs without a rule.
+  automation add <id|any> <connect|disconnect|sleep|wake|manual> <shell|url|notify> <payload…>
+                                Run a shell script, open a URL, or post a
+                                notification on a display event. "manual" makes a
+                                control you invoke yourself — ON and OFF are two
+                                of them. Opt-in: nothing runs without a rule.
   automation enable|disable|remove <rule-id>
-  automation test <rule-id>     Run a rule now and show its output
+  automation test|run <rule-id>   Run a rule now and show its output
   automation log                Show runs from this session
   osd <icon> <0-100>            Show a transient OSD HUD (e.g. sun.max,
                                 speaker.wave.2) at the given percentage

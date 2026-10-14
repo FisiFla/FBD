@@ -10,6 +10,16 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **Manual controls and a notification action for automation.** A rule can be scoped to
+  `manual` — a control you invoke yourself, via the new Run button in Settings →
+  Automation or `fbdcli automation run` — and a `notify` action posts a user
+  notification, which runs in-process rather than through a shell. ON and OFF are two
+  manual rules, and a shell control that prints its state already records that output in
+  the run log, which is how a state-query control is built. Notification permission is
+  asked for only once a notification rule exists, never at first launch, and
+  `fbdcli automation run` refuses a notification rule outright — the CLI is a bare binary
+  with no bundle identity or authorisation, so a request from there would be accepted and
+  then dropped, and reporting success would be a lie.
 - **`fbdcli report [file]` — an exportable display report.** A detailed, paste-ready block
   per display (identity, kind, geometry, current mode with its colour encoding, mode count
   and refresh rates, control paths, brightness, XDR/HDR state) under a header carrying the

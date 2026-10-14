@@ -1744,7 +1744,7 @@ private let cliAutomation = DisplayAutomationController()
 @MainActor
 func cmdAutomation(_ controller: DisplayController, args: [String]) -> Int32 {
     guard let sub = args.first else {
-        print("fbdcli: automation: expected list, log, add, remove, enable, disable or test")
+        print("fbdcli: automation: expected list, log, add, remove, enable, disable, test or run")
         return 1
     }
     let rest = Array(args.dropFirst())
@@ -1776,16 +1776,20 @@ func cmdAutomation(_ controller: DisplayController, args: [String]) -> Int32 {
         return 0
 
     case "add":
+        // Derived from the enums, so a new event or kind cannot leave this
+        // message lying about what is accepted.
+        let eventTokens = AutomationEvent.allCases.map(\.token).joined(separator: ", ")
+        let kindTokens = AutomationActionKind.allCases.map(\.token).joined(separator: ", ")
         guard rest.count >= 4 else {
-            print("fbdcli: automation add: expected <display-id|any> <connect|disconnect|sleep|wake> <shell|url> <payload…>")
+            print("fbdcli: automation add: expected <display-id|any> <\(eventTokens)> <\(kindTokens)> <payload…>")
             return 1
         }
         guard let event = AutomationEvent(token: rest[1]) else {
-            print("fbdcli: automation add: unknown event '\(rest[1])' (connect, disconnect, sleep or wake)")
+            print("fbdcli: automation add: unknown event '\(rest[1])' (\(eventTokens))")
             return 1
         }
         guard let kind = AutomationActionKind(token: rest[2]) else {
-            print("fbdcli: automation add: unknown kind '\(rest[2])' (shell or url)")
+            print("fbdcli: automation add: unknown kind '\(rest[2])' (\(kindTokens))")
             return 1
         }
         let identityKey: String
@@ -1810,9 +1814,13 @@ func cmdAutomation(_ controller: DisplayController, args: [String]) -> Int32 {
             payload: payload
         )
         print("added \(rule.id.uuidString) — \(event.token) on \(identityKey.isEmpty ? "any display" : identityKey)")
+        if event == .manual {
+            // A manual control is useless without knowing how to invoke it.
+            print("run it with: fbdcli automation run \(rule.id.uuidString)")
+        }
         return 0
 
-    case "remove", "enable", "disable", "test":
+    case "remove", "enable", "disable", "test", "run":
         guard let raw = rest.first, let id = UUID(uuidString: raw) else {
             print("fbdcli: automation \(sub): expected a rule id")
             return 1
@@ -1834,10 +1842,22 @@ func cmdAutomation(_ controller: DisplayController, args: [String]) -> Int32 {
             return 0
         default:
             guard let rule = cliAutomation.rule(withID: id) else {
-                print("fbdcli: automation test: no rule \(raw)")
+                print("fbdcli: automation \(sub): no rule \(raw)")
                 return 1
             }
-            print("running \(rule.kind.token) rule (timeout \(Int(AutomationLimits.default.timeout))s)…")
+            // A notification rule has to run in the app. `fbdcli` is a bare binary
+            // with no bundle identity and no notification authorisation, so a
+            // request from here is accepted and then dropped by the system —
+            // reporting success would be a lie about something the user can see did
+            // not happen.
+            if rule.kind == .notification {
+                print("fbdcli: automation \(sub): a notification rule runs in the app — use Settings → Automation.")
+                return 1
+            }
+            // A manual rule is a control the user invokes, so it is named as one;
+            // `test` and `run` are the same action, spelled for both intents.
+            let what = rule.event == .manual ? "manual control" : "\(rule.kind.token) rule"
+            print("running \(what) (timeout \(Int(AutomationLimits.default.timeout))s)…")
             let record = cliAutomation.runSynchronously(rule)
             let output = record.output.trimmingCharacters(in: .whitespacesAndNewlines)
             if !output.isEmpty { print(output) }

@@ -1,7 +1,69 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import UserNotifications
 import os
+
+/// Delivers a notification action.
+///
+/// A seam like `AutomationExecuting`, so a test can assert that a notification
+/// *would* be delivered without one appearing on the user's screen.
+public protocol AutomationNotifying: AnyObject, Sendable {
+    /// Hand the notification to the notification centre. Returns false when that
+    /// could not happen, so a rule that does nothing is visible in the run log
+    /// instead of looking like a success.
+    func deliver(title: String, body: String) -> Bool
+}
+
+/// The shipped notifier, over `UNUserNotificationCenter`.
+public final class UserNotificationDeliverer: AutomationNotifying {
+    public init() {}
+
+    /// Whether this process can talk to the notification centre at all.
+    ///
+    /// It needs a bundle identity. A bare SwiftPM binary — which `fbdcli` is — has
+    /// none, and asking `UNUserNotificationCenter` for its centre there **raises**
+    /// rather than returning nil, so an unguarded call terminates the process.
+    /// That is not hypothetical: it crashed `fbdcli automation add` before this
+    /// guard existed.
+    public static var isAvailable: Bool {
+        Bundle.main.bundleIdentifier != nil
+    }
+
+    /// Ask for permission to show notifications.
+    ///
+    /// Called only when a notification rule actually exists, and only from a
+    /// process that can have the conversation. A user who never configures a
+    /// notification is never prompted, which is the same opt-in posture the rules
+    /// themselves take. Without this the action would be inert: a request added to
+    /// the notification centre while authorisation is undetermined shows nothing.
+    public static func requestAuthorization() {
+        guard isAvailable else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    public func deliver(title: String, body: String) -> Bool {
+        // Refuse rather than raise: a caller in a process with no bundle identity
+        // cannot deliver, and the honest answer is "could not", not a crash.
+        guard Self.isAvailable else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        // A nil trigger delivers immediately.
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        // `add` reports failure asynchronously, so this is an *acceptance* rather
+        // than a confirmation — which is why the wording everywhere is "handed to
+        // Notification Centre" and the run record says the same. If the user has
+        // denied permission the request is accepted here and then dropped by the
+        // system, which no synchronous call can see.
+        UNUserNotificationCenter.current().add(request)
+        return true
+    }
+}
 
 /// The real executor: one process per action, with a hard timeout and a cap on
 /// captured output.
@@ -90,6 +152,7 @@ public final class ProcessAutomationExecutor: AutomationExecuting {
 public final class DisplayAutomationController {
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayAutomation")
     private let executor: AutomationExecuting
+    private let notifier: AutomationNotifying
     private let limits: AutomationLimits
     /// Serial by design — a concurrency limit of one.
     private let queue = DispatchQueue(label: "dev.fisifla.fbd.automation")
@@ -112,9 +175,11 @@ public final class DisplayAutomationController {
 
     public init(
         executor: AutomationExecuting = ProcessAutomationExecutor(),
+        notifier: AutomationNotifying = UserNotificationDeliverer(),
         limits: AutomationLimits = .default
     ) {
         self.executor = executor
+        self.notifier = notifier
         self.limits = limits
         self.rules = Settings.loadAutomationRules()
     }
@@ -122,6 +187,12 @@ public final class DisplayAutomationController {
     // MARK: - Rules
 
     public var allRules: [AutomationRule] { rules }
+
+    /// Whether any stored rule needs notification permission. The app asks for it
+    /// only when this is true, so configuring nothing never prompts.
+    public var hasNotificationRule: Bool {
+        rules.contains { $0.kind == .notification }
+    }
 
     /// Recent runs, newest first — what ran and what it returned.
     public func recentRuns() -> [AutomationRunRecord] { runLog }
@@ -141,6 +212,12 @@ public final class DisplayAutomationController {
         )
         rules.append(rule)
         Settings.saveAutomationRules(rules)
+        if rule.kind == .notification, UserNotificationDeliverer.isAvailable {
+            // Ask the moment one is configured rather than at launch, so the prompt
+            // arrives when its reason is on screen. Guarded, because the CLI shares
+            // this path and has no bundle identity to ask with.
+            UserNotificationDeliverer.requestAuthorization()
+        }
         return rule
     }
 
@@ -175,12 +252,12 @@ public final class DisplayAutomationController {
             event: rule.event,
             displayIdentityKey: rule.displayIdentityKey.isEmpty ? nil : rule.displayIdentityKey
         )
-        let invocation = AutomationCommand.invocation(
+        let effect = AutomationCommand.effect(
             kind: rule.kind,
             payload: rule.payload,
             environment: environment
         )
-        let outcome = executor.execute(invocation, timeout: limits.timeout)
+        let outcome = effect.perform(executor: executor, notifier: notifier, timeout: limits.timeout)
         let record = AutomationRunRecord(
             ruleID: rule.id,
             event: rule.event,
@@ -311,7 +388,7 @@ public final class DisplayAutomationController {
             displayName: displayName,
             displayIdentityKey: identityKey
         )
-        let invocation = AutomationCommand.invocation(
+        let effect = AutomationCommand.effect(
             kind: rule.kind,
             payload: rule.payload,
             environment: environment
@@ -319,10 +396,11 @@ public final class DisplayAutomationController {
         log.notice("automation \(rule.kind.rawValue) rule for \(event.rawValue) on \(displayName ?? "system")")
 
         let executor = self.executor
+        let notifier = self.notifier
         let timeout = limits.timeout
         let ruleID = rule.id
         queue.async { [weak self] in
-            let outcome = executor.execute(invocation, timeout: timeout)
+            let outcome = effect.perform(executor: executor, notifier: notifier, timeout: timeout)
             let record = AutomationRunRecord(
                 ruleID: ruleID,
                 event: event,

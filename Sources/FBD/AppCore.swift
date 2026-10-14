@@ -65,6 +65,13 @@ final class AppCore {
             FBDNotice.shared.report("Safe mode: saved EDID override and configuration-protection restore are off for this session")
         }
         automation.start(controller: displayController)
+        // Notification permission is asked for only when a stored rule needs it, so
+        // a user who never configures one is never prompted. Without this the
+        // notification action would be inert: a request added while authorisation is
+        // undetermined shows nothing.
+        if automation.hasNotificationRule {
+            UserNotificationDeliverer.requestAuthorization()
+        }
         // Lock dim: lower brightness while the screen is locked or the screensaver
         // is up, and restore it on unlock. Started unconditionally — the policy is
         // read per event, so a disabled policy is a no-op rather than a dead
