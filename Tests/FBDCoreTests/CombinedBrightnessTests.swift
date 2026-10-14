@@ -326,4 +326,90 @@ final class CombinedBrightnessTests: XCTestCase {
 
         XCTAssertEqual(xdr.lastTarget, 800)
     }
+
+    // MARK: - The curve's knobs (row 10)
+
+    /// A profile that carries no *curve* knob still routes through the planner's linear
+    /// factor, so wiring the curve cannot have moved anyone who only touched the nits
+    /// fields: 1000-nit peak against the fixture's 500-nit hardware ceiling is exactly 2.0.
+    func testAProfileWithOnlyNitsKnobsStillUsesThePlannerFactor() {
+        xdr.available = false
+        let injected = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(hdrPeakHDRNits: 1000)
+        )
+
+        XCTAssertTrue(injected.set(1.0, on: display))
+
+        XCTAssertEqual(overlay.boostCalls.last?.factor ?? 0, 2.0, accuracy: 1e-9)
+    }
+
+    /// `upscaleMaxPercent` used to shape nothing at all. It now caps how far a software
+    /// boost goes — the curve's own job, and the reason it was written. The planner alone
+    /// would have asked for 1600/500 = 3.2 on this fixture.
+    func testUpscaleMaxPercentCapsTheSoftwareBoostFactor() {
+        xdr.available = false
+        let capped = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(upscaleMaxPercent: 150)
+        )
+
+        XCTAssertTrue(capped.set(1.0, on: display))
+
+        XCTAssertEqual(overlay.boostCalls.last?.factor ?? 0, 1.5, accuracy: 1e-9)
+    }
+
+    /// `dimmingSwitchoverPercent` decides *where* the curve's upscaling begins, so moving
+    /// it must change how much of the ramp is done at the same slider position.
+    func testDimmingSwitchoverPercentMovesWhereTheBoostRamps() {
+        xdr.available = false
+        let late = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(dimmingSwitchoverPercent: 80)
+        )
+        XCTAssertTrue(late.set(0.85, on: display))
+        let lateFactor = overlay.boostCalls.last?.factor ?? 0
+
+        overlay.boostCalls.removeAll()
+        let early = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(dimmingSwitchoverPercent: 40)
+        )
+        XCTAssertTrue(early.set(0.85, on: display))
+        let earlyFactor = overlay.boostCalls.last?.factor ?? 0
+
+        XCTAssertGreaterThan(lateFactor, 1, "0.85 is past both switchovers, so a boost happens either way")
+        XCTAssertLessThan(
+            lateFactor, earlyFactor,
+            "starting the ramp later must leave less of it done at the same slider position"
+        )
+    }
+
+    /// The ceiling applies to the native path as well, and that is the path usually doing
+    /// the boosting: 150% of the fixture's 500-nit hardware ceiling is 750, so a slider
+    /// pushed to the 1600-nit top is capped there.
+    func testUpscaleMaxPercentCapsTheNativeUpscaleTarget() {
+        let capped = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(upscaleMaxPercent: 150)
+        )
+
+        XCTAssertTrue(capped.set(1.0, on: display))
+
+        XCTAssertEqual(xdr.lastTarget, 750)
+    }
+
+    /// The same slider with no curve knob still reaches the top, so 750 is the knob's doing
+    /// rather than a new ceiling. Uses an explicit standard profile: `nil` would read the
+    /// machine's stored model, which a test must not depend on.
+    func testTheNativeTargetIsUncappedWithoutACurveKnob() {
+        let plain = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: .standard
+        )
+
+        XCTAssertTrue(plain.set(1.0, on: display))
+
+        XCTAssertEqual(xdr.lastTarget, 1600)
+    }
 }

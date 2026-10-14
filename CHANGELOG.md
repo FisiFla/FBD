@@ -237,6 +237,17 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 - `fbdcli help` documents `config`.
 
 ### Fixed
+- **Four brightness-model sliders shaped nothing; two of them do now.** The combined-curve
+  model (`BrightnessCurve`) had no caller at all — `XDRBoostPlanner` computes its own linear
+  map — so the "Upscaling maximum" and "Software dimming switchover" sliders in Settings were
+  inert. `upscaleMaxPercent` now caps how far an upscale may reach, on the native nits target
+  as well as the software-boost factor, and `dimmingSwitchoverPercent` moves where that boost
+  ramps. Both take effect only when the profile carries them, so a shipped profile behaves
+  exactly as before. The other two knobs — "Minimum hardware level" and "Redefine 0% software
+  brightness" — belong to the curve's dimming zone, which needs software-brightness state FBD
+  does not track; `get` does not report an overlay dim, so honouring them would make read-back
+  disagree with the screen, which is precisely what `CombinedBrightness` documents itself as
+  fixing. The row records that rather than half-wiring it.
 - **The startup control-value policy works now.** Settings offered "assume last used / write
   to device / read from device" and nothing read it: FBD had no store of per-display control
   values for it to act on, so a visible picker could not do anything. `DisplayController`
