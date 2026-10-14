@@ -100,6 +100,7 @@ sources linked. Paraphrased, the rules that bear on FBD:
 | 6 · one editor at a time | ✅ not applicable — the panel has no inline *forms*, so there is nothing for the rule to sequence. Verified by looking at the rendered panel and by grepping for editor state |
 | 7 · centred empty states | ✅ already centred (`DisplayListView.swift:283`) |
 | 8 · shaded band, not a card | ✅ fixed — `fbdPanelBand()`; rows and sections were floating rounded cards *inside* the panel until now, and the expanded detail is part of the row's band |
+| 9 · the HUD's material | ✅ offered, with a measured caveat — FBD's HUD is a vibrancy view in `.withinWindow` mode, which samples the window's *own* content (the SwiftUI content and nothing else), so it draws a flat panel rather than sampling the desktop. The OS's glass (`NSGlassEffectView`, macOS 26+) is now offered as `OSDStyle.Background.glass`, default unchanged. Captured on macOS 27: it renders correctly and the difference is subtle — which matches this rule's own finding that no glass material holds a HUD's backdrop on macOS 26. `.behindWindow` was measured too and is not a substitute |
 
 ## Plan, in value order
 
