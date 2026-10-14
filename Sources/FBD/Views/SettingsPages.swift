@@ -877,6 +877,26 @@ struct MenuSettingsPage: View {
             }
 
             Section {
+                Picker("Icon", selection: Binding(
+                    get: { Settings.menuBarIcon },
+                    set: { Settings.menuBarIcon = $0 }
+                )) {
+                    ForEach(MenuBarIconStyle.allCases, id: \.self) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                Toggle("Hide the icon when no other display is attached", isOn: Binding(
+                    get: { Settings.hideMenuBarIconWhenSingleDisplay },
+                    set: { Settings.hideMenuBarIconWhenSingleDisplay = $0 }
+                ))
+                Text("Hiding takes effect only while Show FBD in the Dock is on (see the OSD section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Label("Status item", systemImage: "menubar.rectangle")
+            }
+
+            Section {
                 Text("The panel shows one card per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

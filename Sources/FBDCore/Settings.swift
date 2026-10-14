@@ -46,6 +46,8 @@ public enum Settings {
         add("lockDimEnabled", lockDimEnabled)
         add("lockDimTargetPercent", lockDimTargetPercent)
         add("keyboardControlTarget", keyboardControlTargetRaw)
+        add("menuBarIcon", menuBarIconRaw)
+        add("hideMenuBarIconWhenSingleDisplay", hideMenuBarIconWhenSingleDisplay)
         add("brightnessPreferences", debugBrightnessPreferences)
         add("launchAtLogin", launchAtLogin)
         add("showRosettaWarning", showRosettaWarning)
@@ -259,6 +261,26 @@ public enum Settings {
     /// can be found in the Dock just after it opens without living there.
     @Storage(key: "briefDockIconAtStartup", defaultValue: false)
     public static var briefDockIconAtStartup: Bool
+
+    /// The status item's icon. Persisted as the enum's raw SF Symbol name, like
+    /// every other enum key; an unrecognized stored value degrades to the default
+    /// rather than trapping.
+    @Storage(key: "menuBarIcon", defaultValue: MenuBarIconStyle.default.rawValue)
+    public static var menuBarIconRaw: String
+
+    /// Typed view of `menuBarIconRaw`. The `@Storage` key above is the single
+    /// persisted home; callers use this seam. The fallback is also what keeps the
+    /// button drawable when the stored symbol cannot be resolved.
+    public static var menuBarIcon: MenuBarIconStyle {
+        get { MenuBarIconStyle(rawValue: menuBarIconRaw) ?? .default }
+        set { menuBarIconRaw = newValue.rawValue }
+    }
+
+    /// Hide the status item while no display other than the built-in one is
+    /// attached. Refused unless a Dock icon exists — see `MenuBarIconPolicy`,
+    /// because hiding it with no Dock icon would leave the app unreachable.
+    @Storage(key: "hideMenuBarIconWhenSingleDisplay", defaultValue: false)
+    public static var hideMenuBarIconWhenSingleDisplay: Bool
 
     @Storage(key: "customOSDEnabled", defaultValue: true)
     public static var customOSDEnabled: Bool

@@ -108,6 +108,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             width: max(Self.minSize.width, restore.width),
             height: max(Self.minSize.height, restore.height)
         ))
+        // The preferences page is where the status item's icon and visibility are
+        // edited, so leaving it is when they can have changed.
+        applyStatusItemAppearance()
     }
 
     private func resizePanel(to size: NSSize) {
@@ -124,10 +127,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             log.error("No status item button available")
             return
         }
-        let image = NSImage(systemSymbolName: "display", accessibilityDescription: "FBD")
-            ?? NSImage(systemSymbolName: "sun.max", accessibilityDescription: "FBD")
-        image?.isTemplate = true
-        button.image = image
+        applyStatusItemAppearance()
         button.target = self
         button.action = #selector(togglePanel(_:))
         button.toolTip = "FBD"
@@ -152,9 +152,39 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     /// The SwiftUI root refreshes itself from @Published/notification-driven
-    /// state, so there is nothing to rebuild when displays change. Kept as a
-    /// stable hook for AppCore's existing call sites.
-    func refreshUI() {}
+    /// state, so there is nothing to rebuild when displays change. It is the
+    /// right hook for the status item's own appearance, though: whether the item
+    /// is shown depends on how many displays are attached.
+    func refreshUI() {
+        applyStatusItemAppearance()
+    }
+
+    /// Apply the stored icon and the visibility policy.
+    ///
+    /// Called at install time, from `refreshUI()` (AppCore's display observers),
+    /// and from `settingsClosed` — the preferences page is where both values are
+    /// edited, so leaving it is the moment they can have changed.
+    ///
+    /// The fallback chain is the point: this item is a menu-bar app's only
+    /// permanent surface, so a stored symbol name that fails to resolve degrades
+    /// to a known-good icon rather than leaving the button blank.
+    private func applyStatusItemAppearance() {
+        guard let button = statusItem.button else { return }
+        let image = NSImage(
+            systemSymbolName: Settings.menuBarIcon.symbolName,
+            accessibilityDescription: "FBD"
+        ) ?? NSImage(
+            systemSymbolName: MenuBarIconStyle.default.symbolName,
+            accessibilityDescription: "FBD"
+        )
+        image?.isTemplate = true
+        button.image = image
+        statusItem.isVisible = MenuBarIconPolicy.isStatusItemVisible(
+            hideWhenSingleDisplay: Settings.hideMenuBarIconWhenSingleDisplay,
+            hasExternalDisplay: DisplayController.shared.displays.contains { !$0.isBuiltin },
+            showDockIcon: Settings.showDockIcon
+        )
+    }
 
     /// Show the panel: anchored below the status item on first show,
     /// otherwise at the last used position (autosave).
