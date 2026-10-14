@@ -10,6 +10,21 @@ import XCTest
 /// own numbering.
 final class DDCInputSourceTests: XCTestCase {
 
+    // MARK: - A read-back value
+
+    /// The DDC layer reports a feature as a `Double`, and a monitor answering out of range must
+    /// not trap the cast — this lands in a view, which is the worst place for a crash. Nil in,
+    /// nil out; everything else comes back inside `UInt16`.
+    func testAReadBackValueIsClampedRatherThanTrapingTheCast() {
+        XCTAssertNil(DDC.inputSource(from: nil))
+        XCTAssertEqual(DDC.inputSource(from: 0x11), 0x11)
+        XCTAssertEqual(DDC.inputSource(from: 17), 17)
+        XCTAssertEqual(DDC.inputSource(from: -4), 0)
+        XCTAssertEqual(DDC.inputSource(from: 1e9), UInt16.max)
+        XCTAssertNil(DDC.inputSource(from: .nan))
+        XCTAssertNil(DDC.inputSource(from: .infinity))
+    }
+
     // MARK: - capabilityValues
 
     func testParsesAValueList() {

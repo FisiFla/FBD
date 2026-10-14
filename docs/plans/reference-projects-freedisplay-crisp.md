@@ -117,8 +117,14 @@ sources linked. Paraphrased, the rules that bear on FBD:
    so the switch crossfades exactly as Control Center's does. Surfaced as `fbdcli dark-mode
    [on|off]` and a toggle beside True Tone. Not stored in `Settings`: it is the system's switch,
    and another app can change it.
-4. **Input switching in the per-display UI** — the capability already exists over DDC
-   and in the CLI; this only surfaces it where a person would look for it.
+4. **Input switching in the per-display UI** — **done, and the gap was smaller than the table
+   said.** `DDCPanelView` (used by the panel's per-display row *and* Settings → Displays) has had a
+   named input menu plus a raw VCP override for a while, so "CLI + DDC only" was wrong. What was
+   genuinely missing is the feature that makes such a menu honest: it could not say which input was
+   **in effect**. It can now, because VCP 0x60 rides in the same batched DDC read as
+   contrast/volume/mute — no extra traffic, off the main actor — so the menu marks the current input
+   with a checkmark, its title names it, and when the display refuses to answer it falls back to the
+   last input set rather than inventing one.
 5. **Checkmark lists for the panel's discrete selections** — **done, though not as rule 2
    literally reads.** All four of the panel's lists already showed a checkmark on the value in
    effect, so the missing part was the *cost* of reaching them: the resolutions section now
