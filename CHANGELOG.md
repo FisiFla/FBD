@@ -127,6 +127,12 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   no key equivalents at all — ⌘, only duplicated the one the status menu already
   had. This works because the panel can take key focus: its style mask carries
   both `.titled` and `.nonactivatingPanel`.
+- **`fbdcli ambient-light <display> [on|off]`.** Reads or sets the Apple panel's
+  ambient-light auto-brightness. The seam existed and was reachable from the
+  panel's More menu but had no CLI surface (gap-matrix row #12). A bare read
+  doubles as the capability probe — a display with no ambient-light sensor is
+  reported unavailable and exits 2 — and a set is confirmed by reading the state
+  back rather than trusting a status code.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom

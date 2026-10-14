@@ -2016,6 +2016,45 @@ func cmdTrueTone(args: [String]) -> Int32 {
     return 0
 }
 
+// MARK: - Ambient-light auto-brightness (Tier 1 #12)
+
+/// `fbdcli ambient-light <display> [on|off]` — get or set the Apple display's
+/// ambient-light auto-brightness.
+///
+/// Reading already answers the capability question: `isAmbientLightCompensationEnabled`
+/// returns nil when the display has no ambient-light sensor, which is the same
+/// condition the panel's More menu gates its toggle on. A set is confirmed by
+/// reading the state back rather than by trusting the write, because the private
+/// call reports only a status code and the panel is the authority on what it
+/// actually applied.
+@MainActor
+func cmdAmbientLight(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
+    guard controller.isAmbientLightCompensationEnabled(on: display) != nil else {
+        print("ambient-light: unavailable on display \(display.id) (no ambient-light sensor)")
+        return 2
+    }
+    if args.count >= 2 {
+        let wanted: Bool
+        switch args[1] {
+        case "on": wanted = true
+        case "off": wanted = false
+        default:
+            print("fbdcli: ambient-light: expected on or off (got '\(args[1])')")
+            return 1
+        }
+        let current = controller.isAmbientLightCompensationEnabled(on: display)
+        if current != wanted {
+            controller.setAmbientLightCompensation(wanted, on: display)
+        }
+    }
+    guard let enabled = controller.isAmbientLightCompensationEnabled(on: display) else {
+        print("fbdcli: ambient-light: failed to read state for display \(display.id)")
+        return 2
+    }
+    print("ambient-light \(display.id) = \(enabled ? "on" : "off")")
+    return 0
+}
+
 // MARK: - TV / AVR network control (Tier 5)
 
 /// `fbdcli tv <brand> <host> [volume <v>|power|input <name>]` — thin wrappers
