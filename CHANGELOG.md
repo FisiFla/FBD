@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-14
+
 BetterDisplay-parity work agreed at the Phase 3 gate. Scope, evidence and the
 deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
