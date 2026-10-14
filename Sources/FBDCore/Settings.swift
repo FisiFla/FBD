@@ -418,6 +418,10 @@ public enum Settings {
     /// `NetworkDeviceRegistry` writes through this one path rather than a
     /// second one.
     static let networkDevicesKey = "networkDevices.v1"
+
+    /// Storage key for the display → network-device attachments
+    /// (`displayIdentity` → device name). Same single write path.
+    static let networkDeviceAttachmentsKey = "networkDeviceAttachments.v1"
 }
 
 /// Property-wrapper helper backing a UserDefaults key.

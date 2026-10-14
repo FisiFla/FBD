@@ -10,6 +10,14 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **A saved network device can be attached to a display.** The device then follows that
+  display's volume when the brightness/volume keys drive it, so a TV or AVR stops being
+  something reachable only through `fbdcli tv`. Attachments are keyed by the display's
+  **identity**, not its id, so a reconnect keeps them; `fbdcli config device
+  attach|detach|attachments` manages them, and a device deleted afterwards is reported as
+  dangling rather than silently resolving to nothing. Philips sets are the one exception,
+  and say so: pairing needs a PIN read off the TV and that pairing does not outlive the
+  controller instance, so a fire-and-forget volume send cannot complete it.
 - **Manual controls and a notification action for automation.** A rule can be scoped to
   `manual` — a control you invoke yourself, via the new Run button in Settings →
   Automation or `fbdcli automation run` — and a `notify` action posts a user

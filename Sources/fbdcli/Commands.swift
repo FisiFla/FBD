@@ -2217,7 +2217,7 @@ func printConfigUsage() {
     print("       fbdcli config group-sync <group> <0-100>")
     print("       fbdcli config connections connect-all|disconnect-all-but-main|swap-identical")
     print("       fbdcli config model <key> [value]")
-    print("       fbdcli config device list|add|remove …")
+    print("       fbdcli config device list|add|remove|attach|detach|attachments …")
     print("properties: \(ProtectedProperties.ordered.map(\.name).joined(separator: ", "))")
     print("model keys: prefer-hardware, hardware-min, hardware-max, hdr-sdr-peak, hdr-hdr-peak, "
         + "software-zero, min-hardware, switchover, upscale-max, startup-policy")
@@ -2246,7 +2246,7 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "group-sync": return cmdConfigGroupSync(controller, rest)
     case "connections": return cmdConfigConnections(controller, rest)
     case "model": return cmdConfigModel(rest)
-    case "device": return cmdConfigDevice(rest)
+    case "device": return cmdConfigDevice(controller, rest)
     default:
         print("fbdcli: config: unknown subcommand '\(sub)'")
         printConfigUsage()
@@ -2611,7 +2611,7 @@ func cmdConfigModel(_ args: [String]) -> Int32 {
 /// `config device list|add|remove` — the saved TV / AVR registry, so a device
 /// can be addressed by name from `fbdcli tv`.
 @MainActor
-func cmdConfigDevice(_ args: [String]) -> Int32 {
+func cmdConfigDevice(_ controller: DisplayController, _ args: [String]) -> Int32 {
     guard let sub = args.first else {
         print("fbdcli: config device: expected list, add or remove")
         return 1
@@ -2665,8 +2665,48 @@ func cmdConfigDevice(_ args: [String]) -> Int32 {
         print("removed \(name)")
         return 0
 
+    case "attach":
+        guard rest.count >= 2 else {
+            print("fbdcli: config device attach: expected <display-id> <device-name>")
+            return 1
+        }
+        guard let display = requireDisplay(rest[0], in: controller) else { return 1 }
+        guard NetworkDeviceAttachment.attach(deviceNamed: rest[1], toDisplay: display.identityKey) else {
+            print("fbdcli: config device attach: no saved device named '\(rest[1])' — save one with `fbdcli config device add`.")
+            return 1
+        }
+        print("\(display.name) → \(rest[1]): the device now follows this display's volume")
+        return 0
+
+    case "detach":
+        guard let raw = rest.first else {
+            print("fbdcli: config device detach: expected <display-id>")
+            return 1
+        }
+        guard let display = requireDisplay(raw, in: controller) else { return 1 }
+        guard NetworkDeviceAttachment.detach(displayIdentityKey: display.identityKey) else {
+            print("fbdcli: config device detach: \(display.name) has no attached device")
+            return 1
+        }
+        print("\(display.name): detached")
+        return 0
+
+    case "attachments":
+        let attached = NetworkDeviceAttachment.attachments()
+        guard !attached.isEmpty else {
+            print("no attachments")
+            return 0
+        }
+        // A name with no device behind it is marked rather than hidden: the user
+        // expected a device there, and silence would read as a bug.
+        let dangling = Set(NetworkDeviceAttachment.danglingNames())
+        for (identity, name) in attached.sorted(by: { $0.key < $1.key }) {
+            print("\(identity) → \(name)\(dangling.contains(name) ? "  (no such device — it was removed)" : "")")
+        }
+        return 0
+
     default:
-        print("fbdcli: config device: expected list, add or remove (got '\(sub)')")
+        print("fbdcli: config device: expected list, add, remove, attach, detach or attachments (got '\(sub)')")
         return 1
     }
 }
