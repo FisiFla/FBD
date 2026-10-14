@@ -42,11 +42,16 @@ public struct OSDStyle: Codable, Equatable, Sendable {
         case hudDark
         /// Follows the system's light/dark appearance.
         case adaptive
+        /// The OS's glass material — the one the system HUD uses on macOS 26 and later, so the HUD
+        /// samples what is behind it rather than drawing a flat panel. Below macOS 26 there is no
+        /// such view and it falls back to the dark HUD material.
+        case glass
 
         public var label: String {
             switch self {
             case .hudDark: return "Dark HUD"
             case .adaptive: return "Follow system"
+            case .glass: return "Glass"
             }
         }
     }

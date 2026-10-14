@@ -7,6 +7,30 @@ import XCTest
 /// value may do: the defaults have to reproduce the look FBD shipped before this
 /// was configurable, and nothing out of range may reach the renderer.
 final class OSDStyleTests: XCTestCase {
+
+    // MARK: - The glass background
+
+    /// The case exists so a macOS 26+ user can have the HUD sample what is behind it. The default
+    /// stays the incumbent flat HUD, so an untouched install is unchanged.
+    func testGlassIsOfferedWithoutBecomingTheDefault() {
+        XCTAssertTrue(OSDStyle.Background.allCases.contains(.glass))
+        XCTAssertEqual(OSDStyle.standard.background, .hudDark, "the default must stay the incumbent look")
+    }
+
+    /// Raw values are persisted JSON, so they are part of the on-disk contract: renaming one would
+    /// silently reset the background of every user who had chosen it.
+    func testTheBackgroundRawValuesAreStable() {
+        XCTAssertEqual(OSDStyle.Background.hudDark.rawValue, "hudDark")
+        XCTAssertEqual(OSDStyle.Background.adaptive.rawValue, "adaptive")
+        XCTAssertEqual(OSDStyle.Background.glass.rawValue, "glass")
+    }
+
+    func testEveryBackgroundHasALabel() {
+        for background in OSDStyle.Background.allCases {
+            XCTAssertFalse(background.label.isEmpty, "\(background.rawValue) has no label")
+        }
+    }
+
     private let suiteName = "test.fbd.osdstyle"
     private var defaults: UserDefaults!
 

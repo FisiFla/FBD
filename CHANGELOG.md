@@ -10,6 +10,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **The HUD can use the system's glass.** FBD's HUD is a vibrancy view in `.withinWindow` mode,
+  which samples the *window's own* content — the SwiftUI content and nothing else — so it draws a
+  flat panel rather than sampling the desktop behind it. The OS's glass (`NSGlassEffectView`,
+  macOS 26+) is now a third HUD background; the default is untouched, so an untouched install keeps
+  the look it has always had. Captured on macOS 27: it renders correctly, and the difference is
+  subtle — which matches the Crisp review's own note that no glass material can hold a HUD's
+  backdrop on this OS family. Two measured facts shaped it: only `contentView` is guaranteed to sit
+  inside the glass (so the SwiftUI content goes there, not in as a subview), and `.behindWindow` is
+  *not* a substitute for `.withinWindow` here.
 - **FBD speaks 简体中文 and 繁體中文 — starting with the panel.** Crisp ships en · 简体中文 · 繁體中文
   and FBD shipped English only. The mechanism is deliberately the small one: three
   `.lproj/Localizable.strings` beside the icon in `Sources/FBD/Resources`, copied into the bundle by

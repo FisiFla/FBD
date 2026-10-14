@@ -80,12 +80,17 @@ public final class CustomOSD {
     /// re-apply the style and reposition); otherwise build the borderless HUD
     /// window.
     private func makeWindow(content: OSDContent, style: OSDStyle, on screen: NSScreen) -> NSWindow {
-        if let window, let hostingView, let effectView = window.contentView as? NSVisualEffectView {
+        if let window, let hostingView, let background = window.contentView,
+           isReusable(background: background, style: style) {
             hostingView.rootView = content
-            apply(style, to: window, effectView: effectView)
+            apply(style, to: window, background: background)
             position(window, on: screen, style: style)
             return window
         }
+        // Glass and vibrancy are different view classes, so a style change between them rebuilds.
+        // Order the old one out first: it is still on screen otherwise, and the new HUD would sit
+        // on top of the one it replaced.
+        window?.orderOut(nil)
 
         let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
         window.level = .floating
@@ -96,24 +101,42 @@ public final class CustomOSD {
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
 
-        // Rounded HUD background: NSVisualEffectView with the style's material.
-        let effectView = NSVisualEffectView()
-        effectView.state = .active
-        effectView.blendingMode = .withinWindow
-        effectView.wantsLayer = true
-        effectView.layer?.masksToBounds = true
-        apply(style, to: window, effectView: effectView)
+        // Rounded HUD background: the style's material, or the OS's glass where the style asks for
+        // it and the OS has it.
+        //
+        // The vibrancy path is `.withinWindow`, which means the material samples the window's *own*
+        // content — and this window holds only the SwiftUI content, so in practice it renders as a
+        // flat fill rather than sampling the desktop behind it. `.behindWindow` is not a substitute:
+        // it was measured on macOS 27 and the HUD did not appear at all. `NSGlassEffectView`
+        // (macOS 26+) is the way to sample the backdrop, which is why it is offered as a style
+        // rather than applied to everyone. See the Crisp review's rule 9.
+        let background: NSView
+        if style.background == .glass, #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.style = .regular
+            glass.wantsLayer = true
+            glass.layer?.masksToBounds = true
+            background = glass
+        } else {
+            let effectView = NSVisualEffectView()
+            effectView.state = .active
+            effectView.blendingMode = .withinWindow
+            effectView.wantsLayer = true
+            effectView.layer?.masksToBounds = true
+            background = effectView
+        }
+        apply(style, to: window, background: background)
 
         let hostingView = NSHostingView(rootView: content)
         hostingView.translatesAutoresizingMaskIntoConstraints = false
-        effectView.addSubview(hostingView)
+        install(hostingView, in: background)
         NSLayoutConstraint.activate([
-            hostingView.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
-            hostingView.topAnchor.constraint(equalTo: effectView.topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: background.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: background.bottomAnchor),
         ])
-        window.contentView = effectView
+        window.contentView = background
         self.hostingView = hostingView
 
         // Size the window to the SwiftUI content's fitting size (fall back to a
@@ -128,21 +151,67 @@ public final class CustomOSD {
         return window
     }
 
-    /// Apply the parts of the style the *window* owns — the background material,
-    /// the corner radius and the shadow — as opposed to what the SwiftUI content
-    /// draws. Also used when reusing a window, so a style change takes effect
-    /// without tearing the HUD down.
-    private func apply(_ style: OSDStyle, to window: NSWindow, effectView: NSVisualEffectView) {
-        switch style.background {
-        case .hudDark:
-            effectView.material = .hudWindow
-        case .adaptive:
-            // Lets the material follow the system appearance instead of forcing
-            // the dark HUD in light mode.
-            effectView.material = .popover
+    /// Apply the parts of the style the *window* owns — the background material or glass, the
+    /// corner radius and the shadow — as opposed to what the SwiftUI content draws. Also used when
+    /// reusing a window, so a style change takes effect without tearing the HUD down.
+    private func apply(_ style: OSDStyle, to window: NSWindow, background: NSView) {
+        if let effectView = background as? NSVisualEffectView {
+            switch style.background {
+            case .hudDark:
+                effectView.material = .hudWindow
+            case .adaptive:
+                // Lets the material follow the system appearance instead of forcing
+                // the dark HUD in light mode.
+                effectView.material = .popover
+            case .glass:
+                // Unreachable while `isReusable` holds — a glass style never reuses a vibrancy
+                // view — and the sensible fallback for a macOS without glass.
+                effectView.material = .hudWindow
+            }
         }
-        effectView.layer?.cornerRadius = CGFloat(style.cornerRadius)
+        background.layer?.cornerRadius = CGFloat(style.cornerRadius)
+        applyGlassCornerRadius(CGFloat(style.cornerRadius), to: background)
         window.hasShadow = style.showsShadow
+    }
+
+    // MARK: - The macOS 26 glass boundary
+    //
+    // `NSGlassEffectView` needs macOS 26 and this package deploys to 13, so the type may not appear
+    // in a signature. These three helpers keep the availability check in one place each and expose
+    // only `Void` and `Bool`, which lets the callers stay unannotated.
+
+    /// Whether this background is the OS's glass.
+    private func isGlass(_ background: NSView) -> Bool {
+        if #available(macOS 26.0, *) {
+            return background is NSGlassEffectView
+        }
+        return false
+    }
+
+    /// Set the glass corner radius, where the background is glass.
+    private func applyGlassCornerRadius(_ radius: CGFloat, to background: NSView) {
+        if #available(macOS 26.0, *), let glass = background as? NSGlassEffectView {
+            glass.cornerRadius = radius
+        }
+    }
+
+    /// Put the SwiftUI content inside the background: in the glass's `contentView`, which the header
+    /// guarantees is placed inside the effect, and as a plain subview otherwise.
+    private func install(_ hostingView: NSView, in background: NSView) {
+        if #available(macOS 26.0, *), let glass = background as? NSGlassEffectView {
+            glass.contentView = hostingView
+        } else {
+            background.addSubview(hostingView)
+        }
+    }
+
+    /// Whether an existing background view can carry this style. Glass and vibrancy are different
+    /// view classes, so switching between them needs a new window rather than a restyled one.
+    private func isReusable(background: NSView, style: OSDStyle) -> Bool {
+        switch style.background {
+        case .glass: return isGlass(background)
+        case .hudDark, .adaptive: return background is NSVisualEffectView
+        }
     }
 
     /// Place the window on `screen` according to the style. The default (top
