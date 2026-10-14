@@ -210,6 +210,7 @@ struct DisplayListView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Settings")
                 .help("Settings")
+                .keyboardShortcut(",", modifiers: .command)
                 .fbdIconButton()
 
                 Button {
@@ -315,6 +316,7 @@ struct DisplayListView: View {
             .buttonStyle(.borderless)
             .font(.caption)
             .foregroundStyle(virtualScreensExpanded ? Color.accentColor : .secondary)
+            .keyboardShortcut("v", modifiers: [.command, .shift])
 
             Button("Groups") {
                 withAnimation(reduceMotion ? nil : FBDTheme.animationPanel) {
@@ -324,6 +326,7 @@ struct DisplayListView: View {
             .buttonStyle(.borderless)
             .font(.caption)
             .foregroundStyle(groupsExpanded ? Color.accentColor : .secondary)
+            .keyboardShortcut("g", modifiers: [.command, .shift])
 
             Spacer(minLength: 4)
 
@@ -334,6 +337,7 @@ struct DisplayListView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .help("Open a floating picture-in-picture window for the primary display")
+            .keyboardShortcut("p", modifiers: [.command, .shift])
 
             Button("Check for Updates") {
                 UpdaterController.shared.checkForUpdates()
@@ -341,6 +345,7 @@ struct DisplayListView: View {
             .buttonStyle(.borderless)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .keyboardShortcut("u", modifiers: .command)
 
             Button("Quit FBD") {
                 NSApp.terminate(nil)
@@ -348,6 +353,7 @@ struct DisplayListView: View {
             .buttonStyle(.borderless)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .keyboardShortcut("q", modifiers: .command)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)

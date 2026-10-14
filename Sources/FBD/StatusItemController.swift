@@ -35,8 +35,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.moveToActiveSpace, .transient, .fullScreenAuxiliary]
-        panel.minSize = NSSize(width: 420, height: 500)
-        panel.maxSize = NSSize(width: 900, height: 900)
+        panel.minSize = Self.minSize
+        panel.maxSize = Self.maxSize
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         // Remembers position/size across launches and shows.
@@ -82,8 +82,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// width and more height than the main page.
     private static let settingsSize = NSSize(width: 760, height: 860)
     private static let mainSize = NSSize(width: 460, height: 650)
+    /// The panel's designed bounds. `mainSize` is both the main page's default
+    /// and its ceiling — the panel grows past it only for Settings.
+    private static let minSize = NSSize(width: 420, height: 500)
+    private static let maxSize = NSSize(width: 900, height: 900)
+
+    /// What the panel's size was immediately before Settings opened, so going
+    /// back restores exactly that rather than a hard-coded default.
+    private var preSettingsSize: NSSize?
 
     @objc private func settingsOpened(_ sender: Any?) {
+        preSettingsSize = panel.frame.size
         resizePanel(to: NSSize(
             width: max(Self.settingsSize.width, panel.frame.width),
             height: max(Self.settingsSize.height, panel.frame.height)
@@ -91,7 +100,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func settingsClosed(_ sender: Any?) {
-        resizePanel(to: Self.mainSize)
+        // Restore what the page had before Settings opened — the user's own
+        // size, if they resized the panel — never a hard-coded default.
+        let restore = preSettingsSize ?? Self.mainSize
+        preSettingsSize = nil
+        resizePanel(to: NSSize(
+            width: max(Self.minSize.width, restore.width),
+            height: max(Self.minSize.height, restore.height)
+        ))
     }
 
     private func resizePanel(to size: NSSize) {

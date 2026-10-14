@@ -30,9 +30,15 @@ func postClick(_ x: CGFloat, _ y: CGFloat) {
     up.post(tap: .cghidEventTap)
 }
 
-func postKey(_ keyCode: CGKeyCode) {
+func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) {
     let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true)!
     let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false)!
+    // Modifier flags must ride on the key events themselves: menu key
+    // equivalents and SwiftUI .keyboardShortcut both read the event's flags.
+    if !flags.isEmpty {
+        down.flags = flags
+        up.flags = flags
+    }
     down.post(tap: .cghidEventTap)
     usleep(60_000)
     up.post(tap: .cghidEventTap)
@@ -220,8 +226,22 @@ case "click":
 
 case "key":
     guard args.count >= 3, let code = UInt16(args[2]) else { exit(2) }
-    postKey(CGKeyCode(code))
-    print("key \(args[2])")
+    var flags: CGEventFlags = []
+    if args.count >= 4 {
+        for name in args[3].split(separator: ",") {
+            switch name {
+            case "cmd": flags.insert(.maskCommand)
+            case "shift": flags.insert(.maskShift)
+            case "opt": flags.insert(.maskAlternate)
+            case "ctrl": flags.insert(.maskControl)
+            default:
+                FileHandle.standardError.write(Data("unknown modifier \(name)\n".utf8))
+                exit(2)
+            }
+        }
+    }
+    postKey(CGKeyCode(code), flags: flags)
+    print("key \(args[2])\(args.count >= 4 ? " [\(args[3])]" : "")")
 
 case "panel-state":
     print(panelState())
