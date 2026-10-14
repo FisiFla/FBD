@@ -48,9 +48,28 @@ final class AppCore {
         virtualScreens.start()
         disconnect.start()
         layoutProtection.start()
-        edid.start()
-        configProtection.start(controller: displayController)
+        // Startup safe mode (BetterDisplay parity): when the user held Shift at
+        // launch — or set FBD_SAFE_MODE — do NOT re-apply stored configuration
+        // for the session. A bad custom EDID override or a stored
+        // config-protection blob is exactly what the user is escaping, so the
+        // EDID lifecycle hook and the configuration-protection restore observer
+        // stay off. Fail-closed: this only ever suppresses an apply.
+        if SafeMode.shouldApplyStoredState(
+            modifierFlags: NSEvent.modifierFlags.rawValue,
+            readFromEnvironment: ProcessInfo.processInfo.environment
+        ) {
+            edid.start()
+            configProtection.start(controller: displayController)
+        } else {
+            log.notice("safe mode: skipping stored EDID override and configuration-protection restore")
+            FBDNotice.shared.report("Safe mode: saved EDID override and configuration-protection restore are off for this session")
+        }
         automation.start(controller: displayController)
+        // Lock dim: lower brightness while the screen is locked or the screensaver
+        // is up, and restore it on unlock. Started unconditionally — the policy is
+        // read per event, so a disabled policy is a no-op rather than a dead
+        // observer, and the state machine always restores what it recorded.
+        lockDim.start()
         HotkeyController.shared.start()
         UpdaterController.shared.start()
         // Recreate persisted virtual screens at launch (they are process-lifetime).
@@ -92,6 +111,7 @@ final class AppCore {
     let layoutProtection = LayoutProtectionController()
     let edid = EDIDController()
     let configProtection = ConfigProtectionController()
+    let lockDim = LockDimController()
     /// Per-display event automation. Lives here so one instance owns the
     /// observers; the CLI creates its own for one-shot rule edits.
     let automation = DisplayAutomationController()

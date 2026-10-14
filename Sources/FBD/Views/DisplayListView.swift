@@ -41,7 +41,7 @@ struct DisplayListView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var notice = FBDNotice.shared
     /// What `.fbdOpenSettings` asked Settings to open on, if anything.
-    @State private var settingsInitialTab: SettingsView.SettingsTab = .overview
+    @State private var settingsInitialPage: SettingsView.SettingsPage = .displays
     @State private var settingsTargetDisplayID: CGDirectDisplayID?
 
     var body: some View {
@@ -66,7 +66,7 @@ struct DisplayListView: View {
                 if showingSettings {
                     SettingsView(
                         targetDisplayID: settingsTargetDisplayID,
-                        initialTab: settingsInitialTab
+                        initialPage: settingsInitialPage
                     )
                         .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                 } else {
@@ -102,8 +102,7 @@ struct DisplayListView: View {
             // A caller can ask Settings to open on a given tab, and to reveal a
             // given display. Without this a per-display action landed on the
             // Overview page with no sign of the display it was about.
-            settingsInitialTab = (notification.userInfo?["tab"] as? String)
-                .flatMap(SettingsView.SettingsTab.init(rawValue:)) ?? .overview
+            settingsInitialPage = SettingsView.SettingsPage.named(notification.userInfo?["tab"] as? String)
             settingsTargetDisplayID = (notification.userInfo?["displayID"] as? NSNumber)?.uint32Value
             withAnimation(reduceMotion ? nil : FBDTheme.animationPanel) {
                 showingSettings = true
