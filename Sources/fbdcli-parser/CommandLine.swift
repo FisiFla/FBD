@@ -43,6 +43,7 @@ public enum Command: String, CaseIterable {
     case truetone
     case tv
     case config
+    case report
     case help
 }
 

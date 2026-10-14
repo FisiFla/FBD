@@ -38,6 +38,43 @@ func cmdList(_ controller: DisplayController, args: [String]) -> Int32 {
     return 0
 }
 
+// MARK: - report
+
+/// `fbdcli report [file]` — a detailed, paste-ready report of every display, for
+/// pasting into a bug report. Prints, or writes to `file` when one is given.
+///
+/// The formatting lives in `DisplayReport` in FBDCore and is locked by tests, so
+/// the CLI only supplies the facts it alone can know.
+@MainActor
+func cmdReport(_ controller: DisplayController, args: [String]) -> Int32 {
+    let snapshots = controller.displays.map { display in
+        DisplayReport.Snapshot(display: display, isMain: CGDisplayIsMain(display.id) != 0)
+    }
+    // This is the *app's* version when the CLI has a bundle and "unknown" when it
+    // is a bare binary, which is honest rather than invented. The macOS line in
+    // the header is the one that matters for diagnosing display behaviour.
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    let text = DisplayReport.render(
+        snapshots,
+        version: version,
+        platform: ProcessInfo.processInfo.operatingSystemVersionString
+    )
+
+    guard let path = args.first(where: { !$0.hasPrefix("-") }) else {
+        print(text)
+        return 0
+    }
+    let expanded = (path as NSString).expandingTildeInPath
+    do {
+        try text.write(toFile: expanded, atomically: true, encoding: .utf8)
+    } catch {
+        print("fbdcli: report: could not write \(expanded): \(error.localizedDescription)")
+        return 1
+    }
+    print("wrote \(snapshots.count) display(s) to \(expanded)")
+    return 0
+}
+
 // MARK: - info
 
 /// `fbdcli info <id>` — full detail for one display.
