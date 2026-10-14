@@ -130,7 +130,8 @@ Commands:
                                 connect-all|disconnect-all-but-main|swap-identical,
                                 model <key> [value], device list|add|remove,
                                 identity [method], transfer <from-id> <to-id>
-                                [--overwrite]
+                                [--overwrite], vscreen
+                                list|associate|disassociate|apply
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.

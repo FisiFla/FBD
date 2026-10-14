@@ -188,6 +188,18 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   sources in one invocation (`pip 1 --window 1234`), which is the only way to open
   two at once on a single-display Mac. Verified live: two windows coexisted and both
   tore down cleanly when the CLI's stdin closed.
+- **A virtual screen can be associated with real displays, so an arrangement is
+  recalled when it attaches.** `fbdcli config vscreen associate <screen-id>
+  <display-id>…` records the arrangement the displays have at that moment. They are
+  named by identity, so the association outlives the reconnect that reassigns display
+  ids — the reason it is worth storing at all. Recall goes through the same
+  `CGConfigureDisplayOrigin` path layout protection uses, so there is one place that
+  knows how to talk to the display layer, and it fails closed: if any associated
+  display is absent, nothing moves, because a partial arrangement would shuffle the
+  displays that *are* present into positions chosen for a layout that is not.
+  Mirroring is deliberately not implemented and has no stored flag — ADR-0001 records
+  that a virtual screen cannot be addressed as a display, so a flag nothing could
+  apply would be the dead configuration this codebase has had to remove twice.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom

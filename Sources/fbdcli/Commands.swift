@@ -2375,6 +2375,7 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "device": return cmdConfigDevice(controller, rest)
     case "identity": return cmdConfigIdentity(rest)
     case "transfer": return cmdConfigTransfer(controller, args: rest)
+    case "vscreen": return cmdConfigVirtualScreen(controller, args: rest)
     default:
         print("fbdcli: config: unknown subcommand '\(sub)'")
         printConfigUsage()
@@ -2397,6 +2398,104 @@ func printConfigSummary() -> Int32 {
         + "startup=\(prefs.startupControlValuePolicy.rawValue)")
     print("configuration protection: \(Settings.configProtectionEnabled ? "on" : "off")")
     return 0
+}
+
+/// `config vscreen list|associate|disassociate|apply` — associate a virtual screen
+/// with real displays, so an arrangement is recalled when it attaches.
+///
+/// `associate` records the arrangement the displays have **right now**, which is the
+/// only sane way to say "put them back like this" — asking someone to type origins
+/// would be a text field where the UI has a grid.
+///
+/// There is no mirroring here. Mirroring a virtual screen means addressing it as a
+/// display, and ADR-0001 records that a virtual screen FBD created does not appear in
+/// its own process's display list, so that half of the row is not reachable — see
+/// `VirtualScreenAssociation`, which deliberately stores no flag for it.
+@MainActor
+func cmdConfigVirtualScreen(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: config vscreen: expected list, associate, disassociate or apply")
+        return 1
+    }
+    let rest = Array(args.dropFirst())
+
+    switch sub {
+    case "list":
+        let associations = Settings.loadVirtualScreenAssociations()
+        guard !associations.isEmpty else {
+            print("no virtual-screen associations")
+            return 0
+        }
+        for association in associations {
+            let placements = association.placements
+                .map { "\($0.identity)@\($0.x),\($0.y)" }
+                .joined(separator: " ")
+            print("\(association.virtualScreenID): \(placements)")
+        }
+        return 0
+
+    case "associate":
+        guard let screenID = rest.first, !screenID.isEmpty else {
+            print("fbdcli: config vscreen associate: expected a virtual-screen id")
+            return 1
+        }
+        let displayArgs = Array(rest.dropFirst())
+        guard !displayArgs.isEmpty else {
+            print("fbdcli: config vscreen associate: expected at least one display id")
+            return 1
+        }
+        var placements: [VirtualScreenAssociation.Placement] = []
+        for rawID in displayArgs {
+            guard let displayID = requireDisplayID(rawID), let display = controller.display(withID: displayID) else {
+                return 1
+            }
+            let origin = CGDisplayBounds(display.id).origin
+            placements.append(.init(identity: display.identityKey, x: Int32(origin.x), y: Int32(origin.y)))
+        }
+        // One association per screen: associating again replaces rather than
+        // stacking a second arrangement for the same screen.
+        var associations = Settings.loadVirtualScreenAssociations()
+            .filter { $0.virtualScreenID != screenID }
+        associations.append(VirtualScreenAssociation(virtualScreenID: screenID, placements: placements))
+        associations.sort { $0.virtualScreenID < $1.virtualScreenID }
+        Settings.saveVirtualScreenAssociations(associations)
+        print("associated \(screenID) with \(placements.count) display(s) at their current positions")
+        return 0
+
+    case "disassociate":
+        guard let screenID = rest.first, !screenID.isEmpty else {
+            print("fbdcli: config vscreen disassociate: expected a virtual-screen id")
+            return 1
+        }
+        let remaining = Settings.loadVirtualScreenAssociations()
+            .filter { $0.virtualScreenID != screenID }
+        Settings.saveVirtualScreenAssociations(remaining)
+        print("disassociated \(screenID)")
+        return 0
+
+    case "apply":
+        guard let screenID = rest.first, !screenID.isEmpty else {
+            print("fbdcli: config vscreen apply: expected a virtual-screen id")
+            return 1
+        }
+        let attached = controller.displays.map { (identity: $0.identityKey, displayID: $0.id) }
+        let applied = LayoutProtectionController().applyAssociation(
+            forVirtualScreen: screenID,
+            attached: attached,
+            associations: Settings.loadVirtualScreenAssociations()
+        )
+        guard applied else {
+            print("fbdcli: config vscreen apply: nothing applied for \(screenID) "
+                + "(no association, or its displays are not all attached)")
+            return 1
+        }
+        print("applied the arrangement associated with \(screenID)")
+        return 0
+
+    default:
+        print("fbdcli: config vscreen: unknown subcommand '\(sub)'")
+        return 1
+    }
 }
 
 /// `config identity [<method>]` — which key a display's stored settings are filed
