@@ -2147,7 +2147,12 @@ func printConfigUsage() {
     print("       fbdcli config keytarget [mouse|focused|all|audio]")
     print("       fbdcli config group-policy <group> [policy]")
     print("       fbdcli config group-enabled <group> [on|off]")
+    print("       fbdcli config group-sync <group> <0-100>")
+    print("       fbdcli config connections connect-all|disconnect-all-but-main|swap-identical")
+    print("       fbdcli config model <key> [value]")
     print("properties: \(ProtectedProperties.ordered.map(\.name).joined(separator: ", "))")
+    print("model keys: prefer-hardware, hardware-min, hardware-max, hdr-sdr-peak, hdr-hdr-peak, "
+        + "software-zero, min-hardware, switchover, upscale-max, startup-policy")
 }
 
 /// `fbdcli config …` — the settings behind the BetterDisplay-parity features:
@@ -2170,6 +2175,9 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "keytarget": return cmdConfigKeyTarget(rest)
     case "group-policy": return cmdConfigGroupPolicy(rest)
     case "group-enabled": return cmdConfigGroupEnabled(rest)
+    case "group-sync": return cmdConfigGroupSync(controller, rest)
+    case "connections": return cmdConfigConnections(controller, rest)
+    case "model": return cmdConfigModel(rest)
     default:
         print("fbdcli: config: unknown subcommand '\(sub)'")
         printConfigUsage()
@@ -2379,4 +2387,154 @@ func cmdConfigGroupEnabled(_ args: [String]) -> Int32 {
     groups.setEnabled(enabled, forGroup: group.id)
     print("\(group.name): \(enabled ? "on" : "off")")
     return 0
+}
+
+/// `config group-sync <group> <0-100>` — apply a synchronised brightness to the
+/// group's members through the tested planner.
+@MainActor
+func cmdConfigGroupSync(_ controller: DisplayController, _ args: [String]) -> Int32 {
+    guard let name = args.first, let valueArg = args.dropFirst().first else {
+        print("fbdcli: config group-sync: expected <group> <0-100>")
+        return 1
+    }
+    guard let percent = Double(valueArg), (0...100).contains(percent) else {
+        print("fbdcli: config group-sync: expected 0-100 (got '\(valueArg)')")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = groups.group(named: name) else {
+        print("fbdcli: config group-sync: no group named '\(name)'")
+        return 1
+    }
+    let written = groups.applyGroupSync(percent / 100, inGroup: group.id, controller: controller)
+    print("\(group.name): synced \(written) display(s) to \(Int(percent))%")
+    return 0
+}
+
+/// `config connections <action>` — bulk connect/disconnect, planned by the pure
+/// `ConnectionPlanner` and executed through the guarded disconnect chokepoint.
+@MainActor
+func cmdConfigConnections(_ controller: DisplayController, _ args: [String]) -> Int32 {
+    guard let raw = args.first else {
+        print("fbdcli: config connections: expected connect-all, disconnect-all-but-main or swap-identical")
+        return 1
+    }
+    let action: ConnectionAction
+    switch raw {
+    case "connect-all": action = .connectAll
+    case "disconnect-all-but-main": action = .disconnectAllButMain
+    case "swap-identical": action = .swapIdentical
+    default:
+        print("fbdcli: config connections: expected connect-all, disconnect-all-but-main or swap-identical (got '\(raw)')")
+        return 1
+    }
+
+    let descriptors = controller.displays.map { display in
+        DisplayDescriptor(
+            displayID: display.id,
+            isOnline: display.isOnline,
+            isBuiltin: display.isBuiltin,
+            isMain: CGDisplayIsMain(display.id) != 0,
+            vendor: display.vendorNumber,
+            model: display.modelNumber,
+            serial: display.serialNumber
+        )
+    }
+    let steps = ConnectionPlanner.plan(
+        action: action,
+        displays: descriptors,
+        allowsAffectedBuiltInDisconnect: Settings.allowBuiltInDisconnectOnAffectedMacs
+    )
+    guard !steps.isEmpty else {
+        // Not an error: the planner refuses `disconnectAllButMain` with no main
+        // display, and `swapIdentical` with anything but exactly two matches.
+        print("no steps: the planner declined this action for the current display set")
+        return 0
+    }
+    let applied = DisconnectController().apply(steps)
+    print("\(applied) of \(steps.count) display(s) changed")
+    return applied == steps.count ? 0 : 2
+}
+
+/// Mutate the brightness-model preferences through the single write path.
+@MainActor
+func mutateBrightnessPreferences(_ mutate: (inout BrightnessPreferences) -> Void) {
+    var preferences = Settings.brightnessPreferences
+    mutate(&preferences)
+    Settings.brightnessPreferences = preferences
+}
+
+/// `config model <key> [value]` — read or write one brightness-model value.
+@MainActor
+func cmdConfigModel(_ args: [String]) -> Int32 {
+    let prefs = Settings.brightnessPreferences
+    guard let key = args.first else {
+        return printConfigSummary()
+    }
+    let raw = args.dropFirst().first
+
+    /// Print the current value when no value was supplied.
+    func report(_ text: String) -> Int32 {
+        print("\(key): \(text)")
+        return 0
+    }
+    /// A nits-denominated field.
+    func nits(_ current: Double, _ keyPath: WritableKeyPath<BrightnessPreferences, Double>) -> Int32 {
+        guard let raw else { return report("\(Int(current)) nits") }
+        guard let value = Double(raw), (0...40_000).contains(value) else {
+            print("fbdcli: config model \(key): expected 0-40000 (got '\(raw)')")
+            return 1
+        }
+        mutateBrightnessPreferences { $0[keyPath: keyPath] = value }
+        return report("\(Int(value)) nits")
+    }
+    /// A percentage field.
+    func percent(_ current: Double, _ range: ClosedRange<Double>, _ keyPath: WritableKeyPath<BrightnessPreferences, Double>) -> Int32 {
+        guard let raw else { return report("\(Int(current))%") }
+        guard let value = Double(raw), range.contains(value) else {
+            print("fbdcli: config model \(key): expected \(Int(range.lowerBound))-\(Int(range.upperBound)) (got '\(raw)')")
+            return 1
+        }
+        mutateBrightnessPreferences { $0[keyPath: keyPath] = value }
+        return report("\(Int(value))%")
+    }
+
+    switch key {
+    case "prefer-hardware":
+        guard let raw else { return report(prefs.preferHardwareControl ? "on" : "off") }
+        guard let on = parseOnOffWord(raw) else {
+            print("fbdcli: config model prefer-hardware: expected on or off (got '\(raw)')")
+            return 1
+        }
+        mutateBrightnessPreferences { $0.preferHardwareControl = on }
+        return report(on ? "on" : "off")
+
+    case "hardware-min": return nits(prefs.hardwareMinNits, \.hardwareMinNits)
+    case "hardware-max": return nits(prefs.hardwareMaxNits, \.hardwareMaxNits)
+    case "hdr-sdr-peak": return nits(prefs.hdrPeakSDRNits, \.hdrPeakSDRNits)
+    case "hdr-hdr-peak": return nits(prefs.hdrPeakHDRNits, \.hdrPeakHDRNits)
+
+    case "software-zero": return percent(prefs.softwareZeroPercent, 0...100, \.softwareZeroPercent)
+    case "min-hardware": return percent(prefs.minHardwarePercent, 0...100, \.minHardwarePercent)
+    case "switchover": return percent(prefs.dimmingSwitchoverPercent, 0...100, \.dimmingSwitchoverPercent)
+    case "upscale-max": return percent(prefs.upscaleMaxPercent, 100...1000, \.upscaleMaxPercent)
+
+    case "startup-policy":
+        guard let raw else { return report(prefs.startupControlValuePolicy.rawValue) }
+        let aliases: [String: StartupControlValuePolicy] = [
+            "assume": .assumeLastUsed, "write": .writeToDevice, "read": .readFromDevice,
+        ]
+        guard let policy = StartupControlValuePolicy(rawValue: raw) ?? aliases[raw.lowercased()] else {
+            print("fbdcli: config model startup-policy: expected assume, write or read (got '\(raw)')")
+            return 1
+        }
+        mutateBrightnessPreferences { $0.startupControlValuePolicy = policy }
+        return report(policy.rawValue)
+
+    default:
+        print("fbdcli: config model: unknown key '\(key)'")
+        print("keys: prefer-hardware, hardware-min, hardware-max, hdr-sdr-peak, hdr-hdr-peak, "
+            + "software-zero, min-hardware, switchover, upscale-max, startup-policy")
+        return 1
+    }
 }
