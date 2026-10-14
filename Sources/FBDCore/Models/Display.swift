@@ -145,6 +145,33 @@ public final class Display: ObservableObject, Identifiable {
             method: Settings.displayIdentityMethod
         )
     }
+
+    /// The panel's physical size in millimetres, or nil when it does not report one.
+    ///
+    /// Read straight from `CGDisplayScreenSize` rather than cached from a refresh:
+    /// it is a property of the panel, not of the session, and a stale copy would be a
+    /// second thing to keep in step. Nil — rather than a zero size — for a panel whose
+    /// EDID carries no dimensions, because a zero would make every points-per-mm
+    /// calculation infinite and then match everything to it.
+    public var physicalSizeMM: CGSize? {
+        let size = CGDisplayScreenSize(id)
+        guard size.width > 0, size.height > 0, size.width.isFinite, size.height.isFinite else {
+            return nil
+        }
+        return size
+    }
+
+    /// This display's current GUI scale: logical points per millimetre of panel.
+    ///
+    /// Nil when the panel size is unknown or the current mode is. See
+    /// `UIScaleMatching` for what the number is used for.
+    public var guiScale: Double? {
+        guard let physical = physicalSizeMM, let mode = currentMode else { return nil }
+        return UIScaleMatching.scale(
+            logicalWidth: Double(mode.width),
+            physicalWidthMM: Double(physical.width)
+        )
+    }
 }
 
 extension Display: Hashable {
