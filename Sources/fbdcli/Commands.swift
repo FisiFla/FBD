@@ -1967,6 +1967,16 @@ func cmdTrueTone(args: [String]) -> Int32 {
 /// fire on the controllers' own queues, so no run-loop pumping is needed).
 @MainActor
 func cmdTV(args: [String]) -> Int32 {
+    // A saved device can stand in for `<brand> <host>`, so the common case is
+    // `fbdcli tv living-room volume 20` rather than repeating both every time.
+    // A word that *is* a brand is always read as a brand, so the shorthand can
+    // never shadow the explicit form.
+    var args = args
+    if let first = args.first,
+       NetworkDevice.Brand(rawValue: first.lowercased()) == nil,
+       let device = NetworkDeviceRegistry.device(named: first) {
+        args = [device.brand.rawValue, device.host] + Array(args.dropFirst())
+    }
     switch TVCommandValidation.parse(args) {
     case .failure(let failure):
         print("fbdcli: tv: \(failure.message)")
@@ -2150,6 +2160,7 @@ func printConfigUsage() {
     print("       fbdcli config group-sync <group> <0-100>")
     print("       fbdcli config connections connect-all|disconnect-all-but-main|swap-identical")
     print("       fbdcli config model <key> [value]")
+    print("       fbdcli config device list|add|remove …")
     print("properties: \(ProtectedProperties.ordered.map(\.name).joined(separator: ", "))")
     print("model keys: prefer-hardware, hardware-min, hardware-max, hdr-sdr-peak, hdr-hdr-peak, "
         + "software-zero, min-hardware, switchover, upscale-max, startup-policy")
@@ -2178,6 +2189,7 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "group-sync": return cmdConfigGroupSync(controller, rest)
     case "connections": return cmdConfigConnections(controller, rest)
     case "model": return cmdConfigModel(rest)
+    case "device": return cmdConfigDevice(rest)
     default:
         print("fbdcli: config: unknown subcommand '\(sub)'")
         printConfigUsage()
@@ -2535,6 +2547,69 @@ func cmdConfigModel(_ args: [String]) -> Int32 {
         print("fbdcli: config model: unknown key '\(key)'")
         print("keys: prefer-hardware, hardware-min, hardware-max, hdr-sdr-peak, hdr-hdr-peak, "
             + "software-zero, min-hardware, switchover, upscale-max, startup-policy")
+        return 1
+    }
+}
+
+/// `config device list|add|remove` — the saved TV / AVR registry, so a device
+/// can be addressed by name from `fbdcli tv`.
+@MainActor
+func cmdConfigDevice(_ args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        print("fbdcli: config device: expected list, add or remove")
+        return 1
+    }
+    let rest = Array(args.dropFirst())
+    let brands = NetworkDevice.Brand.allCases.map(\.rawValue).joined(separator: ", ")
+
+    switch sub {
+    case "list":
+        let devices = NetworkDeviceRegistry.list()
+        guard !devices.isEmpty else {
+            print("no saved devices")
+            return 0
+        }
+        for device in devices {
+            let zone = device.zone.map { " zone \($0)" } ?? ""
+            print("\(device.name): \(device.brand.displayName) at \(device.host)\(zone)")
+        }
+        return 0
+
+    case "add":
+        guard rest.count >= 3 else {
+            print("fbdcli: config device add: expected <name> <brand> <host> [zone]")
+            print("brands: \(brands)")
+            return 1
+        }
+        guard let brand = NetworkDevice.Brand(rawValue: rest[1].lowercased()) else {
+            print("fbdcli: config device add: unknown brand '\(rest[1])'")
+            print("brands: \(brands)")
+            return 1
+        }
+        let zone = rest.count > 3 ? rest[3] : nil
+        switch NetworkDeviceRegistry.add(name: rest[0], brand: brand, host: rest[2], zone: zone) {
+        case .success(let device):
+            print("saved \(device.name): \(device.brand.displayName) at \(device.host)")
+            return 0
+        case .failure(let failure):
+            print("fbdcli: config device add: \(failure.message)")
+            return 1
+        }
+
+    case "remove":
+        guard let name = rest.first else {
+            print("fbdcli: config device remove: expected a device name")
+            return 1
+        }
+        guard NetworkDeviceRegistry.remove(named: name) else {
+            print("fbdcli: config device remove: no device named '\(name)'")
+            return 1
+        }
+        print("removed \(name)")
+        return 0
+
+    default:
+        print("fbdcli: config device: expected list, add or remove (got '\(sub)')")
         return 1
     }
 }

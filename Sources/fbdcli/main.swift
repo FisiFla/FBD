@@ -106,6 +106,8 @@ Commands:
                                 lg, samsung, philips, or yamaha; action is
                                 volume <0-100>, power, or input <name>
                                 (requires the device in network/API mode)
+                                A saved device name may replace <brand> <host>:
+                                `fbdcli tv living-room volume 20`
   config [show]                 BetterDisplay-parity settings: per-property
                                 configuration protection, resolution favourites,
                                 lock dimming, the keyboard control target, and
@@ -117,7 +119,7 @@ Commands:
                                 <group> [policy], group-enabled <group> [on|off],
                                 group-sync <group> <0-100>, connections
                                 connect-all|disconnect-all-but-main|swap-identical,
-                                model <key> [value]
+                                model <key> [value], device list|add|remove
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.

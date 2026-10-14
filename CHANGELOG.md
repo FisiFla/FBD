@@ -10,6 +10,18 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **A saved network-device registry.** FBD already had working LG webOS, Samsung,
+  Philips and Yamaha controllers, but reaching one meant repeating the brand and
+  host on every single command and nothing remembered a device between runs.
+  `NetworkDeviceRegistry` stores them (name, brand, host, optional Yamaha zone)
+  through the single settings write path; `fbdcli config device list|add|remove`
+  manages them; and `fbdcli tv <name> …` addresses one by name. A host that could
+  redirect the request — a scheme, path, credentials, query, or a `:port` suffix
+  — is refused when the device is added rather than stored for later.
+- **`fbdcli config` completed**: `group-sync <group> <0-100>`,
+  `connections connect-all|disconnect-all-but-main|swap-identical`, and
+  `model <key> [value]` — the last of which also makes each brightness-model
+  value settable on its own instead of only as one opaque blob.
 - **Per-property configuration protection.** Protection was one opaque blob
   (mode + brightness + preset). It now protects six properties independently —
   resolution, refresh rate, preset, HDR mode, main status and brightness — each
@@ -79,9 +91,7 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 ### Not in this change
 - The menu-bar quick menu was **not** restructured to mirror BetterDisplay's
   grouped layout; only Settings was. Recorded as open.
-- The HTTP API and the Shortcuts intents were not extended to the new surfaces,
-  and `fbdcli` has no command for group *sync apply* or for connection
-  management (both are in the app UI).
+- The HTTP API and the Shortcuts intents were not extended to the new surfaces.
 - No new private API was introduced, so `docs/PRIVATE_APIS.md` does not change.
 
 ## [1.6.0] — 2026-10-04
