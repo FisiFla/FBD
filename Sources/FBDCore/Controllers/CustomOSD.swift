@@ -111,11 +111,7 @@ public final class CustomOSD {
         // (macOS 26+) is the way to sample the backdrop, which is why it is offered as a style
         // rather than applied to everyone. See the Crisp review's rule 9.
         let background: NSView
-        if style.background == .glass, #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView()
-            glass.style = .regular
-            glass.wantsLayer = true
-            glass.layer?.masksToBounds = true
+        if style.background == .glass, let glass = OSDGlass.makeView(cornerRadius: CGFloat(style.cornerRadius)) {
             background = glass
         } else {
             let effectView = NSVisualEffectView()
@@ -174,32 +170,27 @@ public final class CustomOSD {
         window.hasShadow = style.showsShadow
     }
 
-    // MARK: - The macOS 26 glass boundary
+    // MARK: - The glass boundary
     //
-    // `NSGlassEffectView` needs macOS 26 and this package deploys to 13, so the type may not appear
-    // in a signature. These three helpers keep the availability check in one place each and expose
-    // only `Void` and `Bool`, which lets the callers stay unannotated.
+    // `NSGlassEffectView` is macOS 26+ and does not exist in older SDKs, so it is reached through
+    // `OSDGlass` rather than named here. These three keep the call sites unannotated.
 
     /// Whether this background is the OS's glass.
     private func isGlass(_ background: NSView) -> Bool {
-        if #available(macOS 26.0, *) {
-            return background is NSGlassEffectView
-        }
-        return false
+        OSDGlass.isGlass(background)
     }
 
     /// Set the glass corner radius, where the background is glass.
     private func applyGlassCornerRadius(_ radius: CGFloat, to background: NSView) {
-        if #available(macOS 26.0, *), let glass = background as? NSGlassEffectView {
-            glass.cornerRadius = radius
-        }
+        guard isGlass(background) else { return }
+        OSDGlass.setCornerRadius(radius, on: background)
     }
 
-    /// Put the SwiftUI content inside the background: in the glass's `contentView`, which the header
-    /// guarantees is placed inside the effect, and as a plain subview otherwise.
+    /// Put the SwiftUI content inside the background: in the glass's `contentView`, which is where it
+    /// is guaranteed to be placed, and as a plain subview otherwise.
     private func install(_ hostingView: NSView, in background: NSView) {
-        if #available(macOS 26.0, *), let glass = background as? NSGlassEffectView {
-            glass.contentView = hostingView
+        if isGlass(background) {
+            OSDGlass.setContent(hostingView, in: background)
         } else {
             background.addSubview(hostingView)
         }
