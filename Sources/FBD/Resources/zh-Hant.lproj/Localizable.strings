@@ -272,3 +272,14 @@
 "%lld display%@" = "%lld 台顯示器";
 "%lldpx" = "%lld像素";
 
+/* 自動化：模型自帶的 label/token 保持英文（FBD_EVENT_LABEL 會交給 Shell 規則，屬於指令稿契約），
+   因此由介面依列舉分支查表 */
+"display connected" = "顯示器已連接";
+"display disconnected" = "顯示器已中斷連接";
+"system sleep" = "系統睡眠";
+"system wake" = "系統喚醒";
+"run manually" = "手動執行";
+"shell" = "Shell";
+"url" = "URL";
+"notify" = "通知";
+

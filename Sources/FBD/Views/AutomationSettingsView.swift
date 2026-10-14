@@ -73,8 +73,23 @@ struct AutomationSettingsView: View {
                 .controlSize(.small)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("\(scopeLabel(rule)) · \(rule.event.label) · \(rule.kind.token)")
-                        .font(.callout)
+                    // Three views rather than one interpolated string: composing them into a single
+                    // Text would look up a format key ("%@ · %@ · %@") that has no literal text in it,
+                    // which nothing can verify and no translator can meaningfully reorder.
+                    HStack(spacing: 4) {
+                        switch scopeLabel(rule) {
+                        case .anyDisplay:
+                            Text("Any display")
+                        case .named(let name):
+                            // A display's name is the user's own data, so it is shown verbatim.
+                            Text(verbatim: name)
+                        }
+                        Text("·").foregroundStyle(.secondary)
+                        Text(eventLabel(rule.event))
+                        Text("·").foregroundStyle(.secondary)
+                        Text(kindLabel(rule.kind))
+                    }
+                    .font(.callout)
                     Text(rule.payload)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
@@ -135,13 +150,13 @@ struct AutomationSettingsView: View {
                 .labelsHidden()
                 Picker("Event", selection: $event) {
                     ForEach(AutomationEvent.allCases, id: \.self) { option in
-                        Text(option.label).tag(option)
+                        Text(eventLabel(option)).tag(option)
                     }
                 }
                 .labelsHidden()
                 Picker("Action", selection: $kind) {
                     ForEach(AutomationActionKind.allCases, id: \.self) { option in
-                        Text(option.token).tag(option)
+                        Text(kindLabel(option)).tag(option)
                     }
                 }
                 .labelsHidden()
@@ -188,9 +203,43 @@ struct AutomationSettingsView: View {
 
     /// Name the rule's display where it is still connected, otherwise fall back
     /// to the stored identity (which is all a disconnected display leaves).
-    private func scopeLabel(_ rule: AutomationRule) -> String {
-        guard !rule.displayIdentityKey.isEmpty else { return "Any display" }
-        return displays.first { $0.identityKey == rule.displayIdentityKey }?.name
-            ?? rule.displayIdentityKey
+    /// The rule's scope, as a value rather than a string: the placeholder is a key, while a display's
+    /// name is the user's own data and has to be shown as it is.
+    private enum ScopeLabel {
+        case anyDisplay
+        case named(String)
+    }
+
+    private func scopeLabel(_ rule: AutomationRule) -> ScopeLabel {
+        guard !rule.displayIdentityKey.isEmpty else { return .anyDisplay }
+        return .named(
+            displays.first { $0.identityKey == rule.displayIdentityKey }?.name
+                ?? rule.displayIdentityKey
+        )
+    }
+
+    /// The event as the UI shows it.
+    ///
+    /// A `switch` here rather than `event.label`: that property is also handed to shell rules as
+    /// `FBD_EVENT_LABEL`, which is a **script contract** — a rule matching on "display connected"
+    /// would break the moment someone ran FBD in another language. The model keeps its English
+    /// accessor; only the UI localises.
+    private func eventLabel(_ event: AutomationEvent) -> LocalizedStringKey {
+        switch event {
+        case .displayConnected: return "display connected"
+        case .displayDisconnected: return "display disconnected"
+        case .systemSleep: return "system sleep"
+        case .systemWake: return "system wake"
+        case .manual: return "run manually"
+        }
+    }
+
+    /// Likewise for the action kind, whose `token` is the spelling the CLI accepts.
+    private func kindLabel(_ kind: AutomationActionKind) -> LocalizedStringKey {
+        switch kind {
+        case .shellScript: return "shell"
+        case .url: return "url"
+        case .notification: return "notify"
+        }
     }
 }

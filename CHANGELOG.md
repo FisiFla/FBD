@@ -54,8 +54,9 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   now fixed rather than accepted: the check understands format keys and verifies their literal
   segments, so the interpolated strings are localised too — `%lld nits`, `%lld Hz`, `%lld display%@`
   and `%lldpx`, 240 keys per language. The Chinese forms drop the English plural, which is why a
-  translation may omit a placeholder. What remains English is what a model supplies (the automation
-  row's labels) and numbers with no words in them. Two things worth
+  translation may omit a placeholder. What remains English is numbers with no words in them, and the
+  automation model's own `label`/`token` — those stay English on purpose, because `FBD_EVENT_LABEL`
+  hands them to shell rules as a script contract, so the UI maps those cases itself. Two things worth
   recording — `Sources/FBD/Resources` is `exclude`d from the SwiftPM target (which is why Info.plist
   lives there and is copied by hand), so the `.lproj` directories have to be copied by the Makefile;
   and `CFBundleLocalizations` must **not** sit alongside real `.lproj` directories, because it made
