@@ -438,7 +438,10 @@ struct DisplaySectionsView: View {
                         ),
                         in: range,
                         accessibilityLabel: "XDR upscale target for \(display.name)",
-                        valueText: { "\(Int($0.rounded())) nits" }
+                        // A closure returning a String is verbatim, so this one has to look its own
+                        // text up — `String(localized:)` uses the same `%lld nits` key SwiftUI
+                        // generates for the interpolated `Text` sites.
+                        valueText: { String(localized: "\(Int($0.rounded())) nits") }
                     )
                     Text("\(Int(upscaleTargetNits)) nits")
                         .font(.caption)

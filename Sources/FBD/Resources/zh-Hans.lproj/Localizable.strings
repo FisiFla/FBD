@@ -265,3 +265,9 @@
 "Menu settings" = "菜单设置";
 "Keyboard settings" = "键盘设置";
 "About settings" = "关于设置";
+
+/* 插值字符串：SwiftUI 会把它们编译为格式键，因此这里是运行时生成的写法 */
+"%lld nits" = "%lld 尼特";
+"%lld Hz" = "%lld Hz";
+"%lld display%@" = "%lld 台显示器";
+"%lldpx" = "%lld像素";

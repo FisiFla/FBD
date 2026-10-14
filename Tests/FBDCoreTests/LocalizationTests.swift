@@ -112,11 +112,8 @@ final class LocalizationTests: XCTestCase {
     /// it is dead weight that hides the fact that a string was renamed. Keys are literal English
     /// text, so "used" means the literal appears somewhere in the app's sources.
     ///
-    /// This check is also why interpolated strings are deliberately **not** in the .strings files:
-    /// SwiftUI turns `Text("\(nits) nits")` into the format key `%lld nits`, which never appears
-    /// verbatim in the source, so an entry for it would be rejected here. Keeping the check strict
-    /// is worth more than those strings: it is what makes a typo in a key fail loudly instead of
-    /// silently falling back to English.
+    /// Format keys (what an interpolated string compiles to) are checked through their literal
+    /// segments instead — see `literalSegments`, which the test below pins.
     func testEveryKeyStillExistsInTheSource() throws {
         var source = ""
         for file in try FileManager.default.subpaths(atPath: packageRoot.appendingPathComponent("Sources/FBD").path) ?? [] {
@@ -128,9 +125,56 @@ final class LocalizationTests: XCTestCase {
 
         for key in try parse(stringsURL("en")).keys {
             XCTAssertTrue(
-                source.contains("\"\(key)\""),
+                sourceUses(key, in: source),
                 "no call site uses \"\(key)\" any more — the key has drifted"
             )
         }
+    }
+
+    /// The helper the source check leans on for format keys: they are split on their placeholders so
+    /// each literal word between them can still be looked for. A key with *no* placeholder yields
+    /// nothing, which is how `sourceUses` tells the two kinds apart.
+    func testFormatKeysAreSplitIntoTheirLiteralSegments() {
+        XCTAssertEqual(LocalizationTests.literalSegments(of: "%lld nits"), ["nits"])
+        XCTAssertEqual(LocalizationTests.literalSegments(of: "%lld display%@"), ["display"])
+        XCTAssertEqual(LocalizationTests.literalSegments(of: "%@ · %@ · %@"), ["·", "·"])
+        XCTAssertEqual(LocalizationTests.literalSegments(of: "General"), [])
+    }
+
+    /// Whether the app's sources still use `key`.
+    ///
+    /// A plain key *is* the literal text, so it has to appear verbatim. A **format** key is what
+    /// SwiftUI makes of an interpolated string — `Text("\(nits) nits")` looks up `%lld nits` — so it
+    /// never appears verbatim; for those, each literal segment between placeholders must still appear.
+    /// That keeps the guard meaningful (renaming `nits` to `dots` in the source stops the segment
+    /// being found) without pretending an interpolated string is spelled out somewhere.
+    private func sourceUses(_ key: String, in source: String) -> Bool {
+        if source.contains("\"\(key)\"") { return true }
+        let segments = Self.literalSegments(of: key)
+        guard !segments.isEmpty else { return false }
+        return segments.allSatisfy { source.contains($0) }
+    }
+
+    /// The literal text between a format key's placeholders, ignoring whitespace-only runs. Empty for
+    /// a key with no placeholder, which is what `sourceUses` needs to tell the two apart.
+    static func literalSegments(of key: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"%(@|lld|ld|d|\.\d+f|f|u|%)"#) else {
+            return []
+        }
+        let whole = NSRange(key.startIndex..., in: key)
+        let matches = regex.matches(in: key, range: whole)
+        guard !matches.isEmpty else { return [] }
+
+        var segments: [String] = []
+        var last = key.startIndex
+        for match in matches {
+            guard let range = Range(match.range, in: key) else { continue }
+            let raw = String(key[last..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            if !raw.isEmpty { segments.append(raw) }
+            last = range.upperBound
+        }
+        let tail = String(key[last...]).trimmingCharacters(in: .whitespaces)
+        if !tail.isEmpty { segments.append(tail) }
+        return segments
     }
 }
