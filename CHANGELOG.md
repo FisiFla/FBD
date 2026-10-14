@@ -133,6 +133,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   doubles as the capability probe — a display with no ambient-light sensor is
   reported unavailable and exits 2 — and a set is confirmed by reading the state
   back rather than trusting a status code.
+- **The status item's icon is now a choice, and it can hide itself when there is
+  nothing to control.** Settings → Menu → Status item offers a curated set of SF
+  Symbols (each measured to resolve on macOS 27 — the list is closed rather than
+  free text, because a name that fails to resolve would leave a menu-bar app with
+  no button), and an option to hide the icon while no display other than the
+  built-in one is attached. That option is refused unless a Dock icon is enabled:
+  hiding the item with no other way in would strand the user, so the policy fails
+  closed instead. Choosing an icon that cannot be resolved falls back to the
+  default rather than leaving the button blank.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom
