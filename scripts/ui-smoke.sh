@@ -50,12 +50,34 @@ fi
 
 # --- 1. Open the panel via the status item ---------------------------------
 step "status-item click opens the panel"
-STATE=$($DRIVER panel-state)
-if [ "$STATE" != "none" ]; then
-    # Close whatever is open first for a clean start.
-    $DRIVER key 53 >/dev/null 2>&1
-    sleep 1
+
+# Start from a *verified* closed panel. This matters: statusSweep starts at
+# x=1710 and returns as soon as any panel is open, so a stale panel makes it
+# report a click that never touched the status item — step 1 then passes while
+# the panel is on an unknown page, and every later AX lookup fails for reasons
+# that look like an app bug. Escape first, then fall back to the panel's own
+# close button, and refuse to continue if the panel will not close.
+close_any_panel() {
+    local tries=0 frame
+    while [ "$($DRIVER panel-state)" != "none" ] && [ "$tries" -lt 5 ]; do
+        frame=$($DRIVER ax-frame "Close FBD panel" 2>/dev/null) || frame=""
+        if [ -n "$frame" ]; then
+            IFS=, read -r CX CY _ _ <<<"$frame"
+            $DRIVER click "$((CX + 14))" "$((CY + 14))" >/dev/null
+        else
+            $DRIVER key 53 >/dev/null 2>&1
+        fi
+        sleep 1
+        tries=$((tries + 1))
+    done
+}
+close_any_panel
+
+if [ "$($DRIVER panel-state)" != "none" ]; then
+    echo "FATAL: panel still open (state '$($DRIVER panel-state)') — refusing to test a stale panel"
+    exit 1
 fi
+
 if [ -n "$STATUS_X_OVERRIDE" ]; then
     FOUND_X=$STATUS_X_OVERRIDE
     $DRIVER click "$FOUND_X" 12 >/dev/null
@@ -120,7 +142,7 @@ else
 fi
 
 # --- 3. Gear opens Settings (panel grows) ----------------------------------
-step "gear opens Settings (460x860)"
+step "gear opens Settings (760x860)"
 GEAR=$($DRIVER ax-frame "Settings" 2>/dev/null) || GEAR=""
 if [ -z "$GEAR" ]; then
     bad "gear not found via AX"
