@@ -200,6 +200,18 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   Mirroring is deliberately not implemented and has no stored flag — ADR-0001 records
   that a virtual screen cannot be addressed as a display, so a flag nothing could
   apply would be the dead configuration this codebase has had to remove twice.
+- **GUI scale matching — and the physical-size data it needed.** `CGDisplayScreenSize`
+  reports a real panel size (344×222 mm for this machine's built-in display), so the row
+  carried as blocked on "reliable physical sizes" was blocked on nobody having called
+  it. `Display` now exposes that size and the GUI scale it implies — logical points per
+  millimetre, which is what determines how large the interface actually looks — and
+  `UIScaleMatching` picks, for each display, the mode whose scale is closest to a
+  reference. Two things are deliberate: distance is *relative*, so 5→6 and 6→5 are
+  equally far apart, and the choice fails closed — if no mode gets within tolerance
+  nothing changes, because moving every window on a display without achieving the match
+  is worse than leaving it alone. `fbdcli config uiscale` reports each display's scale
+  and what it would do, and toggles the setting; it reports rather than applies, since a
+  resolution change moves every open window.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom

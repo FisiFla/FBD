@@ -51,6 +51,8 @@ public enum Settings {
         add("brightnessPreferences", debugBrightnessPreferences)
         add("launchAtLogin", launchAtLogin)
         add("keepAwakeEnabled", keepAwakeEnabled)
+        add("uiScaleMatchingEnabled", uiScaleMatchingEnabled)
+        add("uiScaleMatchingTolerancePercent", uiScaleMatchingTolerancePercent)
         add("showRosettaWarning", showRosettaWarning)
         add("httpAPIToken", "****")
         add("tvLGClientKey", "****")
@@ -379,6 +381,18 @@ public enum Settings {
     /// which is why the toggle is app-side rather than in `fbdcli`.
     @Storage(key: "keepAwakeEnabled", defaultValue: false)
     public static var keepAwakeEnabled: Bool
+
+    /// Match the GUI scale across a group's displays, by choosing the mode whose
+    /// points-per-millimetre is closest to the reference display's. Off by default:
+    /// it changes resolution, which moves every window on the display.
+    @Storage(key: "uiScaleMatchingEnabled", defaultValue: false)
+    public static var uiScaleMatchingEnabled: Bool
+
+    /// How close counts as matched, as a percentage. 2% is a couple of hundredths of a
+    /// point per millimetre at typical scales — below what the eye resolves across a
+    /// desk, so a display inside it is left alone rather than moved for nothing.
+    @Storage(key: "uiScaleMatchingTolerancePercent", defaultValue: 2.0)
+    public static var uiScaleMatchingTolerancePercent: Double
 
     /// Show DDC-unavailable warning banner in the menu.
     @Storage(key: "showRosettaWarning", defaultValue: true)

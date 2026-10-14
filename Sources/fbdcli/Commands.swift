@@ -2376,6 +2376,7 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "identity": return cmdConfigIdentity(rest)
     case "transfer": return cmdConfigTransfer(controller, args: rest)
     case "vscreen": return cmdConfigVirtualScreen(controller, args: rest)
+    case "uiscale": return cmdConfigUIScale(controller, args: rest)
     default:
         print("fbdcli: config: unknown subcommand '\(sub)'")
         printConfigUsage()
@@ -2398,6 +2399,104 @@ func printConfigSummary() -> Int32 {
         + "startup=\(prefs.startupControlValuePolicy.rawValue)")
     print("configuration protection: \(Settings.configProtectionEnabled ? "on" : "off")")
     return 0
+}
+
+/// `config uiscale [on|off|show]` — report and switch GUI-scale matching.
+///
+/// `show` prints what each display's interface actually measures, in points per
+/// millimetre, and what would be applied to bring the others into line with the
+/// reference. It **reports** rather than applies: a resolution change moves every
+/// open window on that display, so it is asked for rather than happening as a side
+/// effect of asking what the scales are.
+///
+/// The physical size comes from `CGDisplayScreenSize`. The gap matrix carried this row
+/// as blocked on "reliable physical sizes"; that API returns a real figure for the
+/// built-in panel (344×222 mm), so the row was blocked on nobody having looked. A panel
+/// that reports no size is reported as unknown and skipped rather than guessed at.
+@MainActor
+func cmdConfigUIScale(_ controller: DisplayController, args: [String]) -> Int32 {
+    if let first = args.first {
+        switch first {
+        case "on", "off":
+            Settings.uiScaleMatchingEnabled = (first == "on")
+            print("ui scale matching = \(first)")
+            return 0
+        case "show":
+            break
+        default:
+            print("fbdcli: config uiscale: expected on, off or show (got '\(first)')")
+            return 1
+        }
+    }
+
+    let tolerance = max(Settings.uiScaleMatchingTolerancePercent, 0) / 100
+    print("ui scale matching: \(Settings.uiScaleMatchingEnabled ? "on" : "off")"
+        + ", tolerance \(Settings.uiScaleMatchingTolerancePercent)%")
+
+    let displays = controller.displays.filter { !$0.isVirtual }
+    guard let reference = displays.first(where: { $0.guiScale != nil }), let target = reference.guiScale else {
+        print("no display reports a physical size — nothing to match against")
+        return 1
+    }
+    print(String(format: "reference: %@ at %.4f points/mm", reference.name, target))
+
+    for display in displays {
+        let size = display.physicalSizeMM
+        let sizeText = size.map { String(format: "%.0f×%.0f mm", $0.width, $0.height) } ?? "size unknown"
+        var line = "  \(display.name) [\(display.id)] \(sizeText)"
+        guard let scale = display.guiScale, let size else {
+            line += " — skipped, no scale"
+            print(line)
+            continue
+        }
+        let plan = UIScaleMatching.plan(
+            target: target,
+            current: uiScaleCandidate(for: display),
+            candidates: uiScaleCandidates(for: display, physicalWidthMM: size.width),
+            tolerance: tolerance
+        )
+        switch plan {
+        case .alreadyMatched:
+            line += String(format: " — %.4f points/mm, matched", scale)
+        case .changeTo(let candidate):
+            line += String(format: " — %.4f points/mm, would switch to \(Int(candidate.logicalWidth)) points wide", scale)
+        case .noCandidate:
+            line += String(format: " — %.4f points/mm, no mode gets within tolerance", scale)
+        }
+        print(line)
+    }
+    return 0
+}
+
+/// The display's current mode reduced for the scale choice, or nil when its scale
+/// cannot be read.
+@MainActor
+private func uiScaleCandidate(for display: Display) -> UIScaleMatching.Candidate? {
+    guard let mode = display.currentMode, let physical = display.physicalSizeMM,
+          let scale = UIScaleMatching.scale(
+              logicalWidth: Double(mode.width), physicalWidthMM: physical.width
+          ) else {
+        return nil
+    }
+    return UIScaleMatching.Candidate(
+        modeID: mode.modeNumber, logicalWidth: Double(mode.width), scale: scale
+    )
+}
+
+/// Every offered mode reduced for the scale choice, dropping the ones whose scale
+/// cannot be computed.
+@MainActor
+private func uiScaleCandidates(for display: Display, physicalWidthMM: Double) -> [UIScaleMatching.Candidate] {
+    display.modes.compactMap { mode in
+        guard let scale = UIScaleMatching.scale(
+            logicalWidth: Double(mode.width), physicalWidthMM: physicalWidthMM
+        ) else {
+            return nil
+        }
+        return UIScaleMatching.Candidate(
+            modeID: mode.modeNumber, logicalWidth: Double(mode.width), scale: scale
+        )
+    }
 }
 
 /// `config vscreen list|associate|disassociate|apply` — associate a virtual screen
