@@ -471,11 +471,23 @@ separate commit on the same branch.
 
   **Verification, stated honestly.** `OSDStyleTests` (8 cases) covers the defaults, clamping including
   non-finite values, idempotence, the round-trip through an injected suite, and that saving clamps what is
-  stored. Build clean, `make ui-smoke` 5/5. But the HUD's *on-screen* rendering was **not** verified in this
-  session: the `fbdcli osd` path needs the app's HTTP API, which was switched off, so the probe reported no
-  window and I am recording that rather than claiming the smoke check the gap matrix asks for. The controls
-  are reachable from Settings → Application, so the style is not a dead setting, but no one has looked at
-  the HUD with a segmented bar or an adaptive background yet.
+  stored. Build clean, `make ui-smoke` 5/5. The HUD **does** render, and this was confirmed — by timing the
+  command rather than by looking at pixels: `cmdOSD` waits `while osd.isVisible` (up to 1.5 s), so a showing
+  HUD makes `fbdcli osd` take ~1.4 s while the baseline `fbdcli list` takes 0.09 s, and a value refused
+  before `show` (`osd sun.max 999`) returns in 0.10 s. `isVisible` is `window?.isVisible`, so that run is
+  the CLI's own evidence that the window was on screen.
+
+  Two earlier attempts to verify this were both wrong, and both were instrument errors rather than missing
+  evidence. The first probed `UIDriver windows`, which filters on `CGWindowOwnerName == "FBD"` — but
+  `fbdcli osd` builds its own `CustomOSD` and shows it **in the CLI process**, so the HUD is owned by
+  `fbdcli` and that filter could never see it. (I then wrote "needs the HTTP API" into this log and a commit
+  message, which was simply false: `cmdOSD` never touches the API.) The second captured the whole screen and
+  asked which frames differed from a baseline; every frame differed, because a menu-bar clock and other
+  windows change constantly, so the test could not fail. A check that cannot fail is worth nothing — the
+  same lesson as the `defaults read` truncation earlier in this session.
+
+  The individual *style variations* — a segmented bar, an adaptive background, the three other positions —
+  are still unobserved. The render path and the default style are confirmed; nobody has looked at the rest.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
