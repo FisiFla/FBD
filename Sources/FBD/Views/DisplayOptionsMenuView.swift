@@ -60,7 +60,9 @@ struct DisplayOptionsMenuView: View {
 
         // Display Mode
         Menu("Display Mode") {
-            ForEach(display.modes, id: \.self) { mode in
+            // Offered modes, not the raw list: the options come from Settings, so
+            // "Allow unsafe modes" changes what appears here too.
+            ForEach(display.offeredModes, id: \.self) { mode in
                 Button {
                     DisplayController.shared.applyMode(mode, to: display)
                 } label: {

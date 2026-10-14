@@ -6,6 +6,80 @@ import XCTest
 /// helpers. Deterministic — no display, no WindowServer, no defaults.
 final class ModeBreadthTests: XCTestCase {
 
+    // MARK: - The stored options ("Allow unsafe modes")
+
+    /// That setting exists to reveal modes the safety filter would drop. Before this
+    /// it was written by the Settings page and read by nothing, so it changed nothing
+    /// while appearing to work.
+    func testUnsafeModesAreHiddenUnlessTheSettingAllowsThem() {
+        let safe = makeMode(number: 1, width: 1920, height: 1080)
+        let risky = makeMode(number: 2, width: 1920, height: 1080, safe: false)
+
+        XCTAssertEqual(
+            ModeFavourites.filter(
+                [safe, risky], options: .offered(allowingUnsafeModes: false), nativeAspect: nil
+            ).map(\.modeNumber),
+            [1]
+        )
+        XCTAssertEqual(
+            ModeFavourites.filter(
+                [safe, risky], options: .offered(allowingUnsafeModes: true), nativeAspect: nil
+            ).map(\.modeNumber),
+            [1, 2]
+        )
+    }
+
+    /// A degenerate mode — zero or negative dimensions — is "unsafe or invalid", so the
+    /// same switch governs it.
+    func testDegenerateModesFollowTheSafetySwitch() {
+        let degenerate = makeMode(number: 3, width: 0, height: 0)
+        XCTAssertTrue(
+            ModeFavourites.filter(
+                [degenerate], options: .offered(allowingUnsafeModes: false), nativeAspect: nil
+            ).isEmpty
+        )
+        XCTAssertEqual(
+            ModeFavourites.filter(
+                [degenerate], options: .offered(allowingUnsafeModes: true), nativeAspect: nil
+            ).map(\.modeNumber),
+            [3]
+        )
+    }
+
+    /// The regression guard that matters, and the one a live run caught: `standard`'s
+    /// conservative view hides *mixed* modes, and mixed modes are what macOS's scaled
+    /// ("More Space") resolutions are — six of them on this machine. Wiring that view
+    /// into the offered list silently removed resolutions people could previously pick,
+    /// which is not what "Allow unsafe modes" means.
+    func testTheOfferedListStillOffersMixedModesThatTheStandardViewHides() {
+        let mixed = makeMode(
+            number: 4, width: 1920, height: 1200,
+            pixelsWide: 2880, pixelsHigh: 1800, hiDPI: true
+        )
+        XCTAssertTrue(ModeFavourites.isMixed(mixed), "the fixture must actually be a mixed mode")
+
+        XCTAssertTrue(ModeFavourites.filter([mixed], options: .standard, nativeAspect: nil).isEmpty)
+        XCTAssertEqual(
+            ModeFavourites.filter([mixed], options: .offered(allowingUnsafeModes: false), nativeAspect: nil)
+                .map(\.modeNumber),
+            [4]
+        )
+    }
+
+    /// Only the safety switch differs between the two offered-list variants, so wiring
+    /// the setting cannot have loosened anything else on the way.
+    func testTheOfferedListTurnsOffOnlyTheSafetySwitch() {
+        let stricter = ModeFilterOptions.offered(allowingUnsafeModes: false)
+        let looser = ModeFilterOptions.offered(allowingUnsafeModes: true)
+        XCTAssertFalse(stricter.showUnsafeOrInvalid)
+        XCTAssertTrue(looser.showUnsafeOrInvalid)
+        XCTAssertTrue(stricter.showMixedModes)
+        XCTAssertTrue(stricter.includeBelow720p)
+        XCTAssertTrue(stricter.includeAbove8K)
+        XCTAssertTrue(stricter.alwaysShowHiDPI)
+        XCTAssertFalse(stricter.onlyNativeAspect)
+    }
+
     private func makeMode(
         number: Int32 = 1,
         width: Int32,

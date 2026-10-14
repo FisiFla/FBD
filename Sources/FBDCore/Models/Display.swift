@@ -172,6 +172,18 @@ public final class Display: ObservableObject, Identifiable {
             physicalWidthMM: Double(physical.width)
         )
     }
+
+    /// The modes to offer for this display: the raw list filtered by the stored
+    /// mode-list options.
+    ///
+    /// Everything that *lists* modes goes through this, so "Allow unsafe modes"
+    /// actually changes what is offered — before this, the filter existed, the setting
+    /// existed, and nothing joined them. The pickers that resolve an explicit request
+    /// (`setRefreshRate`, `applyFavourite`) still work from `modes`: they answer a
+    /// specific ask rather than presenting a choice to pick from.
+    public var offeredModes: [DisplayMode] {
+        ModeFavourites.filter(modes, options: .fromSettings, nativeAspect: nil)
+    }
 }
 
 extension Display: Hashable {

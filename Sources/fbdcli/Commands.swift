@@ -568,12 +568,19 @@ func cmdCaps(_ controller: DisplayController, display: Display) -> Int32 {
 /// `fbdcli modes <id>` — one line per mode: resolution@hz, HiDPI, safe, current.
 @MainActor
 func cmdModes(_ display: Display) -> Int32 {
-    guard !display.modes.isEmpty else {
+    // The offered list rather than the raw one, so the mode-list options are visible
+    // here too and the CLI cannot disagree with the panel about what is offerable.
+    let offered = display.offeredModes
+    guard !offered.isEmpty else {
         print("no modes reported for display \(display.id)")
         return 2
     }
+    let hidden = display.modes.count - offered.count
+    if hidden > 0 {
+        print("\(hidden) mode(s) hidden by the mode-list options (\"Allow unsafe modes\" is off)")
+    }
     let currentNumber = display.currentMode?.modeNumber
-    for mode in display.modes {
+    for mode in offered {
         let hidpi = mode.isHiDPI ? "hidpi" : "sdr"
         let safe = mode.isSafe ? "safe" : "unsafe"
         let current = mode.modeNumber == currentNumber ? "  current" : ""

@@ -85,7 +85,7 @@ struct DisplaySectionsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(display.modes, id: \.self) { mode in
+                ForEach(display.offeredModes, id: \.self) { mode in
                     Button {
                         DisplayController.shared.applyMode(mode, to: display)
                     } label: {

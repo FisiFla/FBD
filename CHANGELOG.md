@@ -237,6 +237,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 - `fbdcli help` documents `config`.
 
 ### Fixed
+- **"Allow unsafe modes" did nothing; now it does.** The setting was written by the
+  Settings page and read by nobody — every mode list came straight from the raw list — so
+  the switch changed nothing while appearing to work. The offered list now runs through
+  `ModeFilterOptions` (`Display.offeredModes`) in the panel's Display Mode menu, the
+  per-display sections and `fbdcli modes`, which also reports how many modes it hid. Every
+  other filter rule is deliberately left permissive: `standard`'s view hides the scaled
+  ("mixed") resolutions macOS itself provides — six on this machine — so wiring that view
+  in wholesale would have silently removed resolutions people could pick. That regression
+  is what the live before/after count caught, and there is a test for it now.
 - **Settings → Back discarded a resized panel.** Going back restored a hard-coded
   460×650, so a panel the user had widened snapped back to 460pt wide (the saved
   frame on this author's machine is 535pt). The size the panel had when Settings

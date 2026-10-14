@@ -131,6 +131,31 @@ public struct ModeFilterOptions: Equatable {
 
     /// The default desktop view: safe, ≥720p, ≤8K, HiDPI kept, mixed hidden.
     public static let standard = ModeFilterOptions()
+
+    /// The options for the mode list FBD **offers** — the panel's mode menu, the
+    /// per-display sections and `fbdcli modes`.
+    ///
+    /// Only the safety switch is driven by a preference, because it is the only one with
+    /// a setting behind it. Every other rule is left permissive **on purpose**: they have
+    /// no setting, and `standard`'s conservative view quietly stops offering the scaled
+    /// ("mixed") resolutions macOS itself provides — measured on this machine, six of
+    /// them. A filter with nothing behind it must not change what people can pick.
+    public static func offered(allowingUnsafeModes allowed: Bool) -> ModeFilterOptions {
+        ModeFilterOptions(
+            showMixedModes: true,
+            showUnsafeOrInvalid: allowed,
+            includeBelow720p: true,
+            includeAbove8K: true,
+            alwaysShowHiDPI: true,
+            onlyNativeAspect: false
+        )
+    }
+
+    /// The offered-list options in force right now — one mapping, so the panel and the
+    /// CLI cannot disagree about what "Allow unsafe modes" means.
+    public static var fromSettings: ModeFilterOptions {
+        .offered(allowingUnsafeModes: Settings.allowUnsafeInvalidModes)
+    }
 }
 
 // MARK: - Favourites, filters and rates
