@@ -95,12 +95,14 @@ final class CombinedBrightnessTests: XCTestCase {
     private var savedCombined: Bool!
     private var savedSoftware: Bool!
     private var savedTarget: Int!
+    private var savedPreferences: BrightnessPreferences!
 
     override func setUp() {
         super.setUp()
         savedCombined = Settings.combinedBrightnessEnabled
         savedSoftware = Settings.softwareUpscalingEnabled
         savedTarget = Settings.xdrUpscaleTargetNits
+        savedPreferences = Settings.brightnessPreferences
         apple = FakeApple()
         ddc = FakeDDC()
         xdr = FakeXDR()
@@ -136,6 +138,9 @@ final class CombinedBrightnessTests: XCTestCase {
         Settings.combinedBrightnessEnabled = true
         Settings.softwareUpscalingEnabled = true
         Settings.xdrUpscaleTargetNits = 1600
+        // Reset the model profile so every case starts from the shipped
+        // default; tests that exercise a profile set it explicitly.
+        Settings.brightnessPreferences = .standard
     }
 
     override func tearDown() {
@@ -144,6 +149,7 @@ final class CombinedBrightnessTests: XCTestCase {
         Settings.combinedBrightnessEnabled = savedCombined
         Settings.softwareUpscalingEnabled = savedSoftware
         Settings.xdrUpscaleTargetNits = savedTarget
+        Settings.brightnessPreferences = savedPreferences
         super.tearDown()
     }
 
@@ -251,5 +257,73 @@ final class CombinedBrightnessTests: XCTestCase {
         XCTAssertTrue(module.setTarget(300, on: display))
         XCTAssertEqual(xdr.lastTarget, 300)
         XCTAssertTrue(display.isXDRUpscaled)
+    }
+
+    // MARK: - Brightness-model preferences (BetterDisplay parity)
+
+    func testDefaultEffectivePreferencesIsStandard() {
+        XCTAssertEqual(module.effectivePreferences, .standard)
+    }
+
+    func testInjectedStandardPreferencesReproduceLegacyRoute() {
+        let injected = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay, preferences: .standard
+        )
+
+        XCTAssertTrue(injected.set(0.2, on: display))
+
+        // Identical to the no-preferences route: 0.2 × 1600 = 320 nits stays
+        // under the 500-nit ceiling, so it writes hardware.
+        XCTAssertEqual(apple.lastWrite, 0.64, accuracy: 0.001)
+        XCTAssertEqual(xdr.writeCalls, 0)
+    }
+
+    func testInjectedProfileCapsHardwareCeiling() {
+        // hardwareMaxNits 250 < the display's 500 → 0.2 × 1600 = 320 nits now
+        // exceeds the ceiling, so the route tilts to native upscaling.
+        let injected = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(hardwareMaxNits: 250)
+        )
+
+        XCTAssertTrue(injected.set(0.2, on: display))
+
+        XCTAssertEqual(xdr.lastTarget, 320)
+        XCTAssertTrue(display.isXDRUpscaled)
+    }
+
+    func testInjectedProfileCapsTopAtHDRPeak() {
+        // hdrPeakHDRNits 800 caps the combined top to 800 nits, so 0.8 ⇒ 640.
+        let injected = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(hdrPeakHDRNits: 800)
+        )
+
+        XCTAssertTrue(injected.set(0.8, on: display))
+
+        XCTAssertEqual(xdr.lastTarget, 640)
+    }
+
+    func testStoredPreferencesFeedTheRoute() {
+        Settings.brightnessPreferences = BrightnessPreferences(hardwareMaxNits: 250)
+
+        // A module with no injected profile must pick up the stored one.
+        let stored = CombinedBrightness(apple: apple, ddc: ddc, xdr: xdr, overlay: overlay)
+        XCTAssertEqual(stored.effectivePreferences.hardwareMaxNits, 250)
+
+        XCTAssertTrue(stored.set(0.2, on: display))
+        XCTAssertEqual(xdr.lastTarget, 320)
+    }
+
+    func testSetTargetUsesInjectedPreferencesHDRPeakCap() {
+        // An explicit 1200-nit target is capped to the profile's 800-nit peak.
+        let injected = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(hdrPeakHDRNits: 800)
+        )
+
+        XCTAssertTrue(injected.setTarget(1200, on: display))
+
+        XCTAssertEqual(xdr.lastTarget, 800)
     }
 }

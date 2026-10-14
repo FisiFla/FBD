@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// What (if anything) to do with a hardware media-key event.
@@ -102,5 +103,60 @@ public enum MediaKeyRouter {
             targetHasDDC: targetHasDDC,
             systemVolumeAvailable: false
         ).action
+    }
+
+    /// A resolved press: the existing routing `Decision` plus the display id(s)
+    /// the key should act on. Additive — the BetterDisplay "which screen do the
+    /// media keys target" parity lives here, leaving `decide`/`route` untouched.
+    public struct RoutedPress: Equatable {
+        public let decision: Decision
+        /// The display id(s) the key applies to, in resolve order.
+        public let displayIDs: [CGDirectDisplayID]
+
+        public init(decision: Decision, displayIDs: [CGDirectDisplayID]) {
+            self.decision = decision
+            self.displayIDs = displayIDs
+        }
+    }
+
+    /// Resolve which display(s) the keys act on from an injected candidate list
+    /// (`KeyboardControlResolver`), then apply the existing routing decision for
+    /// that display. The candidates are injected so the whole path is testable
+    /// without a live display. Additive: the existing `decide`/`route` entry
+    /// points are unchanged.
+    public static func resolve(
+        keyCode: Int32,
+        interceptEnabled: Bool,
+        target: KeyboardControlTarget,
+        candidates: [ScreenCandidate],
+        mouseLocation: CGPoint,
+        focusedDisplayID: CGDirectDisplayID?,
+        audioDeviceName: String?,
+        systemVolumeAvailable: Bool
+    ) -> RoutedPress {
+        // Which capability the key needs decides which candidates are eligible.
+        let requiresVolume = keyCode == 0 || keyCode == 1 || keyCode == 7
+
+        let displayIDs = KeyboardControlResolver.resolve(
+            target: target,
+            candidates: candidates,
+            mouseLocation: mouseLocation,
+            focusedDisplayID: focusedDisplayID,
+            audioDeviceName: audioDeviceName,
+            requiresVolume: requiresVolume
+        )
+
+        // The primary display the key landed on carries the control path.
+        let primary = displayIDs.first.flatMap { id in
+            candidates.first { $0.displayID == id }
+        }
+        let decision = decide(
+            keyCode: keyCode,
+            interceptEnabled: interceptEnabled,
+            targetHasControlPath: primary.map { $0.supportsBrightness || $0.supportsVolume } ?? false,
+            targetHasDDC: primary?.supportsVolume ?? false,
+            systemVolumeAvailable: systemVolumeAvailable
+        )
+        return RoutedPress(decision: decision, displayIDs: displayIDs)
     }
 }

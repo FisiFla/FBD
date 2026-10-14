@@ -63,18 +63,31 @@ public final class CombinedBrightness {
     private let ddc: DDCControlling
     private let xdr: XDRUpscaling
     private let overlay: OverlayControlling
+    /// Optional injected brightness-model profile. `nil` (the default) means
+    /// "use the stored global preferences" — see `effectivePreferences`.
+    private let injectedPreferences: BrightnessPreferences?
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "CombinedBrightness")
+
+    /// The brightness-model profile the route decision runs under: the
+    /// injected profile when one was supplied, otherwise the stored global
+    /// preferences (`Settings.brightnessPreferences`, itself `.standard` when
+    /// unset). Passing `.standard` (or nothing) reproduces the legacy route.
+    public var effectivePreferences: BrightnessPreferences {
+        injectedPreferences ?? Settings.brightnessPreferences
+    }
 
     public init(
         apple: AppleControlling,
         ddc: DDCControlling,
         xdr: XDRUpscaling,
-        overlay: OverlayControlling
+        overlay: OverlayControlling,
+        preferences: BrightnessPreferences? = nil
     ) {
         self.apple = apple
         self.ddc = ddc
         self.xdr = xdr
         self.overlay = overlay
+        self.injectedPreferences = preferences
     }
 
     // MARK: - Interface
@@ -112,7 +125,8 @@ public final class CombinedBrightness {
             maxNits: top,
             hardwareMaxNits: hardwareMax,
             nativeAvailable: xdr.isAvailable(for: display),
-            softwareEnabled: Settings.softwareUpscalingEnabled
+            softwareEnabled: Settings.softwareUpscalingEnabled,
+            preferences: effectivePreferences
         ) {
         case .hardware(let fraction):
             if display.isXDRUpscaled {
@@ -157,7 +171,8 @@ public final class CombinedBrightness {
             nits: nits,
             hardwareMaxNits: hardwareMax,
             nativeAvailable: xdr.isAvailable(for: display),
-            softwareEnabled: Settings.softwareUpscalingEnabled
+            softwareEnabled: Settings.softwareUpscalingEnabled,
+            preferences: effectivePreferences
         ) {
         case .nativeUpscale(let target):
             if xdr.setUpscaleTarget(target, for: display) {
