@@ -391,6 +391,21 @@ separate commit on the same branch.
 
   Verified live: it prints, exports to a file, appears in `fbdcli help`, and an unwritable path reports the
   failure and exits 1 rather than failing silently. FBDCoreTests 702.
+- **The menu-bar panel is flattened** — the last UI/IA parity piece the Phase 5 revamp left out.
+  `DisplayRowView` inlined everything (header, slider, Filters, DDC, Resolutions/XDR, the disable row), so a
+  single display filled most of a 650pt panel and a multi-display Mac could not see its displays at once,
+  which is the one thing the panel exists for.
+
+  The row now shows a title line (icon, name, capability badges, mode, ⋯ menu, power) plus an inline
+  brightness slider carrying its nits value, and folds the rest behind one **More controls** disclosure.
+  Nothing was dropped, and that was checked *before* restructuring rather than after: the ⋯ menu already
+  covered mode, refresh, colour, presets, favourites, mirror, PiP, rotation, disable and Open in Settings, so
+  the fold could not strand a control. Filters, DDC and the resolution/XDR sections remain one click away,
+  and the same content is unfolded in Settings → Displays.
+
+  Verified: build clean, `make ui-smoke` 5/5, the panel's AX tree reports no overlapping text, and the
+  brightness slider is still discoverable by the smoke harness. Captured and inspected before committing,
+  because this changes the primary surface.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a

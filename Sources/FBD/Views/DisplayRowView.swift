@@ -25,27 +25,18 @@ struct DisplayRowView: View {
     @State private var xdrSyncRequest = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             header
             BrightnessSliderView(display: display)
-            disclosureSection(icon: "slider.horizontal.3", title: "Filters") {
-                FilterControlsView(display: display)
+            // The detail is folded away by default. The panel is the *quick*
+            // surface, but with every section open one display filled most of a
+            // 650pt panel — so a multi-display Mac could not see its displays at
+            // once, which is the one thing the panel exists for. Nothing is lost:
+            // every control stays one click away, and the same content is unfolded
+            // in Settings → Displays.
+            disclosureSection(icon: "ellipsis.circle", title: "More controls") {
+                detail
             }
-            if display.ddcAvailable {
-                DDCPanelView(display: display, refreshRequest: ddcRefreshRequest)
-            } else {
-                // Without this the section simply was not there, which reads as a
-                // bug rather than "this display has no DDC/CI".
-                Text("This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            DisplaySectionsView(
-                display: display,
-                refreshTick: $refreshTick,
-                xdrSyncRequest: xdrSyncRequest
-            )
-            disableRow
         }
         .padding(12)
         .fbdCard()
@@ -56,6 +47,31 @@ struct DisplayRowView: View {
                 xdrSyncRequest += 1
             }
         }
+    }
+
+    /// Everything in the row that is not a quick control. Kept as one block so the
+    /// panel can fold it without the *contents* drifting from what a roomier
+    /// surface shows.
+    @ViewBuilder
+    private var detail: some View {
+        disclosureSection(icon: "slider.horizontal.3", title: "Filters") {
+            FilterControlsView(display: display)
+        }
+        if display.ddcAvailable {
+            DDCPanelView(display: display, refreshRequest: ddcRefreshRequest)
+        } else {
+            // Without this the section simply was not there, which reads as a
+            // bug rather than "this display has no DDC/CI".
+            Text("This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        DisplaySectionsView(
+            display: display,
+            refreshTick: $refreshTick,
+            xdrSyncRequest: xdrSyncRequest
+        )
+        disableRow
     }
 
     // MARK: - Header
