@@ -457,7 +457,9 @@ struct ApplicationSettingsPage: View {
                     Stepper(value: int(Settings.ddcCooldownMilliseconds) { Settings.ddcCooldownMilliseconds = max(0, $0) }, in: 0...10_000, step: 100) {
                         Text("\(Settings.ddcCooldownMilliseconds) ms").monospacedDigit()
                     }
+                    .accessibilityElement(children: .combine)
                     .accessibilityLabel("DDC/CI cooldown")
+                    .accessibilityValue("\(Settings.ddcCooldownMilliseconds) milliseconds")
                 }
             } header: {
                 Label("DDC / CI", systemImage: "cable.connector")
@@ -472,7 +474,9 @@ struct ApplicationSettingsPage: View {
                     Stepper(value: int(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort) { Settings.httpServerPort = $0 }, in: 1024...65535) {
                         Text("\(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort)").monospacedDigit()
                     }
+                    .accessibilityElement(children: .combine)
                     .accessibilityLabel("HTTP port")
+                    .accessibilityValue("\(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort)")
                 }
                 Toggle("Custom OSD", isOn: bool(Settings.customOSDEnabled) { Settings.customOSDEnabled = $0 })
                 Text("Shows a brightness HUD when the display brightness changes.")
@@ -562,25 +566,33 @@ struct ApplicationSettingsPage: View {
                 Stepper(value: doublePref(\.hardwareMinNits, step: 1, range: 0...40_000), in: 0...40_000, step: 1) {
                     Text("\(Int(Settings.brightnessPreferences.hardwareMinNits)) nits").monospacedDigit()
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel("Hardware minimum")
+                .accessibilityValue("\(Int(Settings.brightnessPreferences.hardwareMinNits)) nits")
             }
             SettingsRow(title: "Hardware maximum", caption: "Peak brightness in nits when the hardware control is at its maximum.") {
                 Stepper(value: doublePref(\.hardwareMaxNits, step: 50, range: 0...40_000), in: 0...40_000, step: 50) {
                     Text("\(Int(Settings.brightnessPreferences.hardwareMaxNits)) nits").monospacedDigit()
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel("Hardware maximum")
+                .accessibilityValue("\(Int(Settings.brightnessPreferences.hardwareMaxNits)) nits")
             }
             SettingsRow(title: "HDR peak SDR", caption: "Peak SDR brightness in HDR mode.") {
                 Stepper(value: doublePref(\.hdrPeakSDRNits, step: 50, range: 0...40_000), in: 0...40_000, step: 50) {
                     Text("\(Int(Settings.brightnessPreferences.hdrPeakSDRNits)) nits").monospacedDigit()
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel("HDR peak SDR")
+                .accessibilityValue("\(Int(Settings.brightnessPreferences.hdrPeakSDRNits)) nits")
             }
             SettingsRow(title: "HDR peak HDR", caption: "Peak HDR brightness.") {
                 Stepper(value: doublePref(\.hdrPeakHDRNits, step: 50, range: 0...40_000), in: 0...40_000, step: 50) {
                     Text("\(Int(Settings.brightnessPreferences.hdrPeakHDRNits)) nits").monospacedDigit()
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel("HDR peak HDR")
+                .accessibilityValue("\(Int(Settings.brightnessPreferences.hdrPeakHDRNits)) nits")
             }
 
             SettingsSliderRow(
@@ -648,7 +660,9 @@ struct ApplicationSettingsPage: View {
                 Stepper(value: int(Settings.xdrUpscaleTargetNits) { Settings.xdrUpscaleTargetNits = $0 }, in: 100...1600, step: 100) {
                     Text("\(Settings.xdrUpscaleTargetNits) nits").monospacedDigit()
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel("XDR upscale target")
+                .accessibilityValue("\(Settings.xdrUpscaleTargetNits) nits")
             }
         } header: {
             Label("XDR / HDR", systemImage: "sun.max.trianglebadge.exclamationmark")
