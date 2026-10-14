@@ -8,7 +8,7 @@ Free, MIT-licensed macOS menu-bar app for display control (BetterDisplay parity)
 > only project-level instructions file; `CONTEXT.md` carries the domain
 > glossary, `docs/agents/*.md` the engineering-skill wiring, and
 > `docs/PRIVATE_APIS.md` the private-API ledger.
-Repo: https://github.com/FisiFla/FBD (private).
+Repo: https://github.com/FisiFla/FBD — public, MIT.
 
 ## Commands
 
