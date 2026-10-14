@@ -217,13 +217,32 @@ public final class HotkeyController {
             case .display:
                 for display in targetDisplays {
                     let controls = displayController.readDDCControls(for: display)
+                    // The value the display was moved *to*, so an attached device can
+                    // follow it without re-reading the display.
+                    var routedVolume: Double?
                     switch action {
                     case .volumeUp:
-                        displayController.setVolume(min((controls.volume ?? 0.5) + step, 1.0), on: display)
+                        let value = min((controls.volume ?? 0.5) + step, 1.0)
+                        displayController.setVolume(value, on: display)
+                        routedVolume = value
                     case .volumeDown:
-                        displayController.setVolume(max((controls.volume ?? 0.5) - step, 0.0), on: display)
+                        let value = max((controls.volume ?? 0.5) - step, 0.0)
+                        displayController.setVolume(value, on: display)
+                        routedVolume = value
                     default:
                         displayController.setMuted(controls.muted == false, on: display)
+                    }
+                    // A display with a TV or AVR attached drives that device too —
+                    // which is what attaching one means. Fire and forget: a media
+                    // key press must not block on a network round trip, and the
+                    // device reports its own failures through its controller.
+                    if let routedVolume,
+                       let device = NetworkDeviceAttachment.device(forDisplay: display.identityKey) {
+                        Self.deviceCommander.setVolume(
+                            percent: NetworkDeviceVolume.percent(fromDisplayVolume: routedVolume),
+                            on: device,
+                            completion: nil
+                        )
                     }
                     NotificationCenter.default.post(
                         name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id]
@@ -249,6 +268,10 @@ public final class HotkeyController {
         return displays.first { $0.bounds.equalTo(frame) }?.id
             ?? displays.first { $0.bounds.intersects(frame) }?.id
     }
+
+    /// Sends an attached network device's volume. Static so a media-key press does
+    /// not build a controller each time; `NetworkDeviceCommander` holds no state.
+    private static let deviceCommander = NetworkDeviceCommander()
 }
 
 /// Global C callback for CGEventTap media key events.

@@ -437,6 +437,27 @@ separate commit on the same branch.
   Verified live: adding a notification rule no longer crashes, a manual shell control runs and prints its
   output, running a notification rule from the CLI is refused with the reason, and unknown tokens name the
   valid ones (derived from the enums, so they cannot go stale). FBDCoreTests 715.
+- **Gap-matrix row #17 — network devices as display controllers.** A saved device can now be attached to a
+  display, and follows that display's volume when the media keys drive it. The attachment is keyed by the
+  display's **identity** rather than its id, so a reconnect that renumbers the display keeps it — the same
+  reason favourites are keyed that way.
+
+  Two properties are deliberate rather than incidental. An attachment to a device that is not in the
+  registry is **refused**: storing one would leave a reference the user cannot see and make the Settings
+  list claim a device that is not there. And deleting a device afterwards leaves the attachment *reported*
+  as dangling rather than silently resolving to nothing, because silence where the user expected a device
+  reads as a bug.
+
+  Philips is the honest exception. Its controller pairs with a PIN the user reads off the TV, and that
+  pairing does not outlive the controller instance — so a fire-and-forget volume send from a media key
+  cannot complete it. `NetworkDeviceCommander` reports unsupported for that brand instead of appearing to
+  work, and pairing a Philips set stays an explicit `fbdcli tv philips` action. The Yamaha controller also
+  has no zone concept, so a stored zone is not sent.
+
+  Verified live: attaching, listing, refusing an unsaved device, detaching, detaching again (reported), and
+  full cleanup back to "no saved devices" / "no attachments". `NetworkDeviceAttachmentTests` (9 cases)
+  covers persistence through the injected suite, replacement, dangling detection, corrupt data, and the
+  0…1 → 0…100 volume mapping with its clamping. FBDCoreTests 724.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
