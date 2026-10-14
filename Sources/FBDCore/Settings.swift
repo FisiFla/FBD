@@ -43,6 +43,10 @@ public enum Settings {
         add("autoApplyEDIDOverride", autoApplyEDIDOverride)
         add("restoreFactoryEDIDOnQuit", restoreFactoryEDIDOnQuit)
         add("configProtectionEnabled", configProtectionEnabled)
+        add("lockDimEnabled", lockDimEnabled)
+        add("lockDimTargetPercent", lockDimTargetPercent)
+        add("keyboardControlTarget", keyboardControlTargetRaw)
+        add("brightnessPreferences", debugBrightnessPreferences)
         add("launchAtLogin", launchAtLogin)
         add("showRosettaWarning", showRosettaWarning)
         add("httpAPIToken", "****")
@@ -337,6 +341,75 @@ public enum Settings {
 
     public static func clearDDCFeatures(for identity: String) {
         defaults.removeObject(forKey: "ddcFeatures.\(identity)")
+    }
+
+    // MARK: Keyboard control target (BetterDisplay parity)
+
+    /// Which screen the hardware brightness/volume media keys act on. Persisted
+    /// as the enum's raw string through `defaults`, like every other key. An
+    /// unrecognized stored value degrades to the default rather than trapping.
+    @Storage(key: "keyboardControlTarget", defaultValue: KeyboardControlTarget.default.rawValue)
+    public static var keyboardControlTargetRaw: String
+
+    /// Typed view of `keyboardControlTargetRaw`. The `@Storage` key above is the
+    /// single persisted home; callers use this seam.
+    public static var keyboardControlTarget: KeyboardControlTarget {
+        get { KeyboardControlTarget(rawValue: keyboardControlTargetRaw) ?? .default }
+        set { keyboardControlTargetRaw = newValue.rawValue }
+    }
+
+    // MARK: Lock dim (screensaver / lock)
+
+    /// Dim the display while the screen is locked or the screensaver is up.
+    /// Read/written by `LockDimController` through `defaults`, so the app and
+    /// the CLI share one copy.
+    @Storage(key: "lockDimEnabled", defaultValue: false)
+    public static var lockDimEnabled: Bool
+
+    /// Brightness percentage (0…100) the display dims to while locked. Default
+    /// matches `LockDimPolicy.defaultTargetPercent` — keep the two in sync.
+    @Storage(key: "lockDimTargetPercent", defaultValue: 10)
+    public static var lockDimTargetPercent: Double
+
+    // MARK: Brightness preferences (BetterDisplay-parity model)
+
+    /// Persisted *global* brightness-model preferences (JSON-encoded) — the
+    /// knobs that shape the combined-brightness curve. These describe the
+    /// model, not one monitor, so they are not per-display; they are stored
+    /// through `defaults` (the single write path) like every other setting.
+    ///
+    /// Reads are normalised through `BrightnessPreferences.clamped()`, so a
+    /// hand-edited or legacy blob can never surface an inverted or
+    /// non-finite range; an absent blob yields `.standard`.
+    private static let brightnessPreferencesKey = "brightnessPreferences.v1"
+
+    public static var brightnessPreferences: BrightnessPreferences {
+        get {
+            guard let data = defaults.data(forKey: brightnessPreferencesKey),
+                  let prefs = try? JSONDecoder().decode(BrightnessPreferences.self, from: data) else {
+                return .standard
+            }
+            return prefs.clamped()
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue.clamped()) else { return }
+            defaults.set(data, forKey: brightnessPreferencesKey)
+        }
+    }
+
+    /// Compact one-line rendering of the brightness model for the masked
+    /// settings dump, so a bug report carries the curve's shape without a JSON
+    /// blob.
+    static var debugBrightnessPreferences: String {
+        let p = brightnessPreferences
+        return "preferHardware=\(p.preferHardwareControl ? "on" : "off") "
+            + "hardwareNits=\(Int(p.hardwareMinNits))-\(Int(p.hardwareMaxNits)) "
+            + "hdrPeakNits=\(Int(p.hdrPeakSDRNits))/\(Int(p.hdrPeakHDRNits)) "
+            + "softwareZero=\(Int(p.softwareZeroPercent))% "
+            + "minHardware=\(Int(p.minHardwarePercent))% "
+            + "switchover=\(Int(p.dimmingSwitchoverPercent))% "
+            + "upscaleMax=\(Int(p.upscaleMaxPercent))% "
+            + "startup=\(p.startupControlValuePolicy.rawValue)"
     }
 }
 

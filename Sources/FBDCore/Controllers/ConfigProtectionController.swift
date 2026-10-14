@@ -35,13 +35,23 @@ public final class ConfigProtectionController {
 
     // MARK: - Persistence
 
+    /// Everything configuration protection can record for one display. All
+    /// fields are optional so a blob written by an older FBD (which only had
+    /// mode/brightness/preset) still decodes.
     private struct SavedState: Codable {
         /// CGS mode number of the current mode (nil when none could be read).
         var modeNumber: Int32?
+        /// The saved mode's refresh rate in Hz (used when only `.refreshRate`
+        /// is protected, so the exact mode need not still exist).
+        var refreshRate: Double?
         /// Last known brightness, 0…1 (nil when the display has no control path).
         var brightness: Double?
         /// Active XDR preset index (nil = factory default / non-XDR display).
         var activePresetIndex: Int?
+        /// HDR framebuffer mode state (nil when the display cannot report it).
+        var isHDRModeEnabled: Bool?
+        /// Whether the display was the main display.
+        var isMain: Bool?
     }
 
     /// Same suite selection as Settings: the app bundle's standard domain IS
@@ -56,15 +66,50 @@ public final class ConfigProtectionController {
 
     private func key(for identity: String) -> String { "configProtection.v1.\(identity)" }
 
+    /// Per-display selection key. Lives in the same injected suite and under
+    /// the same `configProtection.` prefix as the saved blob, so the app and
+    /// the CLI (which share the suite) agree on it.
+    private func selectionKey(for identity: String) -> String { "configProtection.properties.\(identity)" }
+
+    // MARK: - Property selection
+
+    /// Which properties protection re-applies for this display. Defaults to
+    /// `ProtectedProperties.legacyDefault` so an existing install behaves
+    /// exactly as before until the user widens the selection.
+    public func protectedProperties(for display: Display) -> ProtectedProperties {
+        let key = selectionKey(for: display.identityKey)
+        guard defaults.object(forKey: key) != nil else { return .legacyDefault }
+        return ProtectedProperties(rawValue: defaults.integer(forKey: key))
+    }
+
+    public func setProtectedProperties(_ properties: ProtectedProperties, for display: Display) {
+        defaults.set(properties.rawValue, forKey: selectionKey(for: display.identityKey))
+    }
+
+    /// The properties that will actually be re-applied: the saved selection
+    /// intersected with what this display currently exposes. This is the
+    /// single derived value both restore and the UI/CLI report, so "what will
+    /// happen" cannot drift between them.
+    public func applicableProperties(for display: Display) -> ProtectedProperties {
+        protectedProperties(for: display).intersection(ProtectedProperties.available(for: display))
+    }
+
     // MARK: - Save / restore
 
-    /// Save the display's current mode (via ResolutionController.currentMode)
-    /// + brightness + active preset index, keyed by identityKey.
+    /// Save the display's current mode + refresh rate + brightness + active
+    /// preset + HDR state + main status, keyed by identityKey. Everything
+    /// observable is recorded; which parts are *re-applied* is decided at
+    /// restore time by the per-display `ProtectedProperties` selection, so
+    /// changing the selection never requires re-saving.
     public func saveCurrentState(for display: Display, resolution: ResolutionController, controller: DisplayController) {
+        let mode = resolution.currentMode(for: display)
         let state = SavedState(
-            modeNumber: resolution.currentMode(for: display)?.modeNumber,
+            modeNumber: mode?.modeNumber,
+            refreshRate: mode?.refreshRate,
             brightness: display.brightness ?? controller.getBrightness(for: display),
-            activePresetIndex: display.activePresetIndex
+            activePresetIndex: display.activePresetIndex,
+            isHDRModeEnabled: display.isHDRModeCapable ? display.isHDRModeEnabled : nil,
+            isMain: CGDisplayIsMain(display.id) != 0
         )
         guard let data = try? JSONEncoder().encode(state) else {
             log.warning("saveCurrentState: encode failed for \(display.identityKey)")
@@ -74,10 +119,15 @@ public final class ConfigProtectionController {
         log.debug("saved config state for \(display.identityKey)")
     }
 
-    /// Re-apply saved state for a display that just (re)appeared: mode first
-    /// (via ResolutionController.applyMode), then the active preset, then
-    /// brightness with a small delay so the mode switch settles first.
+    /// Re-apply the *selected* properties that this display exposes, for a
+    /// display that just (re)appeared: mode first (via
+    /// ResolutionController.applyMode), then the preset, HDR mode and main
+    /// status, then brightness with a small delay so the mode switch settles.
     /// No-op unless Settings.configProtectionEnabled and saved state exists.
+    ///
+    /// A property the user selected but the display no longer exposes is
+    /// skipped rather than forced — every step is individually guarded, so a
+    /// display that lost a capability cannot be driven into an invalid state.
     public func restoreIfNeeded(for display: Display, resolution: ResolutionController, controller: DisplayController) {
         guard Settings.configProtectionEnabled,
               let data = defaults.data(forKey: key(for: display.identityKey)),
@@ -85,17 +135,37 @@ public final class ConfigProtectionController {
             return
         }
 
-        if let modeNumber = state.modeNumber,
-           let mode = resolution.modes(for: display).first(where: { $0.modeNumber == modeNumber }) {
-            resolution.applyMode(mode, to: display)
-            log.info("restored mode \(modeNumber) for \(display.identityKey)")
+        let applicable = applicableProperties(for: display)
+
+        if applicable.contains(.resolution) {
+            if let modeNumber = state.modeNumber,
+               let mode = resolution.modes(for: display).first(where: { $0.modeNumber == modeNumber }) {
+                resolution.applyMode(mode, to: display)
+                log.info("restored mode \(modeNumber) for \(display.identityKey)")
+            }
+        } else if applicable.contains(.refreshRate), let hz = state.refreshRate, hz > 0 {
+            // Only the refresh rate is protected: prefer the saved rate rather
+            // than a specific mode, which need not still be offered.
+            resolution.setRefreshRate(hz, for: display)
+            log.info("restored refresh rate \(hz) for \(display.identityKey)")
         }
 
-        if let index = state.activePresetIndex, display.isXDRCapable, display.presets.indices.contains(index) {
+        if applicable.contains(.preset),
+           let index = state.activePresetIndex,
+           display.isXDRCapable,
+           display.presets.indices.contains(index) {
             controller.selectPreset(index, on: display)
         }
 
-        if let brightness = state.brightness {
+        if applicable.contains(.hdrMode), let enabled = state.isHDRModeEnabled, display.isHDRModeCapable {
+            _ = controller.setHDRMode(enabled, on: display)
+        }
+
+        if applicable.contains(.mainStatus), state.isMain == true, CGDisplayIsMain(display.id) == 0 {
+            _ = controller.setAsMainDisplay(display)
+        }
+
+        if applicable.contains(.brightness), let brightness = state.brightness {
             let displayID = display.id
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 Task { @MainActor in

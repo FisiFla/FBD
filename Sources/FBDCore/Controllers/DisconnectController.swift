@@ -44,6 +44,27 @@ public final class DisconnectController {
         return true
     }
 
+    /// Apply a connection plan (see `ConnectionPlanner`) through the guarded
+    /// `setEnabled` chokepoint — the single place a disconnect is performed.
+    ///
+    /// Every step is attempted in order; a step the built-in-disconnect guard
+    /// (or the OS) refuses is *skipped*, never forced, so a safety refusal
+    /// cannot stall the remaining steps. Returns the number of steps that
+    /// succeeded. Never throws; an unknown or unconnected display degrades to a
+    /// refused step rather than a crash.
+    @discardableResult
+    public func apply(_ steps: [ConnectionStep]) -> Int {
+        var applied = 0
+        for step in steps {
+            if setEnabled(step.enable, displayID: step.displayID) {
+                applied += 1
+            } else {
+                log.debug("connection step skipped: \(step.reason)")
+            }
+        }
+        return applied
+    }
+
     /// Observe display topology; when Settings.autoDisconnectBuiltInOnExternal is on
     /// and an external (non-builtin) display becomes active, disable the built-in.
     public func start() {

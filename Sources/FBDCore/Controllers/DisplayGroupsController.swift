@@ -5,9 +5,12 @@ import os
 /// Display groups: brightness syncing, mirroring, UI-scale matching.
 ///
 /// Groups are persisted as JSON in UserDefaults under "displayGroups.v1"
-/// (id, name, displayIDs). Plain class; callers and notification callbacks run
-/// on the main thread — MainActor-isolated work (DisplayController) is entered
-/// via `MainActor.assumeIsolated` after hopping to the main queue when needed.
+/// (id, name, displayIDs). Each group's sync configuration — the enabled flag,
+/// the activation policy and the source/target member filters — is persisted
+/// per group under "groupSync.v1.<id>.*" (see `GroupSyncStore`). Plain class;
+/// callers and notification callbacks run on the main thread —
+/// MainActor-isolated work (DisplayController) is entered via
+/// `MainActor.assumeIsolated` after hopping to the main queue when needed.
 public final class DisplayGroupsController {
     private static let storageKey = "displayGroups.v1"
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayGroupsController")
@@ -68,6 +71,169 @@ public final class DisplayGroupsController {
         }
         guard group.displayIDs.remove(displayID) != nil else { return }
         save()
+    }
+
+    // MARK: - Sync policy & configuration
+
+    /// Whether the group's brightness sync is enabled. Persisted per group in the
+    /// injected suite; defaults to `true`.
+    public func isEnabled(groupID: String) -> Bool {
+        GroupSyncStore.isEnabled(groupID: groupID, defaults: defaults)
+    }
+
+    public func setEnabled(_ enabled: Bool, forGroup id: String) {
+        GroupSyncStore.setEnabled(enabled, groupID: id, defaults: defaults)
+    }
+
+    /// The group's activation policy. Persisted per group; defaults to `.always`.
+    public func activationPolicy(forGroup id: String) -> GroupActivationPolicy {
+        GroupSyncStore.activationPolicy(groupID: id, defaults: defaults)
+    }
+
+    public func setActivationPolicy(_ policy: GroupActivationPolicy, forGroup id: String) {
+        GroupSyncStore.setActivationPolicy(policy, groupID: id, defaults: defaults)
+    }
+
+    /// Members allowed to act as sync sources (empty = all members).
+    public func syncSourceIDs(forGroup id: String) -> Set<CGDirectDisplayID> {
+        GroupSyncStore.syncSourceIDs(groupID: id, defaults: defaults)
+    }
+
+    public func setSyncSourceIDs(_ ids: Set<CGDirectDisplayID>, forGroup id: String) {
+        GroupSyncStore.setSyncSourceIDs(ids, groupID: id, defaults: defaults)
+    }
+
+    /// Members allowed to act as sync targets (empty = all members).
+    public func syncTargetIDs(forGroup id: String) -> Set<CGDirectDisplayID> {
+        GroupSyncStore.syncTargetIDs(groupID: id, defaults: defaults)
+    }
+
+    public func setSyncTargetIDs(_ ids: Set<CGDirectDisplayID>, forGroup id: String) {
+        GroupSyncStore.setSyncTargetIDs(ids, groupID: id, defaults: defaults)
+    }
+
+    /// Whether virtual screens may take part in the group's sync; defaults to
+    /// `false`.
+    public func includeVirtualScreens(forGroup id: String) -> Bool {
+        GroupSyncStore.includeVirtualScreens(groupID: id, defaults: defaults)
+    }
+
+    public func setIncludeVirtualScreens(_ include: Bool, forGroup id: String) {
+        GroupSyncStore.setIncludeVirtualScreens(include, groupID: id, defaults: defaults)
+    }
+
+    // MARK: - Sync planning
+
+    /// The pure, hardware-free plan for syncing `value` across a group.
+    ///
+    /// Reads the group's persisted sync configuration (enabled flag, activation
+    /// policy, source/target member filters, virtual-screen participation) from
+    /// the injected suite and returns the ordered brightness writes the sync
+    /// would perform — without touching any display. Returns an EMPTY plan when
+    /// the group is unknown, disabled, or its activation policy reports the group
+    /// inactive, so "disabled/inactive is a no-op" is a property of the plan
+    /// itself rather than of the write loop.
+    ///
+    /// `ceilingNits` supplies each display's native ceiling; the planner never
+    /// reads hardware itself.
+    public func syncPlan(
+        inGroup id: String,
+        value: Double,
+        connectedIDs: Set<CGDirectDisplayID>,
+        virtualDisplayIDs: Set<CGDirectDisplayID> = [],
+        referenceDisplayID: CGDirectDisplayID? = nil,
+        matchBrightnessInNits: Bool = true,
+        ceilingNits: (CGDirectDisplayID) -> Int = { _ in 0 }
+    ) -> GroupSyncPlan {
+        guard let group = groups.first(where: { $0.id == id }) else {
+            log.warning("syncPlan: no group with id \(id)")
+            return GroupSyncPlan(writes: [])
+        }
+        guard isEnabled(groupID: group.id) else {
+            log.debug("syncPlan: group \(id) is disabled — no-op")
+            return GroupSyncPlan(writes: [])
+        }
+        let sources = syncSourceIDs(forGroup: group.id)
+        let targets = syncTargetIDs(forGroup: group.id)
+        let policy = activationPolicy(forGroup: group.id)
+        guard policy.isActive(
+            memberIDs: group.displayIDs,
+            connectedIDs: connectedIDs,
+            syncSourceIDs: sources,
+            syncTargetIDs: targets
+        ) else {
+            log.debug("syncPlan: group \(id) inactive under '\(policy.rawValue)' — no-op")
+            return GroupSyncPlan(writes: [])
+        }
+
+        let members = group.displayIDs.sorted()
+        let sourceID: CGDirectDisplayID?
+        if let reference = referenceDisplayID, members.contains(reference) {
+            sourceID = reference
+        } else {
+            sourceID = members.first
+        }
+        let ceilings = Dictionary(uniqueKeysWithValues: members.map { ($0, ceilingNits($0)) })
+        let request = GroupSyncRequest(
+            members: members,
+            connectedIDs: connectedIDs,
+            syncSourceIDs: sources,
+            syncTargetIDs: targets,
+            virtualDisplayIDs: virtualDisplayIDs,
+            includeVirtualScreens: includeVirtualScreens(forGroup: group.id),
+            sourceDisplayID: sourceID,
+            sourceCeilingNits: sourceID.map { ceilings[$0] ?? 0 },
+            targetCeilingNits: ceilings,
+            value: value,
+            matchBrightnessInNits: matchBrightnessInNits
+        )
+        return GroupSyncPlanner.plan(request)
+    }
+
+    /// Compute the group's sync plan and apply it through the brightness seam
+    /// (`DisplayController.setBrightness`), returning the number of displays
+    /// actually written.
+    ///
+    /// A no-op returning 0 when the group is disabled, when its activation policy
+    /// reports it inactive, or when no member is connected — the plan is empty in
+    /// each case (see `syncPlan`). Writes go straight to the controller and never
+    /// back through this method, so a sync cannot re-trigger itself.
+    @discardableResult
+    public func applyGroupSync(
+        _ value: Double,
+        inGroup id: String,
+        controller: DisplayController,
+        referenceDisplayID: CGDirectDisplayID? = nil,
+        matchBrightnessInNits: Bool = true
+    ) -> Int {
+        let apply: @MainActor () -> Int = { [self] in
+            let connectedIDs = Set(controller.displays.map { $0.id })
+            let virtualDisplayIDs = Set(controller.displays.filter { $0.isVirtual }.map { $0.id })
+            let ceilings = Dictionary(
+                uniqueKeysWithValues: controller.displays.map { ($0.id, controller.hardwareCeilingNits(for: $0)) }
+            )
+            let plan = self.syncPlan(
+                inGroup: id,
+                value: value,
+                connectedIDs: connectedIDs,
+                virtualDisplayIDs: virtualDisplayIDs,
+                referenceDisplayID: referenceDisplayID,
+                matchBrightnessInNits: matchBrightnessInNits,
+                ceilingNits: { ceilings[$0] ?? 0 }
+            )
+            var written = 0
+            for write in plan.writes {
+                guard let display = controller.display(withID: write.displayID) else { continue }
+                if controller.setBrightness(write.value, on: display) {
+                    written += 1
+                }
+            }
+            return written
+        }
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated(apply)
+        }
+        return DispatchQueue.main.sync { MainActor.assumeIsolated(apply) }
     }
 
     /// Apply the same brightness (0…1) to every display in the group via `controller`.

@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import FBDCore
 
@@ -76,5 +77,107 @@ final class MediaKeyRouterTests: XCTestCase {
             targetHasControlPath: control,
             targetHasDDC: ddc
         )
+    }
+
+    // MARK: - BetterDisplay target resolution (additive)
+
+    private func candidate(
+        id: CGDirectDisplayID,
+        frame: CGRect = CGRect(x: 0, y: 0, width: 100, height: 100),
+        brightness: Bool = true,
+        volume: Bool = true,
+        main: Bool = false
+    ) -> ScreenCandidate {
+        ScreenCandidate(
+            displayID: id,
+            name: "Display",
+            frame: frame,
+            supportsBrightness: brightness,
+            supportsVolume: volume,
+            isMain: main,
+            isOnline: true
+        )
+    }
+
+    private func resolve(
+        key: Int32,
+        target: KeyboardControlTarget = .mouseScreen,
+        candidates: [ScreenCandidate],
+        mouse: CGPoint = CGPoint(x: 50, y: 50),
+        systemVolume: Bool = false
+    ) -> MediaKeyRouter.RoutedPress {
+        MediaKeyRouter.resolve(
+            keyCode: key,
+            interceptEnabled: true,
+            target: target,
+            candidates: candidates,
+            mouseLocation: mouse,
+            focusedDisplayID: nil,
+            audioDeviceName: nil,
+            systemVolumeAvailable: systemVolume
+        )
+    }
+
+    func testResolveBrightnessActsOnTheMouseScreen() {
+        let press = resolve(key: brightnessUp, candidates: [candidate(id: 1, main: true)])
+        XCTAssertEqual(press.decision.action, .brightnessUp)
+        XCTAssertEqual(press.displayIDs, [1])
+    }
+
+    func testResolveVolumeUsesTheDisplayWhenItSupportsVolume() {
+        let press = resolve(key: soundUp, candidates: [candidate(id: 1, volume: true)])
+        XCTAssertEqual(press.decision.action, .volumeUp)
+        XCTAssertEqual(press.decision.volumeTarget, .display)
+        XCTAssertEqual(press.displayIDs, [1])
+    }
+
+    func testResolveVolumeFallsBackToTheSystemWhenTheDisplayHasNoVolume() {
+        let press = resolve(key: soundUp, candidates: [candidate(id: 1, volume: false)], systemVolume: true)
+        XCTAssertEqual(press.decision.action, .volumeUp)
+        XCTAssertEqual(press.decision.volumeTarget, .system)
+    }
+
+    func testResolveVolumeWithNoPathAtAllPassesThrough() {
+        let press = resolve(key: soundUp, candidates: [candidate(id: 1, volume: false)], systemVolume: false)
+        XCTAssertEqual(press.decision.action, .none)
+    }
+
+    func testResolveUnknownKeyPassesThrough() {
+        XCTAssertEqual(resolve(key: 99, candidates: [candidate(id: 1)]).decision.action, .none)
+    }
+
+    func testResolveEmptyCandidatesPassesThrough() {
+        let press = resolve(key: brightnessUp, candidates: [])
+        XCTAssertEqual(press.decision.action, .none)
+        XCTAssertEqual(press.displayIDs, [])
+    }
+
+    func testResolveHonoursInterceptionDisabled() {
+        let press = MediaKeyRouter.resolve(
+            keyCode: brightnessUp,
+            interceptEnabled: false,
+            target: .mouseScreen,
+            candidates: [candidate(id: 1)],
+            mouseLocation: CGPoint(x: 50, y: 50),
+            focusedDisplayID: nil,
+            audioDeviceName: nil,
+            systemVolumeAvailable: false
+        )
+        XCTAssertEqual(press.decision.action, .none)
+    }
+
+    func testResolveRoutesToTheFocusedScreen() {
+        let press = MediaKeyRouter.resolve(
+            keyCode: brightnessUp,
+            interceptEnabled: true,
+            target: .focusedScreen,
+            candidates: [candidate(id: 1), candidate(id: 2, frame: CGRect(x: 200, y: 0, width: 100, height: 100))],
+            mouseLocation: CGPoint(x: 50, y: 50),
+            focusedDisplayID: 2,
+            audioDeviceName: nil,
+            systemVolumeAvailable: false
+        )
+        XCTAssertEqual(press.displayIDs, [2])
+        XCTAssertEqual(press.decision.action, .brightnessUp)
     }
 }
