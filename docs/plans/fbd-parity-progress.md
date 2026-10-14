@@ -300,6 +300,31 @@ separate commit on the same branch.
   hands the controller a plain dictionary lookup, so no DDC traffic happens off a button press.
   `DisplayGroupsSyncValueTests` (7 cases) covers all six nil paths and the source-selection rule.
   FBDCoreTests 656.
+- **Fixed: the UI smoke gate could pass without testing anything — and it was not an app bug.** `make ui-smoke`
+  began failing 4/5 deterministically and read exactly like a regression from the Phase 5 Settings rewrite. It
+  was not. The gate passed 5/5 with `--status-x`, and no app code was at fault; the defect was entirely in
+  the gate's step 1.
+
+  `statusSweep` starts its sweep at x=1710 and returns as soon as *any* panel is open. So when a previous run
+  left a panel open, the sweep reported `FOUND_X=1710` — a click that never touched the status item (which
+  sits at 1534). Step 1 then reported **PASS** while the panel was on an unknown page, and every later
+  accessibility lookup failed in a way that looks precisely like the app having lost its controls. The script
+  pressed Escape first but never verified the panel had actually closed, so nothing caught it.
+
+  Step 1 now starts from a *verified* closed panel — Escape, then the panel's own `Close FBD panel` button as
+  a fallback — and refuses to continue rather than test a stale panel. Verified from all three states that
+  mattered: a clean running app, a panel deliberately left open on Settings (the state that produced 4/5), and
+  a fresh launch with the app killed beforehand. **5/5 in each.**
+
+  Two things I asserted while diagnosing this were wrong, recorded here so nobody repeats them:
+
+  - `panelState()` keys on panel **height** (`height >= 800 ? "settings" : "main"`), not the 460 width. The
+    760×860 Settings size introduced in Phase 5 was never involved.
+  - `Back to FBD` was never missing from the app. It is not on the main page — it belongs to the Settings
+    page, which is exactly where the gate looks for it, and where it is found (step 4 passes).
+
+  Both claims came from reading the script's step *labels* rather than the code behind them: `(460x860)` is
+  descriptive text, not an assertion. The stale label has been corrected to `(760x860)`.
 
 
 
