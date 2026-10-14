@@ -66,6 +66,58 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 
 | `SLSSetDisplayRotation(cid, displayID, rotation)` + `SLDisplayRotation` | ⚠️ **declared + wired (UI + `fbdcli rotate`), returns status 1001 for the built-in on macOS 27** — graceful failure; external-display check pending | SkyLightAPI / DisplayController / rotation submenu |
 
+## DisplayPort link / DPCD / DSC — located 2026-10-14 (gap-matrix row #24, reports row #30)
+
+Row #24 was blocked on *identifying* these symbols. They are **all exported by the public
+`IOKit.framework`**, so they are reached exactly like the `IOAVService*` set already declared
+above — the same linkage, no `dlopen`, no ObjC runtime.
+
+Names were read from the SDK stub (`$(xcrun --show-sdk-path)/System/Library/Frameworks/IOKit.framework/IOKit.tbd`
+— `.tbd` files are plain-text symbol lists), then each was confirmed against the **running** OS with
+`dlsym`, because an SDK stub only proves the SDK knew the name. Probe: `dlopen` IOKit + `dlsym` per
+name on macOS 27.0.1 → **49 of 55 resolved**. Also present in the MacOSX26.5 and MacOSX27.0 stubs,
+so this is not a one-release API.
+
+**Read-only getters — the subset row #24 should use.** None of these write to the sink or put
+anything on the AUX channel:
+
+| Symbol | Serves |
+|---|---|
+| `IODPDeviceGetRevisionMajor` / `GetRevisionMinor` | decoded DPCD revision |
+| `IODPLinkBandwidth`, `IODPVideoBandwidth`, `IODPLinkRateScalar` | link bandwidth |
+| `IODPLinkRateEnum`, `IODPLinkRateIsStandard`, `IODPLinkRateIsUHBR` | link rate, incl. UHBR |
+| `IODPDeviceGetMaxLaneCount` / `GetMaxLinkRate`, `IODPControllerGetMin/MaxLaneCount` | capability limits |
+| `IODPDeviceGetLinkTrainingData`, `IODPDeviceGetSymbolErrorCount`, `IODPServiceGetSymbolErrorCount` | link health |
+| `IODPDeviceGetSupportsDownspread`, `GetSupportsEnhancedMode` | sink capability flags |
+| `IODPDeviceReadDPCD` | raw DPCD reads (the AUX path row #24 names) |
+| `IOAVServiceGetLinkData` / `GetLinkDataWithSource`, `IOAVVideoInterfaceGetLinkData` | link data off the AVService |
+| `IOAVVideoInterfaceCopyDisplayAttributes`, `IOAVServiceCopyProperties` / `CopyProperty` | already-parsed property dictionaries |
+| `IOAVDSCCapabilitiesGetMaxSlicesPerLine`, `IOAVDSCCapabilitiesGetPeakPixelRateForMode`, `IOAVDSCModeForPixelEncoding`, `IOAVVideoColorMinimumBitsPerPixelDSC` (+ `kIOAVDSCCapabilitiesNone` / `kIOAVDSCHintsNone` / `kIOAVDSCParametersNone`) | DSC capability + PPS inputs |
+
+`IOAVServiceGetDevice` walks AVService → Device; `IODPDeviceGetAVDevice` / `GetController` walk back.
+Entry points are `IODPDeviceCreateWithService` / `IODPServiceCreateWithService` /
+`IODPPortCreateWithService`, taking the same `IOService` the DDC path already finds.
+`IOAVCopyFirstMatchingIOAVObjectOfType` and `IODPDeviceGetService` do **not** exist (probed), so
+discovery must stay on service matching.
+
+**Deliberately not used — these drive the link, and a wrong value can wedge the only attached
+display:** `IODPDeviceWriteDPCD`, `IODPControllerSetLaneCount` / `SetLinkRate` / `SetMin*` / `SetMax*` /
+`SetDriveSettings` / `SetScramblingInhibited` / `SetQualityPattern` / `SetSupports*`,
+`IODPServiceRetrainLink`, `IOAVServiceRetrainFRL` / `SetFRLMaxRate` / `SetFRLMinRate` /
+`SetFRLRecovery`. All of them resolve on macOS 27.0.1 — resolving is not permission to call them.
+
+**Tiling has no symbol.** `IODPDeviceGetTiling`, `IOAVVideoLinkTiling` and `IOAVDisplayTiling` all
+fail to resolve, and nothing matching `tiling` appears in the tbd. That facet is reachable only by
+decoding raw DPCD over AUX via `IODPDeviceReadDPCD` — a different, and here untested, job.
+
+**Outstanding unknown — signatures.** The tbd yields names, not prototypes, and the on-disk framework
+is `Resources` + `_CodeSignature` only (the code lives in the dyld shared cache), so a disassembly
+pass needs that image extracted from the cache first. Until then, treat only the prototypes already
+declared in `fbd_private_api.h` as known. **Nothing in this section has been *called*** — every claim
+is symbol resolution. Per the row's own plan, the pure DPCD/DSC byte parsers should land first: they
+are unit-testable with no hardware and no AUX traffic, which is where most of the value and the risk
+sit.
+
 ## Notes
 
 - **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch
