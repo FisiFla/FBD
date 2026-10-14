@@ -133,13 +133,41 @@ public final class HotkeyController {
         let displays = displayController.displays
         guard !displays.isEmpty else { return false }
 
-        // Target the display under the mouse cursor, or the primary non-builtin display if any exists
+        // Which screen the keys act on is the user's configured control target.
+        // The default, `.mouseScreen`, reproduces the historical "under the
+        // pointer, else the primary non-builtin display" behaviour exactly, so
+        // this changes nothing for anyone who has not touched the setting --
+        // and the fallback below keeps the guarantee that a press is never
+        // silently swallowed.
         let mouseLocation = NSEvent.mouseLocation
-        let targetDisplay = displays.first { $0.bounds.contains(mouseLocation) }
-            ?? displays.first { !$0.isBuiltin }
-            ?? displays.first
+        let systemAudio = SystemVolumeController.shared
+        // Which capability the key needs decides which candidates are eligible.
+        let requiresVolume = keyCode == 0 || keyCode == 1 || keyCode == 7
+        let resolved = KeyboardControlResolver.resolve(
+            target: Settings.keyboardControlTarget,
+            candidates: displays.map { display in
+                ScreenCandidate(
+                    displayID: display.id,
+                    name: display.name,
+                    frame: display.bounds,
+                    supportsBrightness: display.appleBrightnessAvailable || display.ddcAvailable,
+                    supportsVolume: display.ddcAvailable,
+                    isMain: CGDisplayIsMain(display.id) != 0,
+                    isOnline: display.isOnline
+                )
+            },
+            mouseLocation: mouseLocation,
+            focusedDisplayID: Self.focusedDisplayID(in: displays),
+            audioDeviceName: systemAudio.deviceName,
+            requiresVolume: requiresVolume
+        ).compactMap { id in displays.first { $0.id == id } }
 
-        guard let targetDisplay else { return false }
+        let targetDisplays = resolved.isEmpty
+            ? [displays.first { $0.bounds.contains(mouseLocation) }
+                ?? displays.first { !$0.isBuiltin }
+                ?? displays[0]]
+            : resolved
+        guard let targetDisplay = targetDisplays.first else { return false }
 
         // Pure routing decision (unit-tested in MediaKeyRouterTests); the
         // event is only consumed when an action is returned.
@@ -150,24 +178,34 @@ public final class HotkeyController {
             targetHasDDC: targetDisplay.ddcAvailable,
             // The Mac's own output volume is the fallback route for volume keys
             // when the display has no DDC (#20).
-            systemVolumeAvailable: SystemVolumeController.shared.isControllable
+            systemVolumeAvailable: systemAudio.isControllable
         )
         let action = decision.action
 
         let step = MediaKeyRouter.step
+
+        // A target may resolve to more than one screen (`.allSuitableScreens`),
+        // so brightness is applied to each. Volume follows the router's single
+        // decision: DDC per screen, or the Mac's own output once.
+        func adjustBrightness(by delta: Double) {
+            for display in targetDisplays {
+                let current = display.brightness
+                    ?? displayController.getBrightness(for: display)
+                    ?? 0.5
+                displayController.setBrightness(min(max(current + delta, 0.0), 1.0), on: display)
+            }
+        }
 
         switch action {
         case .none:
             return false
 
         case .brightnessUp:
-            let current = targetDisplay.brightness ?? displayController.getBrightness(for: targetDisplay) ?? 0.5
-            displayController.setBrightness(min(current + step, 1.0), on: targetDisplay)
+            adjustBrightness(by: step)
             return true
 
         case .brightnessDown:
-            let current = targetDisplay.brightness ?? displayController.getBrightness(for: targetDisplay) ?? 0.5
-            displayController.setBrightness(max(current - step, 0.0), on: targetDisplay)
+            adjustBrightness(by: -step)
             return true
 
         case .volumeUp, .volumeDown, .toggleMute:
@@ -177,27 +215,39 @@ public final class HotkeyController {
             guard let volumeTarget = decision.volumeTarget else { return false }
             switch volumeTarget {
             case .display:
-                let controls = displayController.readDDCControls(for: targetDisplay)
-                switch action {
-                case .volumeUp:
-                    displayController.setVolume(min((controls.volume ?? 0.5) + step, 1.0), on: targetDisplay)
-                case .volumeDown:
-                    displayController.setVolume(max((controls.volume ?? 0.5) - step, 0.0), on: targetDisplay)
-                default:
-                    displayController.setMuted(controls.muted == false, on: targetDisplay)
+                for display in targetDisplays {
+                    let controls = displayController.readDDCControls(for: display)
+                    switch action {
+                    case .volumeUp:
+                        displayController.setVolume(min((controls.volume ?? 0.5) + step, 1.0), on: display)
+                    case .volumeDown:
+                        displayController.setVolume(max((controls.volume ?? 0.5) - step, 0.0), on: display)
+                    default:
+                        displayController.setMuted(controls.muted == false, on: display)
+                    }
+                    NotificationCenter.default.post(
+                        name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id]
+                    )
                 }
-                NotificationCenter.default.post(
-                    name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": targetDisplay.id]
-                )
             case .system:
                 switch action {
-                case .volumeUp: SystemVolumeController.shared.adjust(by: step)
-                case .volumeDown: SystemVolumeController.shared.adjust(by: -step)
-                default: SystemVolumeController.shared.toggleMute()
+                case .volumeUp: systemAudio.adjust(by: step)
+                case .volumeDown: systemAudio.adjust(by: -step)
+                default: systemAudio.toggleMute()
                 }
             }
             return true
         }
+    }
+
+    /// The display whose screen holds the key window (`NSScreen.main`), matched
+    /// against the display list by frame. Nil when nothing matches, which the
+    /// resolver then falls back from.
+    @MainActor
+    private static func focusedDisplayID(in displays: [Display]) -> CGDirectDisplayID? {
+        guard let frame = NSScreen.main?.frame else { return nil }
+        return displays.first { $0.bounds.equalTo(frame) }?.id
+            ?? displays.first { $0.bounds.intersects(frame) }?.id
     }
 }
 
