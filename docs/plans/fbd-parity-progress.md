@@ -365,6 +365,31 @@ separate commit on the same branch.
   looked like a dead intent. It is not — Swift merges string-literal tails, so that title shares its `Dim`
   suffix with `"LockDimController"` and is never stored contiguously. Grep for a type symbol, not the title,
   when checking whether an intent survived the build.
+- **Accessibility pass on the Settings controls — one real fix, plus a false finding of my own corrected.**
+  Added an `ax-dump` command to `scripts/UIDriver.swift` that enumerates interactive accessibility elements
+  with their resolved names, so an unnamed control is visible rather than guessed at.
+
+  **Real fix:** `SettingsSliderRow` drew its title and current value as *siblings* of the `Slider` and never
+  labelled the slider itself, so VoiceOver had no idea what those sliders changed. Both are now attached
+  (`.accessibilityLabel` + `.accessibilityValue`), and the dump confirms it: the brightness-model sliders now
+  report `label='Redefine 0% software brightness'`, `'Minimum hardware level'`, `'Software dimming
+  switchover'` and `'Upscaling maximum'`. A `Slider` has no adjacent-label convention, so those really were
+  unnamed.
+
+  **Corrected false finding:** the first version of the dump read only `AXDescription`/`AXTitle` and reported
+  ~50 controls on the Application page as unlabelled, including every checkbox. That was wrong. A control
+  whose label is drawn beside it — the AppKit convention macOS SwiftUI follows — exposes its name through
+  `AXTitleUIElement` instead. Once the probe resolved that, the checkboxes report `label='Launch at Login'`,
+  `'Prefer hardware brightness control'`, `'Stored control values on startup'`, `'Dim to black'` and so on.
+  The corrected count for the page is 33, not 60. The lesson is the same one this session keeps teaching:
+  suspect the instrument before the code.
+
+  **The one genuine remaining gap:** of those 33, 12 are container `AXGroup`s (not controls) and 14 are the
+  11×8 increment/decrement halves SwiftUI renders for a `Stepper`. A `Stepper`'s own label is not inherited by
+  the two buttons it decomposes into, so VoiceOver reaches a bare increment/decrement control with no idea
+  what it changes. It has to be fixed at each `Stepper` — they are used directly rather than through a shared
+  wrapper (`SettingsPages.swift:457,471,560,565,570,575,642` and `DisplayListView.swift:433`) — and confirmed
+  by re-dumping.
 
 
 

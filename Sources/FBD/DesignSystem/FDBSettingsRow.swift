@@ -20,6 +20,10 @@ struct SettingsRow<Content: View>: View {
                 Text(title)
                 Spacer(minLength: 8)
                 content()
+                    // The title is drawn beside the control, so without this the
+                    // control itself carries no label and VoiceOver announces a
+                    // bare checkbox or slider with no idea what it changes.
+                    .accessibilityLabel(title)
             }
             if let caption {
                 Text(caption)
@@ -50,6 +54,11 @@ struct SettingsSliderRow: View {
                     .foregroundStyle(.secondary)
             }
             Slider(value: Binding(get: { value }, set: onChange), in: range)
+                // The label and the value above are siblings of the slider, so
+                // both have to be attached for VoiceOver to say what the slider
+                // controls and where it currently sits.
+                .accessibilityLabel(title)
+                .accessibilityValue(format(value))
             if let caption {
                 Text(caption)
                     .font(.caption)
