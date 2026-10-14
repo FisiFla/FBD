@@ -193,6 +193,11 @@ final class AppCore {
         switch url.host {
         case "open":
             openSettingsPanel()
+        case "close":
+            // Deterministic panel teardown, so a script or a test never has to
+            // guess with synthetic Escape keypresses or go hunting for the close
+            // button. `fbd://open` is its counterpart.
+            statusItemController.closePanel()
         case "brightness":
             setBrightness(from: url)
         default:

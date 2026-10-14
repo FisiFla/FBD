@@ -19,7 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// `fbd://` URL scheme: `fbd://brightness/<id>/<value>` and `fbd://open`.
+    /// `fbd://` URL scheme: `fbd://brightness/<id>/<value>`, `fbd://open` and
+    /// `fbd://close`.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             appCore?.handle(url: url)

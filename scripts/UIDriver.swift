@@ -174,8 +174,12 @@ func dumpElement(_ element: AXUIElement, depth: Int) {
     }
 }
 
-// MARK: - Status item sweep
+// MARK: - Status item sweep (superseded)
 
+/// Superseded by `status-frame` and kept only as a fallback: it clicks the menu
+/// bar every 8pt until a panel happens to open, which cannot tell a genuine hit
+/// from a stale panel. `status-frame` reads the item's real frame from
+/// `AXExtrasMenuBar` instead. Prefer that.
 func statusSweep(maxX: CGFloat) -> Int {
     let y: CGFloat = 12
     var x = maxX
@@ -192,7 +196,7 @@ func statusSweep(maxX: CGFloat) -> Int {
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    print("usage: UIDriver <click|key|panel-state|ax-frame|ax-dump|status-sweep> ...")
+    print("usage: UIDriver <click|key|panel-state|ax-frame|ax-dump|status-frame|windows|status-sweep> ...")
     exit(2)
 }
 
@@ -209,6 +213,47 @@ case "key":
 
 case "panel-state":
     print(panelState())
+
+case "windows":
+    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    for window in list {
+        guard (window[kCGWindowOwnerName as String] as? String) == "FBD" else { continue }
+        let layer = window[kCGWindowLayer as String] as? Int ?? -1
+        let name = window[kCGWindowName as String] as? String ?? ""
+        let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
+        print("layer=\(layer) name='\(name)' \(bounds)")
+    }
+
+/// The status item's own frame, read from the accessibility tree rather than
+/// guessed at.
+///
+/// An app's status items hang off its `AXExtrasMenuBar` attribute, and they are
+/// **not** CGWindows — with the panel closed the process owns no windows at all,
+/// which is exactly why the old code swept the menu bar clicking every 8pt until
+/// something opened. That sweep could report a click that never touched the
+/// status item, so the smoke test passed while testing nothing.
+case "status-frame":
+    guard let pid = fbdPid() else {
+        print("not-found")
+        exit(1)
+    }
+    let statusApp = AXUIElementCreateApplication(pid)
+    var extrasRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(statusApp, "AXExtrasMenuBar" as CFString, &extrasRef) == .success,
+          let extrasRef, CFGetTypeID(extrasRef) == AXUIElementGetTypeID() else {
+        print("not-found")
+        exit(1)
+    }
+    let extras = unsafeBitCast(extrasRef, to: AXUIElement.self)
+    var itemsRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(extras, kAXChildrenAttribute as CFString, &itemsRef) == .success,
+          let items = itemsRef as? [AXUIElement],
+          let item = items.first(where: { axFrame($0) != nil }),
+          let frame = axFrame(item) else {
+        print("not-found")
+        exit(1)
+    }
+    print("\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height))")
 
 case "ax-dump":
     guard let pid = fbdPid() else {

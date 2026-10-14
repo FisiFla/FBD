@@ -398,6 +398,26 @@ separate commit on the same branch.
   adjustable control. That is a larger change per site (eight of them) and was not attempted. A real
   VoiceOver check is also still outstanding — raw AX enumeration and what VoiceOver actually announces are
   not the same thing, and this whole pass has already taught that lesson twice.
+- **The status-item sweep is gone: the gate now drives the app deterministically.** The gate found the
+  menu-bar item by clicking every 8pt from x=1710 until a panel happened to open. That is not merely slow, it
+  is *unsound*: it cannot tell a real hit from a stale panel, which is exactly how it came to report a click
+  that never landed and let step 1 pass while testing nothing.
+
+  Two replacements, both reading the app's own surfaces instead of guessing:
+
+  - `UIDriver status-frame` reads the item's **real** frame from the accessibility tree — an app's status
+    items hang off its `AXExtrasMenuBar` attribute. They are *not* CGWindows: with the panel closed the
+    process owns no windows at all, which is the underlying reason anyone wrote a sweep. The item spans
+    x=1507..1531, so the old sweep's first "hit" at x=1534 was **3pt past its edge** — it was landing by luck.
+  - **`fbd://close`** joins `fbd://open`, so panel teardown is a documented app route instead of synthetic
+    Escape keypresses or hunting for the close button. Setup and teardown are now both one `open` call.
+
+  Verified from the worst case rather than the convenient one: with the panel *deliberately left open on
+  Settings*, the gate reports **5/5** where the sweep-based version reported 4/5.
+
+  `UIDriver` also gains `windows` (FBD's windows with layer and bounds — the command that showed the status
+  item has no window). `status-sweep` is marked superseded in place rather than deleted, so nothing that
+  still calls it breaks silently.
 
 
 
