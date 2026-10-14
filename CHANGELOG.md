@@ -10,6 +10,18 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **A live DPCD read over AUX: `fbdcli dpcd <display>`.** Row 24's read path — `IODPDeviceReadDPCD`,
+  the AUX route to a DisplayPort sink's registers where DSC, link training and tiling are described —
+  reached through a runtime-resolved IOKit shim that declares **only** the read. Its write-side
+  neighbours (`IODPDeviceWriteDPCD`, the retrain and set calls) resolve on this macOS and are
+  deliberately not declared: a wrong write there can wedge the only attached display. The command
+  reads a block and hands it to the decoder `report --dpcd` already uses, and a failure reports *which*
+  step declined rather than one message for three causes. Verified as far as this machine allows: the
+  entry points resolve, the argument validation and the decode path are exercised, and against the
+  built-in panel it declines at service discovery, because FBD's registry walk is tuned for external
+  displays. **Proving a read end-to-end needs an external DisplayPort display**, which this Mac has
+  none of. A guessed fallback for the built-in panel was written, measured, and removed rather than
+  shipped unverified.
 - **The HUD can use the system's glass.** FBD's HUD is a vibrancy view in `.withinWindow` mode,
   which samples the *window's own* content — the SwiftUI content and nothing else — so it draws a
   flat panel rather than sampling the desktop behind it. The OS's glass (`NSGlassEffectView`,

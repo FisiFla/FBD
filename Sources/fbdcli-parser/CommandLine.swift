@@ -42,6 +42,7 @@ public enum Command: String, CaseIterable {
     case nightshift
     case truetone
     case darkMode = "dark-mode"
+    case dpcd
     case ambientLight = "ambient-light"
     case tv
     case config

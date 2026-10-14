@@ -39,6 +39,7 @@ _fbdcli() {
     'nightshift:Get or set Night Shift strength'
     'truetone:Get or set True Tone'
     'dark-mode:Get or set system Dark Mode'
+    'dpcd:Read a DisplayPort sink\x27s DPCD over AUX'
     'ambient-light:Get or set ambient-light auto-brightness'
     'tv:Control a TV/AVR over the network'
     'report:Detailed report of every display (for bug reports)'

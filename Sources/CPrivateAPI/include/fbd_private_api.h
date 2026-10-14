@@ -236,4 +236,23 @@ typedef void (*fbd_cgvd_set_mode_fn)(void *display, void *mode);
 typedef void (*fbd_cgvd_apply_settings_fn)(void *display, const void *settings);
 typedef void (*fbd_cgvd_release_mode_fn)(void *display, void *mode);
 
+#pragma mark - IODP (DisplayPort AUX / DPCD), read-only
+
+/* Runtime-resolved like everything above: these are exported by IOKit, but linking them would make
+   the app fail to launch on a macOS that drops one. **Only the read is declared** — the write and
+   retrain symbols resolve on this macOS and are deliberately left out, because a wrong write there
+   can wedge the only attached display.
+
+   `service` is an `io_service_t` (a mach port, so a 32-bit integer) — the `DCPAVServiceProxy` /
+   `IOAVService` node the DDC path already finds. `FBDIodpDeviceWithService` returns a +1 object, or
+   NULL. `FBDIodpReadDPCD` reports false when the entry point is missing or the call refused; the
+   bytes it wrote are the caller's to judge. */
+
+bool FBDIodpAvailable(void);
+void *FBDIodpDeviceWithService(uint32_t service);
+/* Read `length` DPCD bytes at `address` into `buffer`. Returns the implementation's own status —
+   0 on success, by the family's convention (`IOAVServiceReadI2C` in this codebase reads it the same
+   way) — or -1 when the entry point is missing, so the caller can tell the two apart. */
+int FBDIodpReadDPCD(void *device, uint32_t address, uint8_t *buffer, uint32_t length);
+
 #endif /* FBD_PRIVATE_API_H */
