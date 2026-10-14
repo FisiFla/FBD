@@ -906,6 +906,18 @@ struct MenuSettingsPage: View {
             } header: {
                 Label("Panel contents", systemImage: "menubar.rectangle")
             }
+
+            Section {
+                Toggle("Keep the Mac awake", isOn: Binding(
+                    get: { Settings.keepAwakeEnabled },
+                    set: { _ = KeepAwakeController.shared.setEnabled($0) }
+                ))
+                Text("Holds a power assertion while FBD runs, so the display stays on through a long transfer, render or presentation. It ends when FBD quits — the assertion belongs to this process, which is why there is no command-line switch for it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Label("System", systemImage: "clock")
+            }
         }
         .formStyle(.grouped)
     }

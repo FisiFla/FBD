@@ -38,6 +38,18 @@ enum FBDTheme {
     /// confirm the state change and get out of the way: inside the 150–250 ms
     /// band, eased out, no bounce or elastic.
     static let animationPanel = Animation.easeOut(duration: 0.22)
+
+    // MARK: Surfaces
+
+    /// Strength of the panel's chrome band — the header, settings header and tools
+    /// footer.
+    ///
+    /// A `labelColor` shade, not a second material. The panel's backdrop is already
+    /// a glass layer (`FrostedBackground`), and material guidance keeps glass on the
+    /// functional layer only: stacking a material inside the glass is
+    /// glass-on-glass, which flattens the hierarchy and makes the chrome compete
+    /// with the content it frames. See `fbdChromeBand()`.
+    static let chromeBandOpacity: Double = 0.08
 }
 
 extension View {
@@ -50,6 +62,17 @@ extension View {
     func fbdIconButton() -> some View {
         frame(minWidth: 28, minHeight: 28)
             .contentShape(Rectangle())
+    }
+
+    /// The panel's chrome band: the header, the settings header, the tools footer.
+    ///
+    /// A flat shade rather than `.ultraThinMaterial`. The panel sits on a glass
+    /// backdrop, so a material here was glass stacked on glass — the content-layer
+    /// rule this came from is that glass belongs to the chrome and content uses a
+    /// standard surface. It also stops three live blurs re-sampling the same
+    /// backdrop every time the panel redraws.
+    func fbdChromeBand() -> some View {
+        background(Color.primary.opacity(FBDTheme.chromeBandOpacity))
     }
 }
 

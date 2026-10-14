@@ -50,6 +50,7 @@ public enum Settings {
         add("hideMenuBarIconWhenSingleDisplay", hideMenuBarIconWhenSingleDisplay)
         add("brightnessPreferences", debugBrightnessPreferences)
         add("launchAtLogin", launchAtLogin)
+        add("keepAwakeEnabled", keepAwakeEnabled)
         add("showRosettaWarning", showRosettaWarning)
         add("httpAPIToken", "****")
         add("tvLGClientKey", "****")
@@ -338,6 +339,13 @@ public enum Settings {
     /// Launch at login (menu-bar setting; implemented in the app target).
     @Storage(key: "launchAtLogin", defaultValue: false)
     public static var launchAtLogin: Bool
+
+    /// Keep the Mac awake while FBD runs, so a long transfer, render or presentation
+    /// does not end with the display asleep. Held as a power assertion by the app
+    /// process — see `KeepAwakeController` — so it necessarily ends with the app,
+    /// which is why the toggle is app-side rather than in `fbdcli`.
+    @Storage(key: "keepAwakeEnabled", defaultValue: false)
+    public static var keepAwakeEnabled: Bool
 
     /// Show DDC-unavailable warning banner in the menu.
     @Storage(key: "showRosettaWarning", defaultValue: true)
