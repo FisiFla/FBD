@@ -33,9 +33,13 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   titles started resolving: verified live in the app's accessibility tree, where "Connect all" now
   reads 全部连接. A test stops the three files drifting: the languages must agree on every key, and
   every key must still appear in the source, since a renamed string would otherwise silently stop
-  resolving and look like "not translated yet" rather than broken. Still English, and recorded as
-  such: the Settings sidebar labels, which are built at runtime (`"\(item.rawValue) settings"`) and
-  so cannot be a literal key — they need a format key. Two things worth
+  resolving and look like "not translated yet" rather than broken. The Settings sidebar went the same
+  way: it rendered `Text(item.rawValue)`, a String, so its labels were verbatim too, and `SettingsPage`
+  now spells its cases out in a `switch` returning `LocalizedStringKey` — which keeps every key a
+  literal the test can verify (236 keys each). What the drift test cannot reach is an *interpolated*
+  string: SwiftUI turns `Text("\(nits) nits")` into the format key `%lld nits`, which never appears
+  verbatim in the source, so the "every key still exists" check would reject an entry for it. Those
+  stay English, and the test says why. Two things worth
   recording — `Sources/FBD/Resources` is `exclude`d from the SwiftPM target (which is why Info.plist
   lives there and is copied by hand), so the `.lproj` directories have to be copied by the Makefile;
   and `CFBundleLocalizations` must **not** sit alongside real `.lproj` directories, because it made

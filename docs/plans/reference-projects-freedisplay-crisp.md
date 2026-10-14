@@ -140,9 +140,11 @@ sources linked. Paraphrased, the rules that bear on FBD:
    every key present in the source. The larger part of the work was not translation but a defect:
    `SettingsRow`, `SettingsSliderRow` and `disclosureSection` took `title: String`, and
    `Text(String)` is verbatim, so no settings title or section header could ever be looked up. They
-   take `LocalizedStringKey` now, and the app's accessibility tree shows those titles in Chinese.
-   Still English: the Settings sidebar labels, built at runtime from `item.rawValue` (a format key is
-   the fix), and any interpolated string.
+   take `LocalizedStringKey` now, and the app's accessibility tree shows those titles in Chinese. The
+   sidebar labels took the same path — `Text(item.rawValue)` was verbatim too — and now come from a
+   `switch` over the cases, so their keys are literals the drift test can check; 236 keys each.
+   Still English: interpolated strings, which SwiftUI turns into *format* keys (`%lld nits`) that
+   never appear verbatim in the source, so the "every key still exists" check cannot verify them.
 9. **Edge-crossing pointer** for displays whose edges do not line up.
 10. **Smooth scaling / the HiDPI-crisp flow** — **settled: not doable within FBD's constraints.**
     Two routes exist and neither works here. Creating a mode through a private API is impossible on
