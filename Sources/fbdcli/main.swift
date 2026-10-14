@@ -18,6 +18,8 @@ Commands:
   info <id> [--json]            Show full detail for a display (or JSON)
   report [file]                 Detailed report of every display, for a bug
                                 report (prints, or writes to <file>)
+  report --dpcd <hex>           Decode a supplied DPCD dump (repeatable; prefix
+                                with a hex address, e.g. 68028:00 for HDCP)
   brightness <id> [0-100]       Get or set brightness (Apple or DDC path)
   contrast <id> [0-100]         Get or set contrast (DDC)
   volume <id> [0-100]           Get or set speaker volume (DDC)
