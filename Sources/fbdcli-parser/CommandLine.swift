@@ -427,7 +427,12 @@ public struct PiPArgs: Equatable, Sendable {
     }
 
     public var action: Action
-    public var source: PiPSourceArgs?
+    /// Every capture source this invocation opens, in order. One source is the
+    /// original form; more than one is what opens several windows at once.
+    public var sources: [PiPSourceArgs]
+    /// The first source. Kept as a name because the single-source form is still the
+    /// common one, and a caller that passes one should not have to say so.
+    public var source: PiPSourceArgs? { sources.first }
     /// brightness, contrast, saturation — 1 = no adjustment.
     public var filter: [Double]
     /// Requested capture rate; nil leaves the stream at `StreamFrameRate.default`.
@@ -437,13 +442,13 @@ public struct PiPArgs: Equatable, Sendable {
 
     public init(
         action: Action,
-        source: PiPSourceArgs? = nil,
+        sources: [PiPSourceArgs] = [],
         filter: [Double] = [1, 1, 1],
         fps: Int? = nil,
         containCursor: Bool = false
     ) {
         self.action = action
-        self.source = source
+        self.sources = sources
         self.filter = filter
         self.fps = fps
         self.containCursor = containCursor
@@ -471,26 +476,18 @@ public struct PiPArgs: Equatable, Sendable {
             return .success(PiPArgs(action: first == "list" ? .list : .stop))
         }
 
-        let source: PiPSourceArgs
-        let filterArgs: [String]
+        let head: PiPSourceArgs
+        let tail: [String]
         switch first {
         case "--window", "--app":
             guard args.count >= 2 else {
                 return .failure(TVCommandValidation.Failure("\(first) expects an identifier"))
             }
-            let identifier = args[1]
-            guard !identifier.isEmpty else {
-                return .failure(TVCommandValidation.Failure("\(first) expects a non-empty identifier"))
+            switch Self.parseSourceFlag(first, args[1]) {
+            case .failure(let failure): return .failure(failure)
+            case .success(let parsed): head = parsed
             }
-            if first == "--window" {
-                guard let windowID = UInt32(identifier) else {
-                    return .failure(TVCommandValidation.Failure("--window expects a numeric window id (got '\(identifier)')"))
-                }
-                source = .window(windowID)
-            } else {
-                source = .application(identifier)
-            }
-            filterArgs = Array(args.dropFirst(2))
+            tail = Array(args.dropFirst(2))
 
         default:
             guard let displayID = UInt32(first) else {
@@ -498,8 +495,32 @@ public struct PiPArgs: Equatable, Sendable {
                     "expected a numeric display id or --window/--app (got '\(first)')"
                 ))
             }
-            source = .display(displayID)
-            filterArgs = Array(args.dropFirst())
+            head = .display(displayID)
+            tail = Array(args.dropFirst())
+        }
+
+        // Further sources may follow the first, which is what lets one invocation
+        // open several windows. Everything else in the tail is the filter, and
+        // `--window`/`--app` used to be rejected there, so nothing that parsed
+        // before changes meaning.
+        var sources: [PiPSourceArgs] = [head]
+        var filterArgs: [String] = []
+        var index = 0
+        while index < tail.count {
+            let token = tail[index]
+            guard token == "--window" || token == "--app" else {
+                filterArgs.append(token)
+                index += 1
+                continue
+            }
+            guard index + 1 < tail.count else {
+                return .failure(TVCommandValidation.Failure("\(token) expects an identifier"))
+            }
+            switch Self.parseSourceFlag(token, tail[index + 1]) {
+            case .failure(let failure): return .failure(failure)
+            case .success(let parsed): sources.append(parsed)
+            }
+            index += 2
         }
 
         switch StreamOptions.extract(filterArgs) {
@@ -512,13 +533,31 @@ public struct PiPArgs: Equatable, Sendable {
             case .success(let values):
                 return .success(PiPArgs(
                     action: .start,
-                    source: source,
+                    sources: sources,
                     filter: values,
                     fps: extracted.options.fps,
                     containCursor: extracted.options.containCursor
                 ))
             }
         }
+    }
+
+    /// One `--window <id>` / `--app <bundle-id>` source. Shared by the leading
+    /// source and by any that follow it.
+    private static func parseSourceFlag(
+        _ flag: String,
+        _ identifier: String
+    ) -> Result<PiPSourceArgs, TVCommandValidation.Failure> {
+        guard !identifier.isEmpty else {
+            return .failure(TVCommandValidation.Failure("\(flag) expects a non-empty identifier"))
+        }
+        if flag == "--window" {
+            guard let windowID = UInt32(identifier) else {
+                return .failure(TVCommandValidation.Failure("--window expects a numeric window id (got '\(identifier)')"))
+            }
+            return .success(.window(windowID))
+        }
+        return .success(.application(identifier))
     }
 }
 

@@ -247,9 +247,13 @@ case "panel-state":
     print(panelState())
 
 case "windows":
+    // Optional owner filter. The app owns FBD's panel, but its HUD, PiP and stream
+    // windows belong to whichever process created them, so checking a second
+    // process' windows has to say whose.
+    let ownerFilter = args.count >= 3 ? args[2] : "FBD"
     let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
     for window in list {
-        guard (window[kCGWindowOwnerName as String] as? String) == "FBD" else { continue }
+        guard (window[kCGWindowOwnerName as String] as? String) == ownerFilter else { continue }
         let layer = window[kCGWindowLayer as String] as? Int ?? -1
         let name = window[kCGWindowName as String] as? String ?? ""
         let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
