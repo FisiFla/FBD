@@ -44,6 +44,12 @@ final class AppCore {
         SystemVolumeController.shared.refresh()
         statusItemController.install()
 
+        // Keep the Mac awake if that is what was asked for last time. Deliberately
+        // outside the safe-mode gate below: that gate exists to escape a bad
+        // *display* configuration, and a power assertion is not a state anyone
+        // needs escaping from.
+        KeepAwakeController.shared.applyStoredPreference()
+
         // Tier 3 controllers: virtual screens, soft disconnect, layout protection.
         virtualScreens.start()
         disconnect.start()

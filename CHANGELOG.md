@@ -163,6 +163,24 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   risk worth taking. A dump is treated as a set of ranges, and a register that was
   never read reports "not read" rather than zero — those are different claims, and
   a report that conflates them is worse than no report.
+- **Two sibling projects reviewed, and the first of their ideas taken on.** Two
+  free alternatives, FreeDisplay and Crisp, were read for what FBD lacks; both are
+  MIT (Crisp ships a `LICENSE`, FreeDisplay declares MIT in its README but ships no
+  licence file). The capability comparison, the licences, and Crisp's Apple-grounded
+  UI doctrine are recorded in
+  `docs/plans/reference-projects-freedisplay-crisp.md` — FBD is ahead on automation,
+  network devices, streaming and EDID override, and behind on scaling finesse,
+  named presets, localisation and a few cheap system controls.
+- **The panel's chrome no longer stacks a material on glass.** The header, the
+  settings header and the tools footer sat on `.ultraThinMaterial` *inside* a panel
+  whose backdrop is already a frosted layer. They now use a flat `labelColor` shade
+  (`FBDTheme.chromeBandOpacity`), so the panel holds one material rather than four —
+  and three live blurs no longer re-sample the same backdrop on every redraw.
+- **Keep the Mac awake.** A toggle in Settings → Menu → System holds a
+  `NoDisplaySleepAssertion` while FBD runs, so a long transfer, render or
+  presentation does not end with the display asleep. It is app-side by necessity:
+  the assertion belongs to the process that holds it, so a `fbdcli` invocation
+  would drop it on exit — which is why there is no command-line switch for it.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom

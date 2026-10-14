@@ -229,7 +229,7 @@ struct DisplayListView: View {
             .padding(.top, 7)
             .padding(.bottom, 8)
         }
-        .background(.ultraThinMaterial)
+        .fbdChromeBand()
         .overlay(alignment: .bottom) {
             Divider().opacity(0.5)
         }
@@ -274,7 +274,7 @@ struct DisplayListView: View {
             .padding(.top, 7)
             .padding(.bottom, 8)
         }
-        .background(.ultraThinMaterial)
+        .fbdChromeBand()
         .overlay(alignment: .bottom) {
             Divider().opacity(0.5)
         }
@@ -358,7 +358,7 @@ struct DisplayListView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
+        .fbdChromeBand()
         .overlay(alignment: .top) {
             Divider().opacity(0.5)
         }
