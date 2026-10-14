@@ -143,7 +143,11 @@ func titleElementValue(of element: AXUIElement) -> String {
 /// Print one line per interactive accessibility element, so a control that
 /// exposes no description — and therefore cannot be reached by assistive
 /// technology — is visible rather than guessed at.
-func dumpElement(_ element: AXUIElement, depth: Int) {
+///
+/// `includeStatic` adds `AXStaticText`, which is what a layout investigation
+/// needs: the *positions* of captions and titles relative to their row are the
+/// only way to tell a clipped row from an overlapping one.
+func dumpElement(_ element: AXUIElement, depth: Int, includeStatic: Bool) {
     guard depth <= 8 else { return }
     let role = axString(element, kAXRoleAttribute as String)
     let description = axString(element, kAXDescriptionAttribute as String)
@@ -152,14 +156,22 @@ func dumpElement(_ element: AXUIElement, depth: Int) {
     let frame = axFrame(element)
     let indent = String(repeating: "  ", count: depth)
     // Static text would drown the list; these are the roles a user can act on.
-    let interactive = [
+    var interesting = [
         "AXButton", "AXSlider", "AXCheckBox", "AXPopUpButton", "AXRadioButton",
         "AXTextField", "AXMenuButton", "AXDisclosureTriangle", "AXTabGroup", "AXGroup",
     ]
-    if interactive.contains(role) {
+    if includeStatic {
+        interesting.append("AXStaticText")
+    }
+    if interesting.contains(role) {
         let place = frame.map { "@\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))" } ?? "@?"
         let viaTitleElement = titleElementValue(of: element)
-        let label = !description.isEmpty ? description : (!title.isEmpty ? title : viaTitleElement)
+        // Static text carries its string in AXValue, not in description/title —
+        // without this the one case a layout investigation cares about reads blank.
+        let staticValue = role == "AXStaticText" ? axString(element, kAXValueAttribute as String) : ""
+        let label = !description.isEmpty
+            ? description
+            : (!title.isEmpty ? title : (!viaTitleElement.isEmpty ? viaTitleElement : staticValue))
         let marker = label.isEmpty ? "   <-- NO LABEL" : ""
         let source = viaTitleElement.isEmpty || !label.isEmpty && label != viaTitleElement
             ? ""
@@ -170,7 +182,7 @@ func dumpElement(_ element: AXUIElement, depth: Int) {
     guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
           let children = childrenRef as? [AXUIElement] else { return }
     for child in children {
-        dumpElement(child, depth: depth + 1)
+        dumpElement(child, depth: depth + 1, includeStatic: includeStatic)
     }
 }
 
@@ -264,8 +276,9 @@ case "ax-dump":
     var windowsRef: CFTypeRef?
     if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windowsRef) == .success,
        let windows = windowsRef as? [AXUIElement] {
+        let includeStatic = args.contains("--all")
         for window in windows {
-            dumpElement(window, depth: 0)
+            dumpElement(window, depth: 0, includeStatic: includeStatic)
         }
     }
 
