@@ -121,6 +121,12 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 - **A sidebar Settings layout.** Settings was a two-tab form; it is now a
   sidebar of `Displays` · `Groups` · `Application` · `Menu` · `Keyboard` ·
   `About` with long pages, and the panel grows to 760×860 for it.
+- **Keyboard shortcuts on the panel's own controls.** The settings gear takes ⌘,
+  and the tools footer ⌘⇧V (Virtual Screens), ⌘⇧G (Groups), ⌘⇧P (PiP), ⌘U
+  (Check for Updates) and ⌘Q (Quit FBD). The panel's controls previously carried
+  no key equivalents at all — ⌘, only duplicated the one the status menu already
+  had. This works because the panel can take key focus: its style mask carries
+  both `.titled` and `.nonactivatingPanel`.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom
@@ -145,10 +151,17 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   brightness-model settings.
 - `fbdcli help` documents `config`.
 
+### Fixed
+- **Settings → Back discarded a resized panel.** Going back restored a hard-coded
+  460×650, so a panel the user had widened snapped back to 460pt wide (the saved
+  frame on this author's machine is 535pt). The size the panel had when Settings
+  opened is now remembered and restored on the way back, clamped to the panel's
+  minimum, so a deliberate resize survives the round trip.
+
 ### Verification
 - `swift build --disable-sandbox` — clean, **zero warnings**.
-- `swift test --disable-sandbox` — **765 tests, 0 failures** (FBDCoreTests
-  363 → 629; FBDCLIParserTests 136). 266 new tests cover the new seams.
+- `swift test --disable-sandbox` — **868 tests, 0 failures** (FBDCoreTests 732,
+  including the 266 test seams added by the parity work; FBDCLIParserTests 136).
 - `make ui-smoke` — 5/5 against the rebuilt app.
 - CLI round-trips verified against the live app for every `config` subcommand,
   including the refusal paths.
