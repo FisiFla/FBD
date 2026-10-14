@@ -45,8 +45,79 @@ func cmdList(_ controller: DisplayController, args: [String]) -> Int32 {
 ///
 /// The formatting lives in `DisplayReport` in FBDCore and is locked by tests, so
 /// the CLI only supplies the facts it alone can know.
+/// `report --dpcd <hex>` / `--dpcd <hexaddr>:<hex>` — decode a supplied DPCD dump.
+///
+/// The read path is deliberately not built yet: the private getters that read
+/// DPCD are located and symbol-verified, but their **signatures** are unknown, and
+/// calling one speculatively against a machine's only attached display is not a
+/// risk worth taking. So this decodes a dump the user supplies — from another
+/// tool, or from FBD once the read path lands. The option may be repeated with an
+/// address prefix, which matters because HDCP's BSTATUS sits at 0x68028, far from
+/// the capability block.
+///
+/// Returns nil when the option is absent, so `report` carries on with displays.
+@MainActor
+func cmdReportDPCD(_ args: [String]) -> Int32? {
+    guard args.contains("--dpcd") else { return nil }
+    var segments: [DPCDBuffer.Segment] = []
+    var index = 0
+    while index < args.count {
+        guard args[index] == "--dpcd" else {
+            index += 1
+            continue
+        }
+        guard index + 1 < args.count else {
+            print("fbdcli: report --dpcd: missing a hex value")
+            return 1
+        }
+        guard let segment = parseDPCDFragment(args[index + 1]) else {
+            print("fbdcli: report --dpcd: expected hex bytes, optionally prefixed with a hex "
+                + "address (0000:14, or 68028:00 for HDCP), got '\(args[index + 1])'")
+            return 1
+        }
+        segments.append(segment)
+        index += 2
+    }
+    print(DPCDReport.decode(DPCDBuffer(segments: segments)).render())
+    return 0
+}
+
+/// `0014` → a segment at address 0. `68028:00` → a one-byte segment at 0x68028.
+///
+/// Refuses rather than trims: a stray character in a supplied dump is usually a
+/// transcription mistake, and silently dropping it would decode a dump the
+/// display never sent.
+private func parseDPCDFragment(_ raw: String) -> DPCDBuffer.Segment? {
+    var body = raw
+    var start = 0
+    if let colon = raw.firstIndex(of: ":") {
+        guard let address = Int(raw[raw.startIndex..<colon], radix: 16) else { return nil }
+        start = address
+        body = String(raw[raw.index(after: colon)...])
+    }
+    let separators = CharacterSet(charactersIn: " ,").union(.whitespaces)
+    let kept = body.unicodeScalars.filter { !separators.contains($0) }
+    let cleaned = String(String.UnicodeScalarView(kept))
+    guard !cleaned.isEmpty, cleaned.count % 2 == 0, cleaned.allSatisfy({ $0.isHexDigit }) else {
+        return nil
+    }
+    var bytes: [UInt8] = []
+    var cursor = cleaned.startIndex
+    while cursor < cleaned.endIndex {
+        let next = cleaned.index(cursor, offsetBy: 2)
+        guard let value = UInt8(cleaned[cursor..<next], radix: 16) else { return nil }
+        bytes.append(value)
+        cursor = next
+    }
+    return DPCDBuffer.Segment(start: start, bytes: bytes)
+}
+
 @MainActor
 func cmdReport(_ controller: DisplayController, args: [String]) -> Int32 {
+    // A supplied dump is decoded on its own: it needs no display, which is also
+    // the only way to exercise the decoders until the read path exists.
+    if let exitCode = cmdReportDPCD(args) { return exitCode }
+
     let snapshots = controller.displays.map { display in
         DisplayReport.Snapshot(display: display, isMain: CGDisplayIsMain(display.id) != 0)
     }

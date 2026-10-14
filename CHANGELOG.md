@@ -152,6 +152,17 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   the network-device attachment, which lives inside one shared blob and would
   otherwise be left pointing at nothing. It refuses to overwrite settings the
   destination already has unless `--overwrite` is passed.
+- **A DPCD/DSC decoder, driven by `fbdcli report --dpcd <hex>`.** The decoders for
+  the DisplayPort Configuration Data block — revision, link rate and lane
+  capability, per-lane training status, the DSC capability block, and HDCP's
+  BSTATUS — are pure, and `report --dpcd` decodes a dump you supply, optionally
+  with an address prefix (`68028:00`), because HDCP sits 400 kB away from the
+  capability block. Reading DPCD *from* the hardware is not built: the private
+  getters are located and symbol-verified, but their signatures are unknown, and
+  calling one speculatively against a machine's only attached display is not a
+  risk worth taking. A dump is treated as a set of ranges, and a register that was
+  never read reports "not read" rather than zero — those are different claims, and
+  a report that conflates them is worse than no report.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom
