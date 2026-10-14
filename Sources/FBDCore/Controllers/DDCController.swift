@@ -178,7 +178,8 @@ public final class DDCController {
             let state = DDC.DDCState(
                 contrast: self.featureValueOnQueue(.contrast, for: display),
                 volume: self.featureValueOnQueue(.volume, for: display),
-                muted: self.featureValueOnQueue(.mute, for: display).map { $0 <= 1.5 }
+                muted: self.featureValueOnQueue(.mute, for: display).map { $0 <= 1.5 },
+                inputSource: self.featureValueOnQueue(.inputSource, for: display)
             )
             Task { @MainActor in completion(state) }
         }

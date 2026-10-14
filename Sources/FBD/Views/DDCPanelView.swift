@@ -19,11 +19,13 @@ struct DDCPanelView: View {
     @State private var volume: Double = 0.5
     @State private var muted = false
     @State private var inputSource = ""
-    /// The input we last set from the named menu. **Not** read back from the
-    /// display: that would be another blocking DDC read on every refresh, and it
-    /// would claim knowledge the panel does not have. Until the user picks one,
-    /// the menu says so rather than guessing.
+    /// The input we last set from the named menu, for immediate feedback. The next DDC refresh
+    /// replaces it with what the display actually reports — see `currentInput`.
     @State private var selectedInput: UInt16?
+    /// What the display reports as its current input, when it answers. Rides in the same batched
+    /// read as contrast/volume/mute, so marking the current input costs no extra DDC traffic; nil
+    /// means the display did not answer, which many do for VCP 0x60.
+    @State private var currentInput: UInt16?
     /// Outcome of the last explicit action in this panel. Nil until the user does
     /// something — the panel does not narrate its own background refreshes.
     @State private var status: FBDStatus?
@@ -36,19 +38,29 @@ struct DDCPanelView: View {
             }
     }
 
-    /// Pull the monitor's real contrast / volume / mute state into the UI.
+    /// Pull the monitor's real contrast / volume / mute / input state into the UI.
     /// Falls back to the last sent value when the monitor doesn't answer
     /// (some DDC monitors ignore reads).
     private func refreshDDCState() {
         guard display.ddcAvailable else { return }
-        // Three blocking reads used to run here on the main actor, one per value,
-        // each doing its own `queue.sync`. They now happen together on the
-        // display's queue and arrive back on the main actor.
+        // The reads used to run here on the main actor, one per value, each doing
+        // its own `queue.sync`. They now happen together on the display's queue and
+        // arrive back on the main actor.
         DisplayController.shared.readDDCState(for: display) { state in
             if let value = state.contrast { contrast = value }
             if let value = state.volume { volume = value }
             if let value = state.muted { muted = value }
+            if let value = state.inputSource {
+                currentInput = DDC.inputSource(from: value)
+            }
         }
+    }
+
+    /// The input to mark as current: what the display reports, else the last one we set. The
+    /// fallback keeps the menu honest between the write and the read-back, and stops it claiming
+    /// knowledge when the display never answers.
+    private var effectiveInput: UInt16? {
+        currentInput ?? selectedInput
     }
 
     private var ddcPanel: some View {
@@ -93,9 +105,10 @@ struct DDCPanelView: View {
             }
 
             // Named inputs, when the display has told us which ones it has. A menu
-            // of actions rather than a Picker: a Picker must show a *current*
-            // selection, and the panel cannot know the display's current input
-            // without another blocking DDC read — so it would be guessing.
+            // of actions with a checkmark on the input in effect: the read rides in
+            // the same batched DDC refresh as contrast/volume, so marking it costs
+            // nothing extra, and when the display does not answer the checkmark
+            // falls back to the last one set rather than inventing one.
             if !inputOptions.isEmpty {
                 HStack(spacing: FBDTheme.spacingM) {
                     Text("Input")
@@ -104,7 +117,15 @@ struct DDCPanelView: View {
                         .frame(width: 54, alignment: .leading)
                     Menu(inputMenuTitle) {
                         ForEach(inputOptions, id: \.self) { value in
-                            Button(inputLabel(value)) { setInput(value) }
+                            Button {
+                                setInput(value)
+                            } label: {
+                                if value == effectiveInput {
+                                    Label(inputLabel(value), systemImage: "checkmark")
+                                } else {
+                                    Text(inputLabel(value))
+                                }
+                            }
                         }
                     }
                     .controlSize(.small)
@@ -199,8 +220,8 @@ struct DDCPanelView: View {
     }
 
     private var inputMenuTitle: String {
-        guard let selectedInput else { return "Choose…" }
-        return inputLabel(selectedInput)
+        guard let effectiveInput else { return "Choose…" }
+        return inputLabel(effectiveInput)
     }
 
     private func setInput(_ value: UInt16) {

@@ -154,6 +154,16 @@ public enum DDC {
         return DDCCapabilities(mccsVersion: mccsVersion, vcpCodes: codes, raw: text)
     }
 
+    /// A VCP 0x60 read-back as a source number, clamped.
+    ///
+    /// The DDC layer reports a feature value as a `Double`, and a monitor that answers with
+    /// something out of range would trap a plain `UInt16(...)` cast — in a view, which is the
+    /// worst place for a crash. Nil in, nil out.
+    public static func inputSource(from value: Double?) -> UInt16? {
+        guard let value, value.isFinite else { return nil }
+        return UInt16(min(max(value, 0), Double(UInt16.max)))
+    }
+
     /// Name for a well-known MCCS input-source value (VCP 0x60).
     ///
     /// The standard assigns these, but vendors disagree often enough that a fixed
@@ -220,11 +230,21 @@ public enum DDC {
         public var contrast: Double?
         public var volume: Double?
         public var muted: Bool?
+        /// The display's current input (VCP 0x60), when it answers — many monitors ignore this
+        /// read, and some vendors disagree about what the numbers mean. Carried in the same batch
+        /// as the rest so marking the current input costs no extra DDC traffic.
+        public var inputSource: Double?
 
-        public init(contrast: Double? = nil, volume: Double? = nil, muted: Bool? = nil) {
+        public init(
+            contrast: Double? = nil,
+            volume: Double? = nil,
+            muted: Bool? = nil,
+            inputSource: Double? = nil
+        ) {
             self.contrast = contrast
             self.volume = volume
             self.muted = muted
+            self.inputSource = inputSource
         }
     }
 }

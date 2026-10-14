@@ -10,6 +10,14 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **The DDC input menu marks the input in effect.** It marked nothing until now: reading VCP 0x60 was
+  a blocking DDC read, so the panel deliberately refused to guess and its title said "Choose…". The
+  read now rides in the *same* batched read as contrast/volume/mute — one more feature on the
+  display's own queue, off the main actor — so the menu shows a checkmark on the current input, its
+  title names it, and where a monitor refuses to answer it falls back to the last input set rather
+  than claiming knowledge it does not have. The `Double → UInt16` conversion is a tested helper
+  (`DDC.inputSource(from:)`) rather than an inline cast in a view, where an out-of-range answer would
+  have trapped.
 - **A Dark Mode toggle, completing Night Shift + True Tone.** Crisp has all three system toggles and
   FBD had two. The mechanism is Crisp's: SkyLight's appearance theme
   (`SLSGetAppearanceThemeLegacy` / `SLSSetAppearanceThemeLegacy` / `SLSSetAppearanceThemeNotifying`),
