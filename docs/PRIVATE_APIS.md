@@ -118,6 +118,50 @@ is symbol resolution. Per the row's own plan, the pure DPCD/DSC byte parsers sho
 are unit-testable with no hardware and no AUX traffic, which is where most of the value and the risk
 sit.
 
+## Signatures recovered from the dyld shared cache — 2026-10-14
+
+The DPCD family was located but its **signatures** were not, and that is what blocked
+reading anything. They can be read off this machine after all; the earlier search came
+up empty because of the tool, not the data. `nm` cannot parse a shared cache (`not
+recognized as a valid object file`), but the cache **retains symbol tables**, so LLDB
+resolves a cache-resident symbol by name and disassembles it:
+
+```
+xcrun lldb --batch \
+  -o "run list" \
+  -o "image lookup -n IODPDeviceReadDPCD" \
+  -o "disassemble -n IODPDeviceReadDPCD" \
+  -o "quit" ./.build/debug/fbdcli
+```
+
+`image lookup` is what showed these are real and addressable — `IODPDeviceReadDPCD` sits
+at `IOKit[0x184d8b0d0]` (`__TEXT.__text + 130744`). What follows are **prototypes** read
+from register usage, which is an interface fact rather than code: no instruction
+sequence or decompilation is reproduced here.
+
+| Symbol | Arity | Evidence |
+|---|---|---|
+| `IODPDeviceGetRevisionMajor` | 1 argument → 32-bit | `ldr w0, [x0, #0x24]` then `ret` |
+| `IODPDeviceReadDPCD` | 4 arguments | `w1` stored as an address; `cmp w3, #0x1000` then `csel`, so the length clamps at 4096 — the DPCD read cap |
+| `IODPDeviceWriteDPCD` | 4 arguments | the mirror of the above with the same clamp. **The one never to call** |
+| `IOAVServiceCopyProperties` | 1 argument → copy | `ldr w0, [x0, #0x10]`; a conventional Copy-returning getter over an opaque handle |
+| `IOAVVideoLinkBandwidth` | 1 argument | `ldr w19, [x0, #0x6c]`, then `lsr x9, x9, #16` — the AV family's 16.16 fixed-point arithmetic |
+| `IODPLinkBandwidth` | 2 arguments | compares `x1` against `0x2540BE400`, `0x324A9A700`, `0x4A817C800` — 10, 13.5 and 20 Gbps, i.e. UHBR10 / 13.5 / 20 |
+
+So row #24's read path is now **signature-known**: `IODPDeviceReadDPCD(device, address,
+buffer, length)`, capped at 4096 bytes, reachable after `IODPDeviceCreateWithService` on
+the same `IOService` the DDC path already finds. **Nothing has been called.** This
+removes the "signatures unknown" blocker; it does not remove the caution around a write
+to the only attached display.
+
+## Mode creation does not exist (rows #22, #27)
+
+Those rows were carried as "symbol unsettled". Settled: **absent**. `SLSAddDisplayMode`,
+`SLSDisplayModeDescription` and `SLSSetDisplayMode` return zero matches on macOS 27,
+checked the same way as above; only `SLSConfigureDisplayMode` exists, and FBD already uses
+it through `CGSAPI`. Creating a display mode needs a *different* mechanism from the one
+those rows' route assumed, so they are blocked on design rather than on a name.
+
 ## Notes
 
 - **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch
