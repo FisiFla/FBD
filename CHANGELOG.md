@@ -10,6 +10,14 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **The resolution list shows the sizes you actually switch between.** The panel's Resolutions
+  section offered every mode inline — 132 of them on this machine — while reaching one through
+  the ⋯ submenu cost three clicks, so neither route was good. It now shows one row per logical
+  size at the current mode's aspect ratio, HiDPI preferred, with the mode in effect always on
+  the list, and **Show all N modes** one click away. `CuratedModes` is pure, so what counts as
+  worth showing is unit-tested: one row per size, the current mode owns its own row, variants
+  win elsewhere, other aspect ratios wait behind "show all", and truncation never drops the
+  mode that is on screen.
 - **Configuration protection covers rotation and the colour profile.**
   `ProtectedProperties` offered six of BetterDisplay's nine properties; it offers eight now.
   Neither new one can be *read* — there is no readable rotation and no readable current

@@ -113,7 +113,12 @@ sources linked. Paraphrased, the rules that bear on FBD:
 3. **Dark Mode toggle** — completes FBD's Night Shift + True Tone into Crisp's set.
 4. **Input switching in the per-display UI** — the capability already exists over DDC
    and in the CLI; this only surfaces it where a person would look for it.
-5. **Checkmark lists for the panel's discrete selections** (rule 2).
+5. **Checkmark lists for the panel's discrete selections** — **done, though not as rule 2
+   literally reads.** All four of the panel's lists already showed a checkmark on the value in
+   effect, so the missing part was the *cost* of reaching them: the resolutions section now
+   shows a curated list (one row per logical size at the current mode's aspect ratio, HiDPI
+   preferred, and the mode in effect always present) with **Show all N modes** one click away.
+   A flat list of all 132 modes would have been a wall, not a list.
 6. **Uniform section chips** (rule 4).
 7. **Named display presets with icons**, plus the App Intent to apply one.
 8. **Localisation** — en plus zh-Hans/zh-Hant, as Crisp does.

@@ -35,6 +35,10 @@ struct DisplaySectionsView: View {
     /// body evaluations (same pattern as DisplayListView's controllers).
     @State private var edidController = EDIDController()
     @State private var colorProfileController = ColorProfileController()
+    /// Whether the resolution list is showing every mode rather than the curated few.
+    /// Per-instance view state, so it resets when the panel is rebuilt — which is fine, the
+    /// curated list is the default anyone wants on opening.
+    @State private var showAllModes = false
     /// Exported EDID + parsed summary shown inside the EDID disclosure.
     @State private var edidData: Data?
     @State private var edidSummary: EDIDParser.ParsedEDID?
@@ -79,41 +83,69 @@ struct DisplaySectionsView: View {
     // MARK: - Resolutions
 
     private var resolutionsList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if display.modes.isEmpty {
+        // A short list with the mode in effect on it, and the rest one click away. The whole
+        // list inline is not a list — this display reports 132 modes — and reaching a
+        // resolution through the ⋯ submenu costs three clicks, so neither extreme is right.
+        let offered = display.offeredModes
+        let curated = CuratedModes.curated(from: offered, current: display.currentMode)
+        return VStack(alignment: .leading, spacing: 2) {
+            if offered.isEmpty {
                 Text("No modes available")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(display.offeredModes, id: \.self) { mode in
+                ForEach(showAllModes ? offered : curated, id: \.self) { mode in
+                    modeRow(mode)
+                }
+                if CuratedModes.hidesAnything(from: offered, current: display.currentMode) {
                     Button {
-                        DisplayController.shared.applyMode(mode, to: display)
+                        showAllModes.toggle()
                     } label: {
                         HStack(spacing: 6) {
-                            Text(mode.label)
-                            if !mode.refreshLabel.isEmpty {
-                                Text(mode.refreshLabel)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if mode.isHiDPI {
-                                Text("HiDPI")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Image(systemName: showAllModes ? "chevron.up" : "chevron.down")
+                                .font(.caption2)
+                            Text(showAllModes ? "Show fewer" : "Show all \(offered.count) modes")
+                                .font(.caption)
                             Spacer(minLength: 0)
-                            if mode == display.currentMode {
-                                Image(systemName: "checkmark")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.accentColor)
-                            }
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                 }
             }
         }
+    }
+
+    /// One row of the resolution list: the mode, its badges, and a checkmark when it is the
+    /// mode in effect — the checkmark column Crisp's menus guidance asks for, on every row
+    /// rather than only some.
+    private func modeRow(_ mode: DisplayMode) -> some View {
+        Button {
+            DisplayController.shared.applyMode(mode, to: display)
+        } label: {
+            HStack(spacing: 6) {
+                Text(mode.label)
+                if !mode.refreshLabel.isEmpty {
+                    Text(mode.refreshLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if mode.isHiDPI {
+                    Text("HiDPI")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if mode == display.currentMode {
+                    Image(systemName: "checkmark")
+                        .font(.caption)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - EDID (Tier 4)
