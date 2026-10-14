@@ -89,6 +89,19 @@ public final class Display: ObservableObject, Identifiable {
         xdrUpscaleTargetNits = active ? targetNits : nil
     }
 
+    /// The software dim in force, 1 = undimmed (0 = fully dimmed).
+    ///
+    /// Tracked per display because the brightness route owns it: `hardwareBrightness` alone is
+    /// not what the screen shows once a dim is applied, and a read that disagrees with the
+    /// screen is the bug this area kept repeating. The lock/dim-to-black overlay is a
+    /// *different* source and does not write this.
+    public private(set) var softwareDim: Double = 1
+
+    /// Record the software dim this display is at. Clamped, and no-op-safe.
+    public func updateSoftwareDim(_ factor: Double) {
+        softwareDim = min(max(factor, 0), 1)
+    }
+
     public func updateModes(_ modes: [DisplayMode], current: DisplayMode?) {
         self.modes = modes
         currentMode = current

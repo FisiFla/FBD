@@ -252,6 +252,20 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 - `fbdcli help` documents `config`.
 
 ### Fixed
+- **"Prefer hardware brightness" and the curve's dimming zone now work, and a brightness read now
+  agrees with the screen.** All three needed the same thing: FBD applied software brightness as an
+  overlay but neither tracked nor reported it, so a read returned the backlight value while the
+  screen showed something dimmer — the read-back-disagrees-with-the-screen bug
+  `CombinedBrightness` documents itself as having fixed once already. The dim is now tracked per
+  display and reported by `get`; the overlay gives the brightness route its **own** dim source
+  beside the dim-to-black/lock one, combined as the darkest of the two so releasing either leaves
+  the other in force. On that footing `preferHardwareControl == false` delivers brightness as a
+  dim over the backlight — falling back to the hardware when the request is brighter than the
+  backlight, because a dim can only ever lower what the screen shows — and the curve's
+  `minHardwarePercent` / `softwareZeroPercent` ramp the hardware and dim the rest, releasing the
+  dim once the route climbs above the ceiling. The dim is taken only where it outlives the call, so
+  a one-shot `fbdcli` invocation keeps the hardware route rather than accepting a write that would
+  vanish. The shipped profile takes neither route, so a default install behaves exactly as before.
 - **Four brightness-model sliders shaped nothing; two of them do now.** The combined-curve
   model (`BrightnessCurve`) had no caller at all — `XDRBoostPlanner` computes its own linear
   map — so the "Upscaling maximum" and "Software dimming switchover" sliders in Settings were
