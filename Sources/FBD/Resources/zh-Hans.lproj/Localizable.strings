@@ -1,0 +1,54 @@
+/* FBD — 简体中文。
+
+   技术名词（HDR、HiDPI、DDC / CI、XDR、FBD）保持原文：它们是规范里的写法，
+   翻译反而会让用户对不上显示器菜单。其余按 Apple 简体中文的用词习惯，
+   例如「显示器」「设置」「镜像」「刷新率」。 */
+
+/* 显示器列表 */
+"No displays" = "没有显示器";
+"Connect a display to control it here." = "连接显示器后即可在此控制。";
+
+/* 单个显示器的菜单 */
+"Manage Display" = "管理显示器";
+"Display Mode" = "显示模式";
+"Refresh Rate" = "刷新率";
+"Color Mode" = "色彩模式";
+"Resolution Favourites" = "分辨率收藏";
+"Screen Rotation" = "屏幕旋转";
+"Mirror Display" = "镜像显示器";
+"Move Display" = "移动显示器";
+"Disable display" = "停用显示器";
+"Re-enable display" = "重新启用显示器";
+"Display will go dark until re-enabled." = "显示器将黑屏，直至重新启用。";
+"Arrange displays from the Settings per-display tab" = "请在「设置」的每个显示器标签页中排列显示器";
+
+/* 分区 */
+"Display Groups" = "显示器组";
+"No groups yet. Create one to sync brightness or mirror displays." = "尚无显示器组。创建一个即可同步亮度或镜像显示器。";
+"Virtual Screens" = "虚拟屏幕";
+"Stream to" = "串流到";
+"Apple Display Preset" = "Apple 显示器预设";
+"XDR upscaling" = "XDR 升频";
+"HDR mode" = "HDR 模式";
+"HDR" = "HDR";
+"HiDPI" = "HiDPI";
+"Auto Brightness" = "自动亮度";
+
+/* 分辨率 */
+"No modes available" = "没有可用模式";
+"No saved override" = "没有已保存的覆盖";
+
+/* DDC / CI */
+"DDC / CI" = "DDC / CI";
+"Input" = "输入源";
+"Mute" = "静音";
+"Target" = "目标";
+"Read capabilities" = "读取功能";
+"Read capabilities to list this display's inputs by name." = "读取功能后即会按名称列出此显示器的输入源。";
+"This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable." = "此显示器不支持 DDC/CI，因此无法使用其显示器控制（输入源、扬声器、对比度）。";
+
+/* 窗口 */
+"Free Better Display" = "自由、更好的显示器";
+"Settings" = "设置";
+"Back to FBD" = "返回 FBD";
+"Close FBD panel" = "关闭 FBD 面板";
