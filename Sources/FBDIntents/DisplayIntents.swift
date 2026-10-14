@@ -187,3 +187,131 @@ struct EnableXDRUpscalingIntent: AppIntent {
         return .result()
     }
 }
+
+// MARK: - Lock dim
+
+/// Dims the display while the screen is locked or the screen saver runs.
+@available(macOS 13, *)
+struct SetLockDimIntent: AppIntent {
+    static var title: LocalizedStringResource = "Set Lock Dim"
+    static var description: IntentDescription? = IntentDescription("Dims the display while the screen is locked or the screen saver is running.")
+    static var openAppWhenRun = false
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Set lock dim \(\.$enabled) at \(\.$targetPercent)%")
+    }
+
+    @Parameter(title: "Enabled", description: "Whether to dim while locked.", default: true)
+    var enabled: Bool
+
+    @Parameter(title: "Target", description: "Brightness percentage to dim to: 0 is fully dark, 100 is no dim at all.", default: 10)
+    var targetPercent: Double
+
+    func perform() async throws -> some IntentResult {
+        guard targetPercent.isFinite, (0...100).contains(targetPercent) else {
+            throw DisplayIntentError.invalidValue("The target must be a percentage between 0 and 100.")
+        }
+        // `clamped()` is the same normalisation the app, the CLI and the HTTP API
+        // apply, so a value reaching Settings is always in range.
+        let policy = LockDimPolicy(enabled: enabled, targetPercent: targetPercent).clamped()
+        await MainActor.run {
+            Settings.lockDimEnabled = policy.enabled
+            Settings.lockDimTargetPercent = policy.targetPercent
+        }
+        return .result(value: Int(policy.targetPercent))
+    }
+}
+
+// MARK: - Keyboard control target
+
+/// Chooses which screen the brightness and volume keys act on.
+@available(macOS 13, *)
+struct SetKeyboardControlTargetIntent: AppIntent {
+    static var title: LocalizedStringResource = "Set Keyboard Control Target"
+    static var description: IntentDescription? = IntentDescription("Chooses which screen the brightness and volume keys act on.")
+    static var openAppWhenRun = false
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Set the keyboard control target to \(\.$target)")
+    }
+
+    /// A `String` rather than an `AppEnum`: declaring the enum conformance
+    /// outside the module that owns `KeyboardControlTarget` would be a
+    /// retroactive conformance. Validated against the real cases instead, so the
+    /// error can name them.
+    @Parameter(title: "Target", description: "mouseScreen, focusedScreen, allSuitableScreens or audioDeviceMatch.")
+    var target: String
+
+    func perform() async throws -> some IntentResult {
+        let raw = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let resolved = KeyboardControlTarget(rawValue: raw) else {
+            let allowed = KeyboardControlTarget.allCases.map(\.rawValue).joined(separator: ", ")
+            throw DisplayIntentError.invalidValue("Unknown target '\(raw)'. Valid targets: \(allowed).")
+        }
+        await MainActor.run { Settings.keyboardControlTarget = resolved }
+        return .result(value: resolved.rawValue)
+    }
+}
+
+// MARK: - Group sync
+
+/// Propagates one member's brightness to the rest of a display group, the same
+/// operation as the Settings page's "Sync now".
+@available(macOS 13, *)
+struct SyncDisplayGroupIntent: AppIntent {
+    static var title: LocalizedStringResource = "Sync Display Group"
+    static var description: IntentDescription? = IntentDescription("Syncs a display group's brightness, propagating the first connected member's value to the rest.")
+    static var openAppWhenRun = false
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Sync display group \(\.$groupName)")
+    }
+
+    @Parameter(title: "Group", description: "The name of the display group to sync.")
+    var groupName: String
+
+    func perform() async throws -> some IntentResult {
+        let name = groupName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            throw DisplayIntentError.invalidValue("A display group name is required.")
+        }
+        // Resolve the group first so an unknown name is reported as such rather
+        // than as a group with nothing to sync.
+        let groupID = await MainActor.run { DisplayGroupsController().group(named: name)?.id }
+        guard let groupID else {
+            throw DisplayIntentError.invalidValue("No display group is named '\(name)'.")
+        }
+
+        let written = await MainActor.run { () -> Int? in
+            let controller = DisplayController.shared
+            let groups = DisplayGroupsController()
+            let displays = controller.displays
+            // Read each member's brightness once, up front, so the closure the
+            // controller receives is a plain lookup and no DDC read happens off
+            // the hot path.
+            var brightnessByID: [UInt32: Double] = [:]
+            for display in displays {
+                if let value = display.brightness ?? controller.getBrightness(for: display) {
+                    brightnessByID[display.id] = value
+                }
+            }
+            guard let reading = groups.syncValue(
+                inGroup: groupID,
+                connectedIDs: Set(displays.map { $0.id }),
+                currentBrightness: { brightnessByID[$0] }
+            ) else {
+                return nil
+            }
+            return groups.applyGroupSync(
+                reading.value,
+                inGroup: groupID,
+                controller: controller,
+                referenceDisplayID: reading.sourceDisplayID
+            )
+        }
+        guard let written else {
+            throw DisplayIntentError.operationFailed("the group has no connected member with a readable brightness.")
+        }
+        return .result(value: written)
+    }
+}

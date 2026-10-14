@@ -346,6 +346,25 @@ separate commit on the same branch.
   Still not exposed over HTTP: resolution favourites, group *sync apply*, connection management, the
   per-display protection-property selection and the saved-device registry. Those are actions against
   hardware or per-display state, each needing its own validation and error contract.
+- **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
+  `Sync Display Group` join the existing display actions. Intents are discovered through the module's
+  `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
+  `String` rather than an `AppEnum` on purpose: declaring the enum conformance outside the module that owns
+  `KeyboardControlTarget` would be a retroactive conformance, so the value is validated against the real
+  cases instead — which lets the error name the valid ones. `Sync Display Group` reuses the same
+  `syncValue` + `applyGroupSync` path as the Settings page's "Sync now".
+
+  Verification, stated honestly: the three intents' type symbols are present in the built binary with the
+  same count as the intents that already work (`SetLockDimIntent`, `SetKeyboardControlTargetIntent`,
+  `SyncDisplayGroupIntent`, and the pre-existing `SetDisplayBrightnessIntent` all at 2), so they are
+  compiled in and registered by the identical mechanism. Full runtime discovery in Shortcuts still needs a
+  manual check on a machine with Shortcuts — the app's `AppIntentsBridge` documents that limitation, and
+  `make app` runs no App Intents metadata-extraction step, which is pre-existing behaviour.
+
+  A false alarm worth recording: grepping the bundle for the literal `"Set Lock Dim"` returned zero hits and
+  looked like a dead intent. It is not — Swift merges string-literal tails, so that title shares its `Dim`
+  suffix with `"LockDimController"` and is never stored contiguously. Grep for a type symbol, not the title,
+  when checking whether an intent survived the build.
 
 
 
