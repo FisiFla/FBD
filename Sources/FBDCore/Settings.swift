@@ -209,6 +209,39 @@ public enum Settings {
         }
     }
 
+    /// Persisted virtual-screen ↔ real-display associations (JSON-encoded), through
+    /// the same `defaults` as everything else so the app and the CLI share one copy.
+    ///
+    /// The nested value type means these are keyed per virtual screen rather than
+    /// stored as one blob with ids inside it — the difference that made the settings
+    /// transfer in `DisplaySettingsTransfer` need two code paths.
+    private static let virtualScreenAssociationsKey = "virtualScreenAssociations.v1"
+
+    public static func loadVirtualScreenAssociations(
+        in defaults: UserDefaults = Settings.defaults
+    ) -> [VirtualScreenAssociation] {
+        guard let data = defaults.data(forKey: virtualScreenAssociationsKey),
+              let associations = try? JSONDecoder().decode([VirtualScreenAssociation].self, from: data) else {
+            return []
+        }
+        return associations
+    }
+
+    public static func saveVirtualScreenAssociations(
+        _ associations: [VirtualScreenAssociation],
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        if associations.isEmpty {
+            // An empty list means "no associations"; leaving an empty blob behind
+            // would make `load` return [] for the wrong reason.
+            defaults.removeObject(forKey: virtualScreenAssociationsKey)
+            return
+        }
+        if let data = try? JSONEncoder().encode(associations) {
+            defaults.set(data, forKey: virtualScreenAssociationsKey)
+        }
+    }
+
     // MARK: Integrations (Tier 5)
 
     /// Enable the local HTTP control API.
