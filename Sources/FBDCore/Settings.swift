@@ -352,6 +352,31 @@ public enum Settings {
         }
     }
 
+    /// The brightness FBD last set for a display, keyed by identity.
+    ///
+    /// This is the "stored control value" the startup policy acts on: what FBD believes
+    /// the display is at, as opposed to what the display reports. **Absent** rather than
+    /// zero for a display FBD has never driven, because 0 is a legitimate brightness and
+    /// "never set" has to stay distinguishable from "fully dim".
+    public static func storedBrightness(
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) -> Double? {
+        defaults.object(forKey: "storedBrightness.\(identity)") as? Double
+    }
+
+    public static func setStoredBrightness(
+        _ value: Double?,
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        if let value {
+            defaults.set(value, forKey: "storedBrightness.\(identity)")
+        } else {
+            defaults.removeObject(forKey: "storedBrightness.\(identity)")
+        }
+    }
+
     /// Persisted layout anchors (JSON-encoded).
     private static let layoutAnchorsKey = "layoutAnchors.v1"
 

@@ -35,6 +35,9 @@ final class AppCore {
         // Re-apply persisted corner masks now that the display list exists. A
         // radius of 0 spawns nothing, so this is free for untouched displays.
         displayController.restoreCornerRadii()
+        // Startup control values (row 9): the default policy does nothing, so this is
+        // free for anyone who never changed it.
+        displayController.applyStartupControlValuePolicy()
         // The Mac's own output volume (#20): one shared controller so the media
         // keys, the CLI and this HUD all act on the same device handle. Refresh
         // is asynchronous by design, so it does not delay launch.

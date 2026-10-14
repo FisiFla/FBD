@@ -55,6 +55,41 @@ public final class DisplayController {
             )
         }
     }
+
+    /// Apply the stored startup control-value policy: read each display's brightness back,
+    /// write FBD's stored value to it, or leave it alone.
+    ///
+    /// Called once at launch, right after `start()`, the way `restoreCornerRadii` is. The
+    /// default policy returns before touching anything, so a default install behaves
+    /// exactly as it did before this existed — the behaviour appears only for someone who
+    /// asked for it, which is the opposite of how the dead settings this fixes came about.
+    public func applyStartupControlValuePolicy() {
+        let policy = Settings.brightnessPreferences.startupControlValuePolicy
+        guard policy != .assumeLastUsed else { return }
+        var read = 0
+        var wrote = 0
+        for display in displays {
+            let stored = Settings.storedBrightness(for: display.identityKey)
+            switch policy.action(hasStoredValue: stored != nil) {
+            case .nothing:
+                continue
+            case .readFromDevice:
+                guard let current = getBrightness(for: display) else {
+                    log.debug("startup \(policy.rawValue): no brightness read for \(display.id)")
+                    continue
+                }
+                Settings.setStoredBrightness(current, for: display.identityKey)
+                read += 1
+            case .writeStored:
+                guard let stored, setBrightness(stored, on: display) else {
+                    log.warning("startup \(policy.rawValue): could not write the stored value to \(display.id)")
+                    continue
+                }
+                wrote += 1
+            }
+        }
+        log.debug("startup control values: read \(read), wrote \(wrote) (\(policy.rawValue))")
+    }
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "DisplayController")
 
     private var hasRegistered = false
@@ -205,6 +240,10 @@ public final class DisplayController {
         let combined = self.combined
         brightnessDebounceWorkItems[display.id]?.cancel()
         let workItem = DispatchWorkItem {
+            // Record FBD's chosen value — the "stored control value" the startup policy
+            // reads or re-writes — *before* the write, so a display that refuses it still
+            // remembers what was asked for.
+            Settings.setStoredBrightness(clamped, for: display.identityKey)
             combined.set(clamped, on: display)
             display.updateBrightness(clamped)
             // Let the OSD and any observers follow UI/CLI brightness writes.

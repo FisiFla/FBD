@@ -237,6 +237,16 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 - `fbdcli help` documents `config`.
 
 ### Fixed
+- **The startup control-value policy works now.** Settings offered "assume last used / write
+  to device / read from device" and nothing read it: FBD had no store of per-display control
+  values for it to act on, so a visible picker could not do anything. `DisplayController`
+  now records the brightness it sets, per display identity, and launch reads it back,
+  re-writes it, or leaves the device alone as asked. Absence is stored as absent rather than
+  0, because 0 is a legitimate brightness — and the default policy touches nothing, so a
+  default install behaves exactly as before. Verified live: with `write`, a stored 0.4
+  reached the panel (38.6% after backlight granularity); with `read`, a deliberately wrong
+  0.99 was corrected to the device's 0.3898 **without changing the device**; with `assume`,
+  nothing happened at all.
 - **"Allow unsafe modes" did nothing; now it does.** The setting was written by the
   Settings page and read by nobody — every mode list came straight from the raw list — so
   the switch changed nothing while appearing to work. The offered list now runs through
