@@ -36,7 +36,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.moveToActiveSpace, .transient, .fullScreenAuxiliary]
         panel.minSize = NSSize(width: 420, height: 500)
-        panel.maxSize = NSSize(width: 600, height: 900)
+        panel.maxSize = NSSize(width: 900, height: 900)
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         // Remembers position/size across launches and shows.
@@ -78,15 +78,20 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         )
     }
 
-    /// The settings page needs more vertical room than the main page.
-    private static let settingsHeight: CGFloat = 860
+    /// The settings page is a sidebar plus a long pane, so it needs both more
+    /// width and more height than the main page.
+    private static let settingsSize = NSSize(width: 760, height: 860)
+    private static let mainSize = NSSize(width: 460, height: 650)
 
     @objc private func settingsOpened(_ sender: Any?) {
-        resizePanel(to: NSSize(width: panel.frame.width, height: max(Self.settingsHeight, panel.frame.height)))
+        resizePanel(to: NSSize(
+            width: max(Self.settingsSize.width, panel.frame.width),
+            height: max(Self.settingsSize.height, panel.frame.height)
+        ))
     }
 
     @objc private func settingsClosed(_ sender: Any?) {
-        resizePanel(to: NSSize(width: panel.frame.width, height: 650))
+        resizePanel(to: Self.mainSize)
     }
 
     private func resizePanel(to size: NSSize) {

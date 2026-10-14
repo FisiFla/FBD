@@ -27,6 +27,8 @@ struct DisplayOptionsMenuView: View {
     @State private var colorProfiles: [ColorProfile] = []
     @State private var colorProfilesLoaded = false
     @State private var colorProfileController = ColorProfileController()
+    /// Resolution controller backing the favourite slots in the menu.
+    @State private var favouriteResolution = ResolutionController()
 
     var body: some View {
         Menu {
@@ -119,6 +121,33 @@ struct DisplayOptionsMenuView: View {
                         } else {
                             Text(preset.name)
                         }
+                    }
+                }
+            }
+        }
+
+        // Resolution favourites — five recall slots, the panel's analogue of
+        // BetterDisplay's per-display favourite modes. Each slot is its own
+        // submenu so the recorded mode is visible before applying it.
+        Menu("Resolution Favourites") {
+            ForEach(1...ModeFavourites.slotCount, id: \.self) { slot in
+                Menu(favouriteSlotLabel(slot)) {
+                    if let favourite = ModeFavourites.favourite(slot: slot, for: display.identityKey) {
+                        Button("Apply \(favouriteSummary(favourite))") {
+                            let recall = favouriteResolution.applyFavourite(
+                                slot: slot,
+                                for: display.identityKey,
+                                to: display
+                            )
+                            if recall.isUnavailable {
+                                FBDNotice.shared.report("Favourite \(slot) no longer has a matching mode on this display.")
+                            }
+                            refreshTick += 1
+                        }
+                        Divider()
+                    }
+                    Button("Record current resolution") {
+                        recordFavourite(slot)
                     }
                 }
             }
@@ -229,7 +258,7 @@ struct DisplayOptionsMenuView: View {
                     name: .fbdOpenSettings,
                     object: nil,
                     userInfo: [
-                        "tab": SettingsView.SettingsTab.perDisplay.rawValue,
+                        "tab": SettingsView.SettingsPage.displays.rawValue,
                         "displayID": NSNumber(value: display.id),
                     ]
                 )
@@ -238,6 +267,37 @@ struct DisplayOptionsMenuView: View {
     }
 
     // MARK: - Quick control helpers
+
+    /// The label for one favourite slot: the recorded mode, or "empty".
+    private func favouriteSlotLabel(_ slot: Int) -> String {
+        guard let favourite = ModeFavourites.favourite(slot: slot, for: display.identityKey) else {
+            return "\(slot) — empty"
+        }
+        return "\(slot) — \(favouriteSummary(favourite))"
+    }
+
+    private func favouriteSummary(_ favourite: ModeFavourite) -> String {
+        var text = "\(favourite.width) × \(favourite.height)"
+        if favourite.isHiDPI { text += " HiDPI" }
+        if favourite.refreshRate > 0 { text += String(format: " @ %.2f Hz", favourite.refreshRate) }
+        return text
+    }
+
+    /// Record the display's current mode into a slot, reporting either outcome
+    /// — a menu dismisses on selection, so a status line inside it would never
+    /// be read (the banner is the surface for menu-initiated actions).
+    private func recordFavourite(_ slot: Int) {
+        guard let mode = favouriteResolution.currentMode(for: display) else {
+            FBDNotice.shared.report("No current resolution to record.")
+            return
+        }
+        guard ModeFavourites.save(mode, into: slot, for: display.identityKey) else {
+            FBDNotice.shared.report("Resolution favourite \(slot) is out of range.")
+            return
+        }
+        FBDNotice.shared.report("Recorded resolution favourite \(slot).")
+        refreshTick += 1
+    }
 
     private var hidpiBinding: Binding<Bool> {
         Binding(
