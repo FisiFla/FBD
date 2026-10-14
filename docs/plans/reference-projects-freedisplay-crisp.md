@@ -110,7 +110,13 @@ sources linked. Paraphrased, the rules that bear on FBD:
    `NoDisplaySleepAssertion` while FBD runs; verified with `pmset -g assertions`,
    which shows the assertion while the app is up and nothing after it quits. It is
    app-side by necessity: the assertion belongs to the process holding it.
-3. **Dark Mode toggle** — completes FBD's Night Shift + True Tone into Crisp's set.
+3. **Dark Mode toggle** — **done.** FBD's Night Shift + True Tone are now Crisp's set. Crisp's own
+   mechanism is the one used: SkyLight's appearance theme (`SLSGetAppearanceThemeLegacy` /
+   `SLSSetAppearanceThemeLegacy` / `SLSSetAppearanceThemeNotifying`), resolved at runtime through a
+   C shim so a Mac without it degrades rather than crashing, with the notifying variant preferred
+   so the switch crossfades exactly as Control Center's does. Surfaced as `fbdcli dark-mode
+   [on|off]` and a toggle beside True Tone. Not stored in `Settings`: it is the system's switch,
+   and another app can change it.
 4. **Input switching in the per-display UI** — the capability already exists over DDC
    and in the CLI; this only surfaces it where a person would look for it.
 5. **Checkmark lists for the panel's discrete selections** — **done, though not as rule 2

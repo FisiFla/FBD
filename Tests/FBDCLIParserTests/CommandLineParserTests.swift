@@ -33,6 +33,20 @@ final class CommandLineParserTests: XCTestCase {
 
     // MARK: - Ambient-light auto-brightness (#12)
 
+    func testDarkModeBare() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["dark-mode"]),
+            .command(.darkMode, raw: ["dark-mode"], direct: false)
+        )
+    }
+
+    func testDarkModeWithValue() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["dark-mode", "off"]),
+            .command(.darkMode, raw: ["dark-mode", "off"], direct: false)
+        )
+    }
+
     func testAmbientLightBare() {
         XCTAssertEqual(
             CLICommandLine.parse(["ambient-light"]),

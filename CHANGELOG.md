@@ -10,6 +10,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **A Dark Mode toggle, completing Night Shift + True Tone.** Crisp has all three system toggles and
+  FBD had two. The mechanism is Crisp's: SkyLight's appearance theme
+  (`SLSGetAppearanceThemeLegacy` / `SLSSetAppearanceThemeLegacy` / `SLSSetAppearanceThemeNotifying`),
+  resolved at runtime through a C shim like every other private surface, so a Mac without those
+  symbols degrades to "unavailable" rather than crashing — and the notifying variant is preferred so
+  the switch crossfades the way Control Center's does. Available as `fbdcli dark-mode [on|off]`
+  (bare, it reports) and as a toggle beside True Tone in Settings. Deliberately **not** stored in
+  `Settings`: it is the system's switch and another app can flip it, so the UI reads it live rather
+  than remembering a value that could go stale.
 - **The resolution list shows the sizes you actually switch between.** The panel's Resolutions
   section offered every mode inline — 132 of them on this machine — while reaching one through
   the ⋯ submenu cost three clicks, so neither route was good. It now shows one row per logical
