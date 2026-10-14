@@ -106,6 +106,15 @@ Commands:
                                 lg, samsung, philips, or yamaha; action is
                                 volume <0-100>, power, or input <name>
                                 (requires the device in network/API mode)
+  config [show]                 BetterDisplay-parity settings: per-property
+                                configuration protection, resolution favourites,
+                                lock dimming, the keyboard control target, and
+                                display-group sync policy. Subcommands: show,
+                                protect <id> [properties], favourite <id>
+                                list|save|apply [slot], lockdim [on|off],
+                                lockdim-target [0-100], keytarget
+                                [mouse|focused|all|audio], group-policy
+                                <group> [policy], group-enabled <group> [on|off]
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
@@ -220,6 +229,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdNightShift(args: rest)
     case .truetone:
         return cmdTrueTone(args: rest)
+    case .config:
+        return cmdConfig(controller, args: rest)
     case .tv:
         return cmdTV(args: rest)
     case .help:
