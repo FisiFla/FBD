@@ -114,7 +114,10 @@ Commands:
                                 list|save|apply [slot], lockdim [on|off],
                                 lockdim-target [0-100], keytarget
                                 [mouse|focused|all|audio], group-policy
-                                <group> [policy], group-enabled <group> [on|off]
+                                <group> [policy], group-enabled <group> [on|off],
+                                group-sync <group> <0-100>, connections
+                                connect-all|disconnect-all-but-main|swap-identical,
+                                model <key> [value]
   help                          Show this help
 
 Exit codes: 0 success, 1 usage/argument error, 2 operation failed.
