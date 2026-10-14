@@ -39,6 +39,8 @@ _fbdcli() {
     'nightshift:Get or set Night Shift strength'
     'truetone:Get or set True Tone'
     'tv:Control a TV/AVR over the network'
+    'report:Detailed report of every display (for bug reports)'
+    'config:BetterDisplay-parity settings (show/protect/favourite/lockdim/…)'
     'help:Show help'
   )
 
@@ -73,6 +75,14 @@ _fbdcli() {
           ;;
         tv)
           _fbdcli_tv
+          ;;
+        config)
+          _values 'config subcommand' \
+            show protect favourite lockdim lockdim-target keytarget \
+            group-policy group-enabled group-sync connections model device
+          ;;
+        report)
+          _message 'optional output file'
           ;;
         brightness|contrast|volume)
           _fbdcli_percent_command

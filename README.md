@@ -4,14 +4,16 @@ A free, MIT-licensed macOS menu-bar app for display control: brightness (Apple +
 volume, contrast, input switching, resolution/refresh-rate control, virtual displays,
 XDR/HDR brightness upscaling, full-screen software filters (contrast, saturation,
 gamma, color temperature, invert, sharpening, zoom/pan, 3D LUT), screen rotation,
-EDID overrides, per-display event automation, and more.
+EDID overrides, per-display event automation (shell, URL or notification), a configurable
+on-screen HUD and Dock behaviour, saved TV/AVR control over the network, display groups
+with sync policies, resolution favourites, lock-dim, and more.
 
 **Goal: full feature parity with BetterDisplay — no Pro tier, no licensing, no telemetry.
 Updates via Sparkle (optional).**
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-All feature tiers are implemented (477 unit tests, CI green per push). Apple locks down
+All feature tiers are implemented (868 unit tests, CI green per push). Apple locks down
 private display APIs differently per macOS release; FBD degrades gracefully (feature off,
 UI notes it) when a path is unavailable.
 
@@ -66,6 +68,9 @@ swift run fbdcli filter 1 1 1 1 1 --sharpness 2 --zoom 1.5   # sharpen + zoom
 swift run fbdcli filter 1 1 1 1 1 --lut ~/LUTs/grade.cube     # custom 3D LUT
 swift run fbdcli rotate 3 90          # rotate an external display
 swift run fbdcli settings             # masked settings dump (for bug reports)
+swift run fbdcli report               # detailed per-display report (for bug reports)
+swift run fbdcli config show          # lock dim, keyboard target, groups, brightness model…
+swift run fbdcli config device add "Living room TV" lg 192.168.0.50
 ```
 
 `fbdcli help` lists all commands; `--direct` forces local execution instead of routing
@@ -93,6 +98,12 @@ curl -H "X-FBD-Token: $TOKEN" http://127.0.0.1:8765/api/displays
 `fbdcli` sends the token automatically (single driver — writes go through the app so the
 CLI never races the DDC bus). CORS is enabled for web clients (`OPTIONS` → 204);
 `GET /api/health` is the one unauthenticated endpoint.
+
+Alongside `/api/displays`, `/api/virtual` and `/api/system`, a `/api/config` namespace
+covers the settings surfaces: lock-dim, the keyboard control target, connection management,
+per-display protection, resolution favourites and the saved device registry. `GET
+/api/config` reports them all; writes are `POST /api/config/<what>` with a JSON body, and a
+refusal names the valid values rather than ignoring the request.
 
 ## DDC on Apple Silicon
 
