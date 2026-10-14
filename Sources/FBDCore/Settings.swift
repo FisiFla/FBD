@@ -411,6 +411,13 @@ public enum Settings {
             + "upscaleMax=\(Int(p.upscaleMaxPercent))% "
             + "startup=\(p.startupControlValuePolicy.rawValue)"
     }
+
+    // MARK: Network devices (TV / AVR registry)
+
+    /// Storage key for the saved network-device registry. Exposed so
+    /// `NetworkDeviceRegistry` writes through this one path rather than a
+    /// second one.
+    static let networkDevicesKey = "networkDevices.v1"
 }
 
 /// Property-wrapper helper backing a UserDefaults key.

@@ -239,4 +239,31 @@ in `docs/PRIVATE_APIS.md`, so the ledger is deliberately unchanged.
 Nothing was committed and nothing was pushed; all work is in the working tree on the branch
 `feat/betterdisplay-parity`, ready for review.
 
+---
+
+## Follow-up items (continuing past the plan's phases)
+
+The user asked for the remaining backlog to continue after the plan's list closed. Each item is a
+separate commit on the same branch.
+
+- **`fbdcli config` completed** (`cb3ae63`) — `group-sync <group> <0-100>`,
+  `connections connect-all|disconnect-all-but-main|swap-identical`, and
+  `model <key> [value]`. The last also makes each brightness-model value settable on its own rather
+  than only as a whole blob. Every path validates and refuses bad input.
+- **Saved network-device registry** — FBD had four working network controllers (LG webOS, Samsung,
+  Philips, Yamaha) but nothing remembered a device, and reaching one meant repeating brand + host
+  every time. `NetworkDeviceRegistry` stores name/brand/host[/Yamaha zone] through the same settings
+  write path, `config device list|add|remove` manages them, and `fbdcli tv <name> …` addresses one
+  by name. Host validation is fail-closed: a scheme, path, credentials, query or `:port` suffix is
+  refused when the device is added, because the host is interpolated into a request URL by the
+  controllers.
+
+  Two things were found by testing rather than by design: a bare IPv6 literal (`fe80::1`) was
+  rejected because its `:1` looked like a port suffix, and `[fe80::1]:3000` was *accepted* when it
+  should not have been. Both are fixed and covered.
+
+  `NetworkDeviceRegistryTests` (20 cases) covers validation, dedup, the size bound and corrupt-blob
+  handling. FBDCoreTests 649, FBDCLIParserTests 136 — **785 tests, 0 failures**.
+
+
 
