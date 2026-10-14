@@ -311,7 +311,14 @@ public final class DisplayController {
     /// rotation on success, nil on failure.
     @discardableResult
     public func setRotation(_ degrees: Int, on display: Display) -> Int? {
-        SkyLightAPI.setRotation(degrees, for: display.id)
+        let applied = SkyLightAPI.setRotation(degrees, for: display.id)
+        // Rotation cannot be read back, so the value FBD applied is the only record of it —
+        // and the only thing configuration protection could restore. Recorded only when the
+        // write actually succeeded.
+        if let applied {
+            Settings.setStoredRotation(applied, for: display.identityKey)
+        }
+        return applied
     }
 
     // MARK: - Main display / arrangement

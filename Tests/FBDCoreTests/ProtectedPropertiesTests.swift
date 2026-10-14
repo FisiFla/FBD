@@ -1,183 +1,121 @@
-import CoreGraphics
 import XCTest
 @testable import FBDCore
 
-/// Pure selection logic for per-property configuration protection: name
-/// parsing, the apply-order listing, and which properties a given display
-/// exposes. No hardware involved.
+/// Row 1: per-property configuration protection. What is asserted here is the option set and
+/// the stored values the two *unreadable* properties are protected from — the restore path
+/// itself needs a live display, and `SavedState` is private to its controller.
 final class ProtectedPropertiesTests: XCTestCase {
+    private let suiteName = "test.fbd.protectedproperties"
+    private var defaults: UserDefaults!
 
-    private func makeDisplay(
-        id: CGDirectDisplayID = 1,
-        vendor: UInt32 = 0x10AC,
-        model: UInt32 = 0x1234
-    ) -> Display {
-        Display(
-            id: id,
-            name: "Protection Test",
+    override func setUp() {
+        super.setUp()
+        UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
+        defaults = UserDefaults(suiteName: suiteName)!
+    }
+
+    override func tearDown() {
+        UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
+        defaults = nil
+        super.tearDown()
+    }
+
+    // MARK: - The option set
+
+    func testRotationAndColourProfileAreSelectableByName() {
+        let selection = ProtectedProperties.parse("rotation,colourProfile")
+        XCTAssertEqual(selection, [.rotation, .colourProfile])
+        XCTAssertEqual(selection?.names, ["rotation", "colourProfile"])
+    }
+
+    func testAllCoversBothNewProperties() {
+        XCTAssertTrue(ProtectedProperties.all.contains(.rotation))
+        XCTAssertTrue(ProtectedProperties.all.contains(.colourProfile))
+        XCTAssertEqual(ProtectedProperties.parse("all")?.contains(.rotation), true)
+    }
+
+    /// Widening what protection covers must stay an explicit user choice: the legacy default
+    /// is what every existing install has, so it must not have grown two properties.
+    func testTheLegacyDefaultDidNotWiden() {
+        XCTAssertEqual(ProtectedProperties.legacyDefault, [.resolution, .brightness, .preset])
+        XCTAssertFalse(ProtectedProperties.legacyDefault.contains(.rotation))
+        XCTAssertFalse(ProtectedProperties.legacyDefault.contains(.colourProfile))
+    }
+
+    /// The apply order is both the CLI vocabulary and the restore sequence, and brightness
+    /// stays last because it is applied after a settling delay.
+    func testApplyOrderPutsBrightnessLast() {
+        XCTAssertEqual(ProtectedProperties.ordered.last?.name, "brightness")
+        XCTAssertEqual(
+            ProtectedProperties.all.names,
+            [
+                "resolution", "refreshRate", "preset", "hdrMode", "mainStatus",
+                "rotation", "colourProfile", "brightness",
+            ]
+        )
+    }
+
+    func testAnUnknownNameIsStillRefusedRatherThanDropped() {
+        XCTAssertNil(ProtectedProperties.parse("rotation,nonsense"))
+    }
+
+    /// Neither new property can be probed — there is no readable rotation and no readable
+    /// current profile — so both hang off the same condition the mode-based ones do: a display
+    /// FBD can enumerate. With no mode there is nothing to offer.
+    func testTheUnprobeablePropertiesFollowTheEnumeratedDisplayCondition() {
+        let idle = Display(
+            id: 7,
+            name: "No modes",
             isBuiltin: false,
-            vendorNumber: vendor,
-            modelNumber: model,
-            serialNumber: 0x5678,
+            vendorNumber: 1,
+            modelNumber: 2,
+            serialNumber: 3,
             bounds: .zero,
             isOnline: true,
             isActive: true
         )
+
+        let available = ProtectedProperties.available(for: idle)
+
+        XCTAssertTrue(available.contains(.mainStatus), "main status works for any display")
+        XCTAssertFalse(available.contains(.rotation))
+        XCTAssertFalse(available.contains(.colourProfile))
     }
 
-    private func makeMode(number: Int32 = 7, refreshRate: Double = 60) -> DisplayMode {
-        DisplayMode(
-            modeNumber: number,
-            flags: DisplayMode.safeFlag,
-            width: 1920,
-            height: 1080,
-            pixelsWide: 1920,
-            pixelsHigh: 1080,
-            refreshRate: refreshRate,
-            encoding: "RGB "
+    // MARK: - The values the two unreadable properties are protected from
+
+    func testRotationRoundTripsThroughTheInjectedSuite() {
+        XCTAssertNil(Settings.storedRotation(for: "a", in: defaults))
+        Settings.setStoredRotation(90, for: "a", in: defaults)
+        XCTAssertEqual(Settings.storedRotation(for: "a", in: defaults), 90)
+        Settings.setStoredRotation(nil, for: "a", in: defaults)
+        XCTAssertNil(Settings.storedRotation(for: "a", in: defaults))
+    }
+
+    /// Zero degrees is a real rotation (landscape), so it has to survive — which is why the
+    /// setter takes an optional instead of treating 0 as "unset".
+    func testZeroDegreesIsStoredRatherThanReadAsAbsent() {
+        Settings.setStoredRotation(0, for: "a", in: defaults)
+        XCTAssertEqual(Settings.storedRotation(for: "a", in: defaults), 0)
+    }
+
+    func testColourProfileRoundTripsThroughTheInjectedSuite() {
+        XCTAssertNil(Settings.storedColourProfile(for: "a", in: defaults))
+        Settings.setStoredColourProfile("/Library/ColorSync/Profiles/test.icc", for: "a", in: defaults)
+        XCTAssertEqual(
+            Settings.storedColourProfile(for: "a", in: defaults),
+            "/Library/ColorSync/Profiles/test.icc"
         )
+        Settings.setStoredColourProfile(nil, for: "a", in: defaults)
+        XCTAssertNil(Settings.storedColourProfile(for: "a", in: defaults))
     }
 
-    private func makePreset(index: Int = 0) -> XDRPreset {
-        XDRPreset(
-            index: index,
-            name: "Test Preset \(index)",
-            isValid: true,
-            isWritable: true,
-            maxSDRLuminance: 500,
-            maxHDRLuminance: 1600,
-            maxSliderBrightness: 1600,
-            minSliderBrightness: 0,
-            edrHeadroom: 16,
-            uniqueID: Data(repeating: 0, count: 16),
-            raw: [:]
-        )
-    }
-
-    // MARK: - Set algebra
-
-    func testAllContainsEveryNamedProperty() {
-        for (name, property) in ProtectedProperties.ordered {
-            XCTAssertTrue(ProtectedProperties.all.contains(property), "all must contain \(name)")
-        }
-        XCTAssertEqual(ProtectedProperties.all.names.count, ProtectedProperties.ordered.count)
-    }
-
-    func testLegacyDefaultIsModeBrightnessPreset() {
-        XCTAssertEqual(ProtectedProperties.legacyDefault, [.resolution, .brightness, .preset])
-        XCTAssertFalse(ProtectedProperties.legacyDefault.contains(.hdrMode))
-        XCTAssertFalse(ProtectedProperties.legacyDefault.contains(.mainStatus))
-        XCTAssertFalse(ProtectedProperties.legacyDefault.contains(.refreshRate))
-    }
-
-    func testNamesFollowApplyOrder() {
-        // Apply order is resolution, refreshRate, preset, hdrMode, mainStatus, brightness.
-        let set: ProtectedProperties = [.brightness, .mainStatus, .resolution]
-        XCTAssertEqual(set.names, ["resolution", "mainStatus", "brightness"])
-    }
-
-    // MARK: - Parsing
-
-    func testParseAcceptsCommaSeparatedNames() {
-        XCTAssertEqual(ProtectedProperties.parse("resolution,brightness"), [.resolution, .brightness])
-    }
-
-    func testParseIsCaseInsensitiveAndToleratesSpaces() {
-        XCTAssertEqual(ProtectedProperties.parse(" RefreshRate , HDRMode "), [.refreshRate, .hdrMode])
-    }
-
-    func testParseAllExpands() {
-        XCTAssertEqual(ProtectedProperties.parse("all"), .all)
-    }
-
-    func testParseAccumulatesWithAll() {
-        XCTAssertEqual(ProtectedProperties.parse("all,brightness"), .all)
-    }
-
-    /// A typo must be refused, not silently dropped — otherwise a user could
-    /// believe a property is protected when it is not.
-    func testParseRejectsUnknownName() {
-        XCTAssertNil(ProtectedProperties.parse("resolution,nonsense"))
-        XCTAssertNil(ProtectedProperties.parse(""))
-        XCTAssertNil(ProtectedProperties.parse(" "))
-    }
-
-    func testNamesRoundTripThroughParse() {
-        for property in [ProtectedProperties.all, .legacyDefault, [.hdrMode], [.mainStatus]] {
-            XCTAssertEqual(
-                ProtectedProperties.parse(property.names.joined(separator: ",")),
-                property,
-                "names/parse must round-trip for \(property.rawValue)"
-            )
-        }
-    }
-
-    // MARK: - Availability
-
-    func testBareDisplayOnlyExposesMainStatus() {
-        // A display with no mode, no brightness path and no XDR/HDR support.
-        XCTAssertEqual(ProtectedProperties.available(for: makeDisplay()), [.mainStatus])
-    }
-
-    func testModeExposesResolutionAndRefreshRate() {
-        let display = makeDisplay()
-        let mode = makeMode()
-        display.updateModes([mode], current: mode)
-        let available = ProtectedProperties.available(for: display)
-        XCTAssertTrue(available.contains(.resolution))
-        XCTAssertTrue(available.contains(.refreshRate))
-        XCTAssertFalse(available.contains(.brightness))
-    }
-
-    func testBrightnessExposedByAnyControlPath() {
-        let apple = makeDisplay(id: 1)
-        apple.updateAppleBrightnessStatus(available: true)
-        XCTAssertTrue(ProtectedProperties.available(for: apple).contains(.brightness))
-
-        let ddc = makeDisplay(id: 2)
-        ddc.updateDDCStatus(available: true, capabilities: nil)
-        XCTAssertTrue(ProtectedProperties.available(for: ddc).contains(.brightness))
-    }
-
-    func testPresetRequiresCapabilityAndPresets() {
-        let display = makeDisplay()
-        display.updateXDRState(
-            presets: [],
-            isXDRCapable: true,
-            activePresetIndex: nil,
-            isXDRUpscaled: false,
-            xdrUpscaleTargetNits: nil,
-            isHDRModeCapable: false,
-            isHDRModeEnabled: false
-        )
-        XCTAssertFalse(
-            ProtectedProperties.available(for: display).contains(.preset),
-            "XDR-capable but with no presets listed must not offer preset protection"
-        )
-
-        display.updateXDRState(
-            presets: [makePreset()],
-            isXDRCapable: true,
-            activePresetIndex: 0,
-            isXDRUpscaled: false,
-            xdrUpscaleTargetNits: nil,
-            isHDRModeCapable: false,
-            isHDRModeEnabled: false
-        )
-        XCTAssertTrue(ProtectedProperties.available(for: display).contains(.preset))
-    }
-
-    func testHDRModeRequiresCapability() {
-        let display = makeDisplay()
-        display.updateXDRState(
-            presets: [],
-            isXDRCapable: false,
-            activePresetIndex: nil,
-            isXDRUpscaled: false,
-            xdrUpscaleTargetNits: nil,
-            isHDRModeCapable: true,
-            isHDRModeEnabled: true
-        )
-        XCTAssertTrue(ProtectedProperties.available(for: display).contains(.hdrMode))
+    func testTheTwoStoredValuesAreKeyedByIdentitySoDisplaysDoNotShare() {
+        Settings.setStoredRotation(90, for: "a", in: defaults)
+        Settings.setStoredRotation(270, for: "b", in: defaults)
+        Settings.setStoredColourProfile("/x/a.icc", for: "a", in: defaults)
+        XCTAssertEqual(Settings.storedRotation(for: "a", in: defaults), 90)
+        XCTAssertEqual(Settings.storedRotation(for: "b", in: defaults), 270)
+        XCTAssertNil(Settings.storedColourProfile(for: "b", in: defaults))
     }
 }

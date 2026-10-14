@@ -10,6 +10,13 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **Configuration protection covers rotation and the colour profile.**
+  `ProtectedProperties` offered six of BetterDisplay's nine properties; it offers eight now.
+  Neither new one can be *read* — there is no readable rotation and no readable current
+  colour profile — so both are restored from the value FBD itself last applied, recorded as
+  it applies it; one set by another tool is invisible, which the type says plainly. The
+  legacy default is deliberately unchanged, so upgrading never begins re-applying more state
+  than before: widening remains an explicit choice.
 - **A saved network device can be attached to a display.** The device then follows that
   display's volume when the brightness/volume keys drive it, so a TV or AVR stops being
   something reachable only through `fbdcli tv`. Attachments are keyed by the display's

@@ -184,7 +184,10 @@ final class ConfigProtectionControllerTests: XCTestCase {
 
         XCTAssertEqual(
             controller.applicableProperties(for: display),
-            [.resolution, .refreshRate, .mainStatus]
+            // Rotation and the colour profile are offered for any enumerated display because
+            // neither can be probed — there is nothing to test for — so a display with a mode
+            // exposes them alongside the mode-based properties.
+            [.resolution, .refreshRate, .mainStatus, .rotation, .colourProfile]
         )
     }
 
