@@ -19,7 +19,7 @@ enum FBDTheme {
     static let radiusTile: CGFloat = 8
     /// Elevated cards (display rows, settings groups).
     static let radiusCard: CGFloat = 12
-    /// Inset panels inside a card (DDC controls).
+    /// Inset wells inside a panel band (DDC controls).
     static let radiusInset: CGFloat = 9
 
     /// Reserved height for the transparent titlebar strip (traffic lights).
@@ -50,6 +50,15 @@ enum FBDTheme {
     /// glass-on-glass, which flattens the hierarchy and makes the chrome compete
     /// with the content it frames. See `fbdChromeBand()`.
     static let chromeBandOpacity: Double = 0.08
+
+    /// The panel's content bands.
+    ///
+    /// The panel is *one* surface — its own backdrop — and the chrome already reads that way
+    /// (`fbdChromeBand`). Rows used to be rounded cards floating on top of it, each with its own
+    /// fill and border, which is the glass-on-glass stacking the chrome fix was about, one level
+    /// down. A row is now a full-width band of this shade instead: same surface, no second
+    /// layer, and the divider between rows does the separating rather than a gap.
+    static let panelBandOpacity: Double = 0.035
 }
 
 extension View {
@@ -73,6 +82,12 @@ extension View {
     /// backdrop every time the panel redraws.
     func fbdChromeBand() -> some View {
         background(Color.primary.opacity(FBDTheme.chromeBandOpacity))
+    }
+
+    /// The panel's row surface: a full-width band rather than a floating rounded card, so the
+    /// panel stays one surface. See `FBDTheme.panelBandOpacity`.
+    func fbdPanelBand() -> some View {
+        background(Color.primary.opacity(FBDTheme.panelBandOpacity))
     }
 }
 
