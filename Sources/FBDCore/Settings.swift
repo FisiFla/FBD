@@ -250,6 +250,16 @@ public enum Settings {
     }
 
     /// Show the custom brightness/volume OSD overlay.
+    /// Show the app in the Dock. A menu-bar app runs as an accessory — no Dock
+    /// icon, no app-switcher entry — so this is the opt-in that makes it regular.
+    @Storage(key: "showDockIcon", defaultValue: false)
+    public static var showDockIcon: Bool
+
+    /// Show a Dock icon briefly at launch, then drop back to accessory, so the app
+    /// can be found in the Dock just after it opens without living there.
+    @Storage(key: "briefDockIconAtStartup", defaultValue: false)
+    public static var briefDockIconAtStartup: Bool
+
     @Storage(key: "customOSDEnabled", defaultValue: true)
     public static var customOSDEnabled: Bool
 
@@ -422,6 +432,9 @@ public enum Settings {
     /// Storage key for the display → network-device attachments
     /// (`displayIdentity` → device name). Same single write path.
     static let networkDeviceAttachmentsKey = "networkDeviceAttachments.v1"
+
+    /// Storage key for the HUD's style.
+    static let osdStyleKey = "osdStyle.v1"
 }
 
 /// Property-wrapper helper backing a UserDefaults key.

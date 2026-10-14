@@ -123,6 +123,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   `About` with long pages, and the panel grows to 760×860 for it.
 
 ### Changed
+- **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom
+  centre), a continuous or a segmented bar, a dark HUD or one that follows the system
+  appearance, a shadow toggle, and a corner-radius slider. The defaults reproduce the
+  previous appearance exactly, so an untouched install is unchanged, and every value is
+  clamped — a stored radius cannot clip the content. The HUD's content now carries its own
+  foreground, which also fixes unreadable text on the dark HUD in light mode.
+- **Dock visibility rules.** A menu-bar app is an accessory by default; it can now be given
+  a permanent Dock icon, or a brief one at launch so it is findable in the Dock just after
+  it opens.
 - **The menu-bar panel is flattened.** Each display is now one compact row: icon, name,
   capability badges, current mode, the options menu and the power button on the title
   line, with the brightness slider and its nits value inline beneath it. Filters, DDC/CI

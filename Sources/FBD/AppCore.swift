@@ -72,6 +72,8 @@ final class AppCore {
         if automation.hasNotificationRule {
             UserNotificationDeliverer.requestAuthorization()
         }
+
+        applyDockPolicy()
         // Lock dim: lower brightness while the screen is locked or the screensaver
         // is up, and restore it on unlock. Started unconditionally — the policy is
         // read per event, so a disabled policy is a no-op rather than a dead
@@ -107,6 +109,27 @@ final class AppCore {
         if IOAVServiceAPI.isAppleSilicon && IOAVServiceAPI.isRunningUnderRosetta && Settings.showRosettaWarning {
             log.warning("Running under Rosetta — DDC control is unavailable")
             NotificationCenter.default.post(name: .fbdRosettaWarningActive, object: nil)
+        }
+    }
+
+    /// Dock visibility. A menu-bar app runs as an accessory — no Dock icon and no
+    /// app-switcher entry — unless the user asks for one, or asks for one briefly
+    /// at launch so the app can be found in the Dock just after it opens.
+    ///
+    /// `main.swift` sets `.accessory` before the app runs; this is what can change
+    /// it afterwards, and it re-checks the permanent setting before dropping back,
+    /// so a brief icon cannot undo a deliberate one.
+    private func applyDockPolicy() {
+        if Settings.showDockIcon {
+            NSApp.setActivationPolicy(.regular)
+            return
+        }
+        guard Settings.briefDockIconAtStartup else { return }
+        NSApp.setActivationPolicy(.regular)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Settings.showDockIcon else { return }
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 

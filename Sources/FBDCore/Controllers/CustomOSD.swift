@@ -41,12 +41,17 @@ public final class CustomOSD {
     public func show(icon: String, value: Double, displayID: CGDirectDisplayID? = nil) {
         guard Settings.customOSDEnabled else { return }
         let clamped = min(max(value, 0), 1)
+        let style = OSDStyle.load()
         guard let screen = targetScreen(displayID: displayID) else {
             log.warning("show: no screen found (display \(displayID.map(String.init) ?? "cursor"))")
             return
         }
 
-        let window = makeWindow(content: OSDContent(icon: icon, value: clamped), on: screen)
+        let window = makeWindow(
+            content: OSDContent(icon: icon, value: clamped, style: style),
+            style: style,
+            on: screen
+        )
         self.window = window
 
         // Reset the auto-hide timer on every show.
@@ -71,12 +76,14 @@ public final class CustomOSD {
 
     // MARK: - Window plumbing
 
-    /// Reuse the existing window when present (just swap the SwiftUI content
-    /// and reposition); otherwise build the borderless HUD window.
-    private func makeWindow(content: OSDContent, on screen: NSScreen) -> NSWindow {
-        if let window, let hostingView {
+    /// Reuse the existing window when present (just swap the SwiftUI content,
+    /// re-apply the style and reposition); otherwise build the borderless HUD
+    /// window.
+    private func makeWindow(content: OSDContent, style: OSDStyle, on screen: NSScreen) -> NSWindow {
+        if let window, let hostingView, let effectView = window.contentView as? NSVisualEffectView {
             hostingView.rootView = content
-            position(window, on: screen)
+            apply(style, to: window, effectView: effectView)
+            position(window, on: screen, style: style)
             return window
         }
 
@@ -85,19 +92,17 @@ public final class CustomOSD {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.hasShadow = true
         window.ignoresMouseEvents = true
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
 
-        // Dark rounded HUD background: NSVisualEffectView with the HUD material.
+        // Rounded HUD background: NSVisualEffectView with the style's material.
         let effectView = NSVisualEffectView()
-        effectView.material = .hudWindow
         effectView.state = .active
         effectView.blendingMode = .withinWindow
         effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = Self.cornerRadius
         effectView.layer?.masksToBounds = true
+        apply(style, to: window, effectView: effectView)
 
         let hostingView = NSHostingView(rootView: content)
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -119,18 +124,46 @@ public final class CustomOSD {
             width: fitting.width > 0 ? fitting.width : 180,
             height: fitting.height > 0 ? fitting.height : 44
         ))
-        position(window, on: screen)
+        position(window, on: screen, style: style)
         return window
     }
 
-    /// Center the window horizontally, just under the menu bar of the screen.
-    private func position(_ window: NSWindow, on screen: NSScreen) {
+    /// Apply the parts of the style the *window* owns — the background material,
+    /// the corner radius and the shadow — as opposed to what the SwiftUI content
+    /// draws. Also used when reusing a window, so a style change takes effect
+    /// without tearing the HUD down.
+    private func apply(_ style: OSDStyle, to window: NSWindow, effectView: NSVisualEffectView) {
+        switch style.background {
+        case .hudDark:
+            effectView.material = .hudWindow
+        case .adaptive:
+            // Lets the material follow the system appearance instead of forcing
+            // the dark HUD in light mode.
+            effectView.material = .popover
+        }
+        effectView.layer?.cornerRadius = CGFloat(style.cornerRadius)
+        window.hasShadow = style.showsShadow
+    }
+
+    /// Place the window on `screen` according to the style. The default (top
+    /// centre, 8pt under the menu bar) is exactly what FBD has always done, so an
+    /// untouched install is unchanged.
+    private func position(_ window: NSWindow, on screen: NSScreen, style: OSDStyle) {
         let visible = screen.visibleFrame
         let size = window.frame.size
-        window.setFrameOrigin(NSPoint(
-            x: visible.midX - size.width / 2,
-            y: visible.maxY - size.height - 8
-        ))
+        let inset: CGFloat = 8
+        let origin: NSPoint
+        switch style.position {
+        case .topCenter:
+            origin = NSPoint(x: visible.midX - size.width / 2, y: visible.maxY - size.height - inset)
+        case .topLeading:
+            origin = NSPoint(x: visible.minX + inset, y: visible.maxY - size.height - inset)
+        case .topTrailing:
+            origin = NSPoint(x: visible.maxX - size.width - inset, y: visible.maxY - size.height - inset)
+        case .bottomCenter:
+            origin = NSPoint(x: visible.midX - size.width / 2, y: visible.minY + inset)
+        }
+        window.setFrameOrigin(origin)
     }
 
     /// The screen to show on: the requested display, else the screen under the
@@ -150,23 +183,65 @@ public final class CustomOSD {
     }
 }
 
-/// The HUD's SwiftUI content: icon + progress bar + percentage.
+/// The HUD's SwiftUI content: icon + bar + percentage.
 private struct OSDContent: View {
     let icon: String
     let value: Double
+    let style: OSDStyle
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .medium))
                 .frame(width: 24)
-            ProgressView(value: value)
-                .frame(width: 110)
+            bar
             Text("\(Int((value * 100).rounded()))%")
                 .font(.system(size: 13, weight: .semibold).monospacedDigit())
                 .frame(width: 38, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
+        // The content carries its own foreground. The HUD's dark material needs a
+        // light one, and a background that follows the system appearance needs a
+        // system-appearance one — the same content cannot serve both, and leaving
+        // it to the default made the dark HUD unreadable in light mode.
+        .foregroundStyle(style.background == .hudDark ? Color.white : Color.primary)
+    }
+
+    @ViewBuilder
+    private var bar: some View {
+        switch style.barStyle {
+        case .continuous:
+            ProgressView(value: value)
+                .frame(width: 110)
+        case .segmented:
+            SegmentedBar(value: value, count: style.segmentCount)
+                .frame(width: 110, height: 10)
+        }
+    }
+}
+
+/// A discrete bar: `count` segments filled to `value`.
+///
+/// Drawn rather than assembled from sliders, because the HUD ignores the mouse and
+/// anything that looks interactive but is not is a lie.
+private struct SegmentedBar: View {
+    let value: Double
+    let count: Int
+
+    var body: some View {
+        GeometryReader { geometry in
+            let gap: CGFloat = 2
+            let total = geometry.size.width
+            let segmentWidth = max((total - gap * CGFloat(count - 1)) / CGFloat(count), 1)
+            let filled = Int((value * Double(count)).rounded())
+            HStack(spacing: gap) {
+                ForEach(0..<count, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(index < filled ? Color.accentColor : Color.primary.opacity(0.25))
+                        .frame(width: segmentWidth)
+                }
+            }
+        }
     }
 }
