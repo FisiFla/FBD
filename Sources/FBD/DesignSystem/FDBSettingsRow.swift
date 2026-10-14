@@ -10,8 +10,12 @@ import SwiftUI
 
 /// A labelled control with an optional explanatory caption underneath.
 struct SettingsRow<Content: View>: View {
-    let title: String
-    var caption: String?
+    /// `LocalizedStringKey`, not `String`. SwiftUI only looks a key up through a
+    /// `LocalizedStringKey`; `Text(String)` is verbatim. With `String` here every settings title
+    /// was invisible to the `.strings` files no matter how many translations were added — the
+    /// lookup simply never happened. Every call site passes a literal, so nothing else changed.
+    let title: LocalizedStringKey
+    var caption: LocalizedStringKey?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -37,11 +41,13 @@ struct SettingsRow<Content: View>: View {
 /// A slider that shows its label and current value inline. BetterDisplay's
 /// settings surface shows label + value for every slider; this is that shape.
 struct SettingsSliderRow: View {
-    let title: String
+    /// `LocalizedStringKey` for the same reason as `SettingsRow`: a `String` here would render
+    /// verbatim and never be looked up.
+    let title: LocalizedStringKey
     let value: Double
     let range: ClosedRange<Double>
     let format: (Double) -> String
-    let caption: String?
+    let caption: LocalizedStringKey?
     let onChange: (Double) -> Void
 
     var body: some View {
