@@ -101,6 +101,12 @@ Entry points are `IODPDeviceCreateWithService` / `IODPServiceCreateWithService` 
 `IOAVCopyFirstMatchingIOAVObjectOfType` and `IODPDeviceGetService` do **not** exist (probed), so
 discovery must stay on service matching.
 
+**`IODPDeviceReadDPCD` is used as of 2026-10-14**, through `Sources/CPrivateAPI/fbd_iodp.c` and
+`IODPAPI` (`fbdcli dpcd <display>`, row 24). The shim declares **only** the read; everything in the
+"deliberately not used" list below stays unused by policy. One caveat from the first live attempt: the
+read declines at *service* discovery on the built-in panel, because `IOAVServiceAPI`'s registry walk is
+tuned for external displays, so a read proven end-to-end needs an external DisplayPort display.
+
 **Deliberately not used — these drive the link, and a wrong value can wedge the only attached
 display:** `IODPDeviceWriteDPCD`, `IODPControllerSetLaneCount` / `SetLinkRate` / `SetMin*` / `SetMax*` /
 `SetDriveSettings` / `SetScramblingInhibited` / `SetQualityPattern` / `SetSupports*`,

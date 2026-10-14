@@ -19,6 +19,29 @@ public enum IOAVServiceAPI {
     ///   - displayID: CG display ID (used for logging only).
     ///   - vendor/model/serial: display identity used to match the registry node.
     public static func findAVService(displayID: CGDirectDisplayID, vendor: UInt32, model: UInt32, serial: UInt32) -> IOAVServiceRef? {
+        guard let service = findDPService(displayID: displayID, vendor: vendor, model: model, serial: serial) else {
+            return nil
+        }
+        defer { IOKitSupport.release(service) }
+        guard let avService = IOAVServiceCreateWithService(service) else {
+            log.debug("IOAVServiceCreateWithService failed for \(displayID)")
+            return nil
+        }
+        return avService
+    }
+
+    /// The `DCPAVServiceProxy` / `IOAVService` node for a display, or nil. A **+1 ref the caller
+    /// owns** — release with `IOKitSupport.release`.
+    ///
+    /// This is the IOService `findAVService` wraps in an IOAVService, and also the one
+    /// `IODPDeviceCreateWithService` wants for the DPCD read path, so it is exposed rather than
+    /// buried inside `findAVService` and duplicated.
+    public static func findDPService(
+        displayID: CGDirectDisplayID,
+        vendor: UInt32,
+        model: UInt32,
+        serial: UInt32
+    ) -> io_service_t? {
         guard isAppleSilicon else { return nil }
 
         guard let displayService = displayService(vendor: vendor, model: model, serial: serial) else {
@@ -32,12 +55,7 @@ public enum IOAVServiceAPI {
             log.debug("No DCPAVServiceProxy/IOAVService under display service for \(displayID)")
             return nil
         }
-        defer { IOKitSupport.release(proxy) }
-        guard let service = IOAVServiceCreateWithService(proxy) else {
-            log.debug("IOAVServiceCreateWithService failed for \(displayID)")
-            return nil
-        }
-        return service
+        return proxy // +1 ref transfers to the caller
     }
 
     /// The IORegistry node for a display, matched by vendor/model/serial of its
@@ -56,6 +74,26 @@ public enum IOAVServiceAPI {
             }
         }
         return nil
+    }
+
+    /// The IORegistry node for the display itself — the `AppleCLCD2` / `IODisplayConnect` /
+    /// `IOMobileFramebufferShim` node that `findDPService` walks *from*. A **+1 ref the caller owns**.
+    ///
+    /// Exposed because `IODPDeviceCreateWithService` accepts a display's own IOService as well as the
+    /// AVService child, and a built-in panel has no `DCPAVServiceProxy` to walk to — measured: the
+    /// DPCD read found no service until this was tried.
+    public static func findDisplayService(
+        displayID: CGDirectDisplayID,
+        vendor: UInt32,
+        model: UInt32,
+        serial: UInt32
+    ) -> io_service_t? {
+        guard isAppleSilicon else { return nil }
+        guard let service = displayService(vendor: vendor, model: model, serial: serial) else {
+            log.debug("No display service for \(displayID)")
+            return nil
+        }
+        return service // +1 ref transfers to the caller
     }
 
     private static func propsMatchDisplay(_ props: [String: Any], vendor: UInt32, model: UInt32, serial: UInt32) -> Bool {

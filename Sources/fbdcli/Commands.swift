@@ -43,17 +43,60 @@ func cmdList(_ controller: DisplayController, args: [String]) -> Int32 {
 /// `fbdcli report [file]` — a detailed, paste-ready report of every display, for
 /// pasting into a bug report. Prints, or writes to `file` when one is given.
 ///
+// MARK: - DPCD (live, over AUX)
+
+/// `fbdcli dpcd <display> [address] [length]` — read a DisplayPort sink's DPCD over AUX and decode
+/// it with the same decoder `report --dpcd` uses.
+///
+/// A **read**, and read-only by construction: the shim declares only `IODPDeviceReadDPCD`. Its
+/// write-side neighbours — `IODPDeviceWriteDPCD`, the retrain and the set calls — all resolve on this
+/// macOS and are deliberately absent, because a wrong write there can wedge the only attached
+/// display.
+@MainActor
+func cmdDPCD(_ controller: DisplayController, display: Display, args: [String]) -> Int32 {
+    guard IODPAPI.isAvailable else {
+        print("dpcd: the IODP entry points are unavailable on this Mac")
+        return 2
+    }
+    var address = DPCDRequest.receiverCapabilityAddress
+    if let raw = args.first {
+        guard let parsed = UInt32(raw, radix: 16) else {
+            print("fbdcli: dpcd: address must be hex (got '\(raw)')")
+            return 1
+        }
+        address = parsed
+    }
+    var length = 16
+    if args.count >= 2 {
+        guard let parsed = Int(args[1]) else {
+            print("fbdcli: dpcd: length must be a number (got '\(args[1])')")
+            return 1
+        }
+        length = parsed
+    }
+    guard let request = DPCDRequest(address: address, length: length) else {
+        print("fbdcli: dpcd: length must be 1…\(DPCDRequest.maxLength)")
+        return 1
+    }
+    switch IODPAPI.read(request, for: display) {
+    case .success(let bytes):
+        print("dpcd \(display.id): \(bytes.count) byte(s) from 0x\(String(format: "%04X", address))")
+        print(DPCDReport.decode(DPCDBuffer(bytes, startingAt: Int(address))).render())
+        return 0
+    case .failure(let failure):
+        print("dpcd \(display.id): \(failure.description)")
+        return 2
+    }
+}
+
 /// The formatting lives in `DisplayReport` in FBDCore and is locked by tests, so
 /// the CLI only supplies the facts it alone can know.
 /// `report --dpcd <hex>` / `--dpcd <hexaddr>:<hex>` — decode a supplied DPCD dump.
 ///
-/// The read path is deliberately not built yet: the private getters that read
-/// DPCD are located and symbol-verified, but their **signatures** are unknown, and
-/// calling one speculatively against a machine's only attached display is not a
-/// risk worth taking. So this decodes a dump the user supplies — from another
-/// tool, or from FBD once the read path lands. The option may be repeated with an
-/// address prefix, which matters because HDCP's BSTATUS sits at 0x68028, far from
-/// the capability block.
+/// For a dump read straight off a sink, `fbdcli dpcd <display>` goes through the live AUX path
+/// (`IODPAPI`); this option stays for a dump from another tool, or one captured earlier. The option
+/// may be repeated with an address prefix, which matters because HDCP's BSTATUS sits at 0x68028, far
+/// from the capability block.
 ///
 /// Returns nil when the option is absent, so `report` carries on with displays.
 @MainActor

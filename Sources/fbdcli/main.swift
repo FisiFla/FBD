@@ -109,6 +109,8 @@ Commands:
   nightshift [0-100]            Get or set Night Shift strength
   truetone [on|off]             Get or set True Tone
   dark-mode [on|off]            Get or set system Dark Mode
+  dpcd <display> [addr] [len]   Read a DisplayPort sink's DPCD over AUX (a
+                                read; hex address, default 0x0000)
   ambient-light <display> [on|off]
                                 Apple display auto-brightness (ambient light);
                                 the state doubles as the capability probe
@@ -252,6 +254,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdTrueTone(args: rest)
     case .darkMode:
         return cmdDarkMode(args: rest)
+    case .dpcd:
+        return withDisplay(controller, rest) { cmdDPCD(controller, display: $0, args: $1) }
     case .ambientLight:
         return withDisplay(controller, rest) { cmdAmbientLight(controller, display: $0, args: $1) }
     case .config:
