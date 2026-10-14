@@ -434,7 +434,9 @@ struct DisplayListView: View {
                     Text("\(Int(newScreenRefresh)) Hz")
                         .monospacedDigit()
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityLabel("Refresh rate")
+                .accessibilityValue("\(Int(newScreenRefresh)) hertz")
                 .controlSize(.small)
                 Toggle("HDR", isOn: $newScreenHDR)
                     .toggleStyle(.switch)

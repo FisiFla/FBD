@@ -392,12 +392,27 @@ separate commit on the same branch.
   element itself (which is what VoiceOver focuses), but it is **not** a fix for the inner buttons and is
   recorded as unproven rather than as an improvement.
 
-  The fix that should work is collapsing the element instead of labelling it around the outside:
-  `.accessibilityElement(children: .ignore)` plus `.accessibilityLabel`, `.accessibilityValue` and
-  `.accessibilityAdjustableAction` on each stepper, which replaces the two unnamed buttons with one named
-  adjustable control. That is a larger change per site (eight of them) and was not attempted. A real
-  VoiceOver check is also still outstanding — raw AX enumeration and what VoiceOver actually announces are
-  not the same thing, and this whole pass has already taught that lesson twice.
+  **Resolved — collapse the element, not label around it.** The fix that works is
+  `.accessibilityElement(children: .combine)` plus `.accessibilityLabel` and `.accessibilityValue` on each
+  `Stepper`, which replaces the two anonymous 11×8 increment/decrement buttons with one named element.
+  Applied to all eight steppers (seven on the Application page, one in the panel's virtual-screen form) and
+  **measured with a self-validating harness: 14 unlabelled buttons → 0**, with each stepper now appearing as
+  a single named element (e.g. `'Hardware maximum' @1094,427`).
+
+  Three things this cost, all recorded because they cost real time:
+
+  - `.accessibilityLabel` alone does **not** work on a `Stepper` (33 → 32). The label lands on the stepper
+    element while the buttons it decomposes into stay anonymous, so the count barely moves.
+  - `.accessibilityElement(children: .ignore)` with an explicit `accessibilityAdjustableAction` — the
+    approach this log previously predicted — turned out to be unnecessary. `.combine` is enough and needs no
+    duplicated step/range logic per site.
+  - The measurement harness now refuses to report a number unless the capture is verified to be showing the
+    page (window state plus a known marker string). A stale *or empty* AX tree otherwise reports "0
+    unlabelled", which is exactly how a bogus result was believed once already — the two attempts that
+    followed were spent chasing a change that had in fact been a no-op.
+
+  Still outstanding: a real VoiceOver check. Raw AX enumeration and what VoiceOver actually announces are
+  not the same thing, and this pass has taught that lesson twice.
 - **The status-item sweep is gone: the gate now drives the app deterministically.** The gate found the
   menu-bar item by clicking every 8pt from x=1710 until a panel happened to open. That is not merely slow, it
   is *unsound*: it cannot tell a real hit from a stale panel, which is exactly how it came to report a click
