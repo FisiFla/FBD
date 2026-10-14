@@ -105,6 +105,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   `About` with long pages, and the panel grows to 760×860 for it.
 
 ### Changed
+- **The menu-bar panel is flattened.** Each display is now one compact row: icon, name,
+  capability badges, current mode, the options menu and the power button on the title
+  line, with the brightness slider and its nits value inline beneath it. Filters, DDC/CI
+  and the resolution/XDR sections moved behind a single **More controls** disclosure.
+  Before this, one display filled most of the 650pt panel, so a multi-display Mac could
+  not see its own displays at once — the one thing the panel exists for. Nothing became
+  unreachable: the ⋯ menu already covered mode, refresh, colour, presets, favourites,
+  mirror, PiP, rotation, disable and Open in Settings, and the folded content is unfolded
+  in Settings → Displays.
 - `Settings.debugSummary` now includes the lock-dim, keyboard-target and
   brightness-model settings.
 - `fbdcli help` documents `config`.
