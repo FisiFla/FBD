@@ -42,6 +42,7 @@ public enum Command: String, CaseIterable {
     case nightshift
     case truetone
     case tv
+    case config
     case help
 }
 

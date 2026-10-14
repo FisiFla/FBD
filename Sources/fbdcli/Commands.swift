@@ -2125,3 +2125,258 @@ func cmdTVYamaha(host: String, action: TVCommand.Action) -> Int32 {
     _ = semaphore.wait(timeout: .now() + 15)
     return printTVResult(brand: "yamaha", host: host, action: action, ok: commandResult)
 }
+
+// MARK: - Configuration (BetterDisplay-parity surfaces)
+
+/// Parse an on/off word. Returns nil for anything else, so a typo is refused
+/// rather than silently treated as "off".
+func parseOnOffWord(_ raw: String) -> Bool? {
+    switch raw.lowercased() {
+    case "on", "1", "true", "yes": return true
+    case "off", "0", "false", "no": return false
+    default: return nil
+    }
+}
+
+func printConfigUsage() {
+    print("usage: fbdcli config [show]")
+    print("       fbdcli config protect <id> [all|<property>[,<property>…]]")
+    print("       fbdcli config favourite <id> list|save|apply [slot]")
+    print("       fbdcli config lockdim [on|off]")
+    print("       fbdcli config lockdim-target [0-100]")
+    print("       fbdcli config keytarget [mouse|focused|all|audio]")
+    print("       fbdcli config group-policy <group> [policy]")
+    print("       fbdcli config group-enabled <group> [on|off]")
+    print("properties: \(ProtectedProperties.ordered.map(\.name).joined(separator: ", "))")
+}
+
+/// `fbdcli config …` — the settings behind the BetterDisplay-parity features:
+/// per-property configuration protection, resolution favourites, lock
+/// dimming, the keyboard control target, and display-group sync policy.
+///
+/// These are *settings*, not hardware writes, so they run locally against the
+/// same `Settings.defaults` suite the app reads: one write path, no DDC bus
+/// contention, and the app picks the change up on its next read.
+@MainActor
+func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let sub = args.first else { return printConfigSummary() }
+    let rest = Array(args.dropFirst())
+    switch sub {
+    case "show": return printConfigSummary()
+    case "protect": return cmdConfigProtect(controller, args: rest)
+    case "favourite", "favorite": return cmdConfigFavourite(controller, args: rest)
+    case "lockdim": return cmdConfigLockDim(rest)
+    case "lockdim-target": return cmdConfigLockDimTarget(rest)
+    case "keytarget": return cmdConfigKeyTarget(rest)
+    case "group-policy": return cmdConfigGroupPolicy(rest)
+    case "group-enabled": return cmdConfigGroupEnabled(rest)
+    default:
+        print("fbdcli: config: unknown subcommand '\(sub)'")
+        printConfigUsage()
+        return 1
+    }
+}
+
+@MainActor
+func printConfigSummary() -> Int32 {
+    let prefs = Settings.brightnessPreferences
+    print("lock dim: \(Settings.lockDimEnabled ? "on" : "off") at \(Int(Settings.lockDimTargetPercent))%")
+    print("keyboard control target: \(Settings.keyboardControlTarget.rawValue)")
+    print("brightness model: preferHardware=\(prefs.preferHardwareControl ? "on" : "off") "
+        + "hardwareNits=\(Int(prefs.hardwareMinNits))-\(Int(prefs.hardwareMaxNits)) "
+        + "hdrPeakNits=\(Int(prefs.hdrPeakSDRNits))/\(Int(prefs.hdrPeakHDRNits)) "
+        + "softwareZero=\(Int(prefs.softwareZeroPercent))% "
+        + "minHardware=\(Int(prefs.minHardwarePercent))% "
+        + "switchover=\(Int(prefs.dimmingSwitchoverPercent))% "
+        + "upscaleMax=\(Int(prefs.upscaleMaxPercent))% "
+        + "startup=\(prefs.startupControlValuePolicy.rawValue)")
+    print("configuration protection: \(Settings.configProtectionEnabled ? "on" : "off")")
+    return 0
+}
+
+/// `config protect <id> [properties]` — get or set which properties
+/// configuration protection re-applies for a display.
+@MainActor
+func cmdConfigProtect(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard let idArg = args.first, let id = requireDisplayID(idArg) else {
+        print("fbdcli: config protect: expected a display id")
+        return 1
+    }
+    guard let display = controller.display(withID: id) else {
+        print("fbdcli: config protect: no display with id \(id)")
+        return 1
+    }
+    let protection = ConfigProtectionController()
+    guard let spec = args.dropFirst().first else {
+        print("protected: \(protection.protectedProperties(for: display).names.joined(separator: ","))")
+        print("available: \(ProtectedProperties.available(for: display).names.joined(separator: ","))")
+        return 0
+    }
+    guard let parsed = ProtectedProperties.parse(spec) else {
+        print("fbdcli: config protect: unknown property in '\(spec)'")
+        printConfigUsage()
+        return 1
+    }
+    protection.setProtectedProperties(parsed, for: display)
+    print("protected: \(parsed.names.joined(separator: ","))")
+    return 0
+}
+
+/// `config favourite <id> list|save|apply [slot]` — the five mode recall slots.
+@MainActor
+func cmdConfigFavourite(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard args.count >= 2, let id = requireDisplayID(args[0]) else {
+        print("fbdcli: config favourite: expected <id> list|save|apply [slot]")
+        return 1
+    }
+    guard let display = controller.display(withID: id) else {
+        print("fbdcli: config favourite: no display with id \(id)")
+        return 1
+    }
+    let action = args[1]
+
+    if action == "list" {
+        let favourites = ModeFavourites.favourites(for: display.identityKey)
+        if favourites.isEmpty {
+            print("no favourites recorded")
+            return 0
+        }
+        for favourite in favourites {
+            let hidpi = favourite.isHiDPI ? " HiDPI" : ""
+            let hz = favourite.refreshRate > 0 ? String(format: " @ %.2f Hz", favourite.refreshRate) : ""
+            print("\(favourite.slot): \(favourite.width)x\(favourite.height)\(hidpi)\(hz)")
+        }
+        return 0
+    }
+
+    guard action == "save" || action == "apply" else {
+        print("fbdcli: config favourite: expected list, save or apply (got '\(action)')")
+        return 1
+    }
+    guard args.count >= 3, let slot = Int(args[2]) else {
+        print("fbdcli: config favourite \(action): expected a slot number")
+        return 1
+    }
+
+    let resolution = ResolutionController()
+    if action == "save" {
+        guard let mode = resolution.currentMode(for: display) else {
+            print("fbdcli: config favourite save: no current mode to record")
+            return 2
+        }
+        guard ModeFavourites.save(mode, into: slot, for: display.identityKey) else {
+            print("fbdcli: config favourite save: slot \(slot) is out of range (1...\(ModeFavourites.slotCount))")
+            return 1
+        }
+        print("saved slot \(slot)")
+        return 0
+    }
+
+    let recall = resolution.applyFavourite(slot: slot, for: display.identityKey, to: display)
+    if recall.isUnavailable {
+        print("slot \(slot) has no matching mode on this display")
+        return 2
+    }
+    print("applied slot \(slot)")
+    return 0
+}
+
+@MainActor
+func cmdConfigLockDim(_ args: [String]) -> Int32 {
+    guard let raw = args.first else {
+        print("lock dim: \(Settings.lockDimEnabled ? "on" : "off")")
+        return 0
+    }
+    guard let enabled = parseOnOffWord(raw) else {
+        print("fbdcli: config lockdim: expected on or off (got '\(raw)')")
+        return 1
+    }
+    Settings.lockDimEnabled = enabled
+    print("lock dim: \(enabled ? "on" : "off")")
+    return 0
+}
+
+@MainActor
+func cmdConfigLockDimTarget(_ args: [String]) -> Int32 {
+    guard let raw = args.first else {
+        print("lock dim target: \(Int(Settings.lockDimTargetPercent))%")
+        return 0
+    }
+    guard let percent = Double(raw), (0...100).contains(percent) else {
+        print("fbdcli: config lockdim-target: expected 0-100 (got '\(raw)')")
+        return 1
+    }
+    Settings.lockDimTargetPercent = percent
+    print("lock dim target: \(Int(percent))%")
+    return 0
+}
+
+@MainActor
+func cmdConfigKeyTarget(_ args: [String]) -> Int32 {
+    guard let raw = args.first else {
+        print("keyboard control target: \(Settings.keyboardControlTarget.rawValue)")
+        return 0
+    }
+    let aliases: [String: KeyboardControlTarget] = [
+        "mouse": .mouseScreen,
+        "focused": .focusedScreen,
+        "all": .allSuitableScreens,
+        "audio": .audioDeviceMatch,
+    ]
+    guard let target = KeyboardControlTarget(rawValue: raw) ?? aliases[raw.lowercased()] else {
+        print("fbdcli: config keytarget: expected mouse, focused, all or audio (got '\(raw)')")
+        return 1
+    }
+    Settings.keyboardControlTarget = target
+    print("keyboard control target: \(target.rawValue)")
+    return 0
+}
+
+@MainActor
+func cmdConfigGroupPolicy(_ args: [String]) -> Int32 {
+    guard let name = args.first else {
+        print("fbdcli: config group-policy: expected a group name")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = groups.group(named: name) else {
+        print("fbdcli: config group-policy: no group named '\(name)'")
+        return 1
+    }
+    guard let raw = args.dropFirst().first else {
+        print("\(group.name): \(groups.activationPolicy(forGroup: group.id).rawValue)")
+        return 0
+    }
+    guard let policy = GroupActivationPolicy(rawValue: raw) else {
+        let known = GroupActivationPolicy.allCases.map(\.rawValue).joined(separator: ", ")
+        print("fbdcli: config group-policy: expected one of \(known) (got '\(raw)')")
+        return 1
+    }
+    groups.setActivationPolicy(policy, forGroup: group.id)
+    print("\(group.name): \(policy.rawValue)")
+    return 0
+}
+
+@MainActor
+func cmdConfigGroupEnabled(_ args: [String]) -> Int32 {
+    guard let name = args.first else {
+        print("fbdcli: config group-enabled: expected a group name")
+        return 1
+    }
+    let groups = DisplayGroupsController()
+    guard let group = groups.group(named: name) else {
+        print("fbdcli: config group-enabled: no group named '\(name)'")
+        return 1
+    }
+    guard let raw = args.dropFirst().first else {
+        print("\(group.name): \(groups.isEnabled(groupID: group.id) ? "on" : "off")")
+        return 0
+    }
+    guard let enabled = parseOnOffWord(raw) else {
+        print("fbdcli: config group-enabled: expected on or off (got '\(raw)')")
+        return 1
+    }
+    groups.setEnabled(enabled, forGroup: group.id)
+    print("\(group.name): \(enabled ? "on" : "off")")
+    return 0
+}
