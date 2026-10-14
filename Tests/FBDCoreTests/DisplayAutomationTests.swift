@@ -151,17 +151,21 @@ final class DisplayAutomationTests: XCTestCase {
 
     // MARK: - Invocation (never starts anything)
 
-    func testShellInvocationRunsThroughZsh() {
-        let invocation = AutomationCommand.invocation(
+    func testShellInvocationRunsThroughZsh() throws {
+        // `invocation` is optional now: a notification kind produces none, so the
+        // type says so rather than inventing an executable.
+        let invocation = try XCTUnwrap(AutomationCommand.invocation(
             kind: .shellScript, payload: "echo hi", environment: ["FBD_EVENT": "displayConnected"]
-        )
+        ))
         XCTAssertEqual(invocation.executable, "/bin/zsh")
         XCTAssertEqual(invocation.arguments, ["-c", "echo hi"])
         XCTAssertEqual(invocation.environment["FBD_EVENT"], "displayConnected")
     }
 
-    func testURLInvocationGoesThroughOpen() {
-        let invocation = AutomationCommand.invocation(kind: .url, payload: "shortcuts://run-shortcut?name=X")
+    func testURLInvocationGoesThroughOpen() throws {
+        let invocation = try XCTUnwrap(
+            AutomationCommand.invocation(kind: .url, payload: "shortcuts://run-shortcut?name=X")
+        )
         XCTAssertEqual(invocation.executable, "/usr/bin/open")
         XCTAssertEqual(invocation.arguments, ["shortcuts://run-shortcut?name=X"])
     }

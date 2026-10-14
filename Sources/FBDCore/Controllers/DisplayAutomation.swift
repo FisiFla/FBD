@@ -10,6 +10,13 @@ public enum AutomationEvent: String, Codable, CaseIterable, Sendable {
     case systemSleep
     /// The system woke.
     case systemWake
+    /// **Invoked by the user, never by the system.** A rule with this event is a
+    /// manual control: it exists to be run on demand, which is why the scheduler
+    /// refuses to select one for any event.
+    ///
+    /// ON/OFF and state-query controls are each a manual rule — a control that
+    /// queries state is a manual rule whose shell output lands in the run log.
+    case manual
 
     /// System events are not attributable to one display, so only rules with an
     /// empty display identity (an "any display" rule) fire for them.
@@ -23,6 +30,7 @@ public enum AutomationEvent: String, Codable, CaseIterable, Sendable {
         case .displayDisconnected: return "display disconnected"
         case .systemSleep: return "system sleep"
         case .systemWake: return "system wake"
+        case .manual: return "run manually"
         }
     }
 
@@ -33,6 +41,7 @@ public enum AutomationEvent: String, Codable, CaseIterable, Sendable {
         case .displayDisconnected: return "disconnect"
         case .systemSleep: return "sleep"
         case .systemWake: return "wake"
+        case .manual: return "manual"
         }
     }
 
@@ -48,11 +57,15 @@ public enum AutomationActionKind: String, Codable, CaseIterable, Sendable {
     case shellScript
     /// Open the payload as a URL (or file) with `/usr/bin/open`.
     case url
+    /// Deliver a user notification. Runs **in-process** — no subprocess and no
+    /// shell — which is why it is an action kind rather than a special payload.
+    case notification
 
     public var token: String {
         switch self {
         case .shellScript: return "shell"
         case .url: return "url"
+        case .notification: return "notify"
         }
     }
 
@@ -156,12 +169,90 @@ public enum AutomationCommand {
         kind: AutomationActionKind,
         payload: String,
         environment: [String: String] = [:]
-    ) -> AutomationInvocation {
+    ) -> AutomationInvocation? {
         switch kind {
         case .shellScript:
             return AutomationInvocation(executable: "/bin/zsh", arguments: ["-c", payload], environment: environment)
         case .url:
             return AutomationInvocation(executable: "/usr/bin/open", arguments: [payload], environment: environment)
+        case .notification:
+            // A notification starts nothing, so there is no invocation to return.
+            // `effect(kind:payload:environment:)` is the total entry point.
+            return nil
+        }
+    }
+
+    /// What a kind actually does. Total — every kind resolves to something
+    /// runnable — so callers never have to decide what a nil invocation means.
+    public static func effect(
+        kind: AutomationActionKind,
+        payload: String,
+        environment: [String: String] = [:]
+    ) -> AutomationEffect {
+        switch kind {
+        case .shellScript, .url:
+            // `invocation` is non-nil for exactly these two kinds; the fallback
+            // keeps this total without a force-unwrap.
+            return .run(invocation(kind: kind, payload: payload, environment: environment)
+                ?? AutomationInvocation(executable: "/usr/bin/false", arguments: [], environment: environment))
+        case .notification:
+            let parsed = AutomationNotification.parse(payload)
+            return .notify(title: parsed.title, body: parsed.body)
+        }
+    }
+}
+
+/// A notification action's payload, parsed.
+public enum AutomationNotification {
+    /// `Title | body`, split on the **first** `|` so a body may contain more.
+    ///
+    /// With no separator the whole payload is the body and the title falls back to
+    /// FBD's own name — which is what makes `notify "Coffee brewed"` do the
+    /// obvious thing instead of demanding a separator nobody asked for.
+    public static func parse(_ payload: String) -> (title: String, body: String) {
+        guard let separator = payload.firstIndex(of: "|") else {
+            return ("FBD", payload.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        let title = payload[payload.startIndex..<separator].trimmingCharacters(in: .whitespaces)
+        let body = payload[payload.index(after: separator)...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return (title.isEmpty ? "FBD" : title, body)
+    }
+}
+
+/// What an action does: start a process, or deliver a notification.
+///
+/// A sum type rather than one struct with an optional field, so there is no
+/// meaningless value for the case that starts nothing — a notification has no
+/// executable, and inventing one would put a lie in the run log.
+public enum AutomationEffect: Equatable, Sendable {
+    case run(AutomationInvocation)
+    case notify(title: String, body: String)
+
+    /// Execute this effect, mapping it to the outcome the run log records.
+    ///
+    /// Non-isolated on purpose: the controller calls it both from the main actor
+    /// (a manual run) and from its serial queue (an event), and duplicating this
+    /// mapping in two places is how the two paths would drift.
+    public func perform(
+        executor: AutomationExecuting,
+        notifier: AutomationNotifying,
+        timeout: TimeInterval
+    ) -> (exitCode: Int32, output: String, timedOut: Bool) {
+        switch self {
+        case .run(let invocation):
+            return executor.execute(invocation, timeout: timeout)
+        case .notify(let title, let body):
+            // A notification has no exit code, and the controller cannot know
+            // whether the system drew a banner — only that the request was handed
+            // over. The wording says that rather than claiming a delivery.
+            let handedOver = notifier.deliver(title: title, body: body)
+            return (
+                handedOver ? 0 : 1,
+                handedOver
+                    ? "notification handed to Notification Centre: \(title)"
+                    : "notification could not be handed to Notification Centre",
+                false
+            )
         }
     }
 }
@@ -213,7 +304,13 @@ public enum AutomationScheduler {
         now: Date,
         limits: AutomationLimits
     ) -> [AutomationRule] {
-        rules.filter { rule in
+        // A manual control is never *scheduled*. It exists to be invoked, and
+        // selecting one here would let an event storm run the user's commands
+        // unbidden — so this refuses the manual event itself rather than merely
+        // manual rules, which keeps the guarantee even if a caller passes it by
+        // mistake.
+        guard event != .manual else { return [] }
+        return rules.filter { rule in
             guard rule.enabled, rule.event == event, rule.matches(identityKey: identityKey) else {
                 return false
             }

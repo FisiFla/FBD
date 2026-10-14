@@ -17,6 +17,10 @@ struct AutomationSettingsView: View {
     /// The controller is not an `ObservableObject`, so mutations bump this to
     /// re-render the list.
     @State private var tick = 0
+    /// The most recent manual run, shown under its own row. Running from here
+    /// rather than deferring to `fbdcli` is also what lets a notification rule
+    /// work: the CLI has no bundle identity and no notification authorisation.
+    @State private var lastRun: AutomationRunRecord?
 
     @State private var scope = ""                 // "" = any display
     @State private var event = AutomationEvent.displayConnected
@@ -54,40 +58,69 @@ struct AutomationSettingsView: View {
     // MARK: - Rows
 
     private func ruleRow(_ rule: AutomationRule) -> some View {
-        HStack(alignment: .top, spacing: FBDTheme.spacingM) {
-            // A real (visually hidden) label: `Toggle("")` leaves VoiceOver with
-            // no name for this control at all.
-            Toggle("Enabled", isOn: Binding(
-                get: { rule.enabled },
-                set: { enabled in
-                    _ = controller.setEnabled(enabled, ruleID: rule.id)
-                    tick += 1
-                }
-            ))
-            .labelsHidden()
-            .controlSize(.small)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: FBDTheme.spacingM) {
+                // A real (visually hidden) label: `Toggle("")` leaves VoiceOver with
+                // no name for this control at all.
+                Toggle("Enabled", isOn: Binding(
+                    get: { rule.enabled },
+                    set: { enabled in
+                        _ = controller.setEnabled(enabled, ruleID: rule.id)
+                        tick += 1
+                    }
+                ))
+                .labelsHidden()
+                .controlSize(.small)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(scopeLabel(rule)) · \(rule.event.label) · \(rule.kind.token)")
-                    .font(.callout)
-                Text(rule.payload)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(scopeLabel(rule)) · \(rule.event.label) · \(rule.kind.token)")
+                        .font(.callout)
+                    Text(rule.payload)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                Spacer()
+                // Run it now. For a manual control this is the control's action; for
+                // an event rule it is the "try it without waiting" path.
+                Button {
+                    lastRun = controller.runSynchronously(rule)
+                    tick += 1
+                } label: {
+                    Image(systemName: "play.fill")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(rule.event == .manual ? "Run this control now" : "Run this rule now")
+                .accessibilityLabel(rule.event == .manual ? "Run control" : "Run rule")
+                Button {
+                    _ = controller.removeRule(id: rule.id)
+                    tick += 1
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help("Remove this rule")
+                .accessibilityLabel("Remove rule")
+            }
+
+            if let lastRun, lastRun.ruleID == rule.id {
+                Text(describe(lastRun))
                     .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
+                    .foregroundStyle(lastRun.succeeded ? Color.secondary : Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            Button {
-                _ = controller.removeRule(id: rule.id)
-                tick += 1
-            } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-            .help("Remove this rule")
-            .accessibilityLabel("Remove rule")
         }
+    }
+
+    /// What a run did, in one line — the point being that a rule which did nothing
+    /// visible still says so.
+    private func describe(_ record: AutomationRunRecord) -> String {
+        let output = record.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let status = record.timedOut ? "timed out" : "exit \(record.exitCode)"
+        return output.isEmpty ? status : "\(status) — \(output)"
     }
 
     private var addRow: some View {

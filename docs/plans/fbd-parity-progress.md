@@ -406,6 +406,37 @@ separate commit on the same branch.
   Verified: build clean, `make ui-smoke` 5/5, the panel's AX tree reports no overlapping text, and the
   brightness slider is still discoverable by the smoke harness. Captured and inspected before committing,
   because this changes the primary surface.
+- **Gap-matrix row #18 — custom control integration.** Two additions to the automation layer, following the
+  matrix's route rather than copying BetterDisplay's shape:
+
+  - a **`manual` event**, so a rule can be a control the user invokes rather than something the system
+    fires. ON and OFF are two manual rules, and a shell control that prints its state is a third — its
+    output already lands in the run log, which is what FBD has instead of a separate state-query field;
+  - a **`notify` action**, which runs in-process rather than through a shell, so it is an action *kind*
+    rather than a special payload. `AutomationEffect` is a sum type so the "starts nothing" case has no
+    meaningless invocation, and `AutomationNotification.parse` treats `Title | body` with the whole string
+    as the body when there is no separator.
+
+  The scheduler **refuses the manual event entirely** — not merely manual rules — because selecting one
+  would let an event topology storm run the user's commands unbidden. That is a guarantee, so it has its own
+  tests.
+
+  **Two things went wrong, and one of them was mine.** First, nothing in the app had ever called
+  `requestAuthorization`: a `notify` rule would have been handed to the system and shown nothing. That is
+  the dead-setting failure again, and it was found by asking what makes the action *visible* rather than
+  whether the code ran. Permission is now requested when a notification rule is configured or found at
+  launch, so a user who configures none is never prompted.
+
+  Second, my first version called `UserNotificationCenter.current()` from `addRule`, which the CLI shares —
+  and a bare SwiftPM binary has no bundle identity, so that **crashed `fbdcli automation add`** with
+  `bundleProxyForCurrentProcess is nil`. It is now gated on `Bundle.main.bundleIdentifier`, and `deliver`
+  returns false rather than raising. The live check caught it, and so did a second mistake in the same
+  script: it matched only lowercase UUIDs while the CLI prints uppercase, so the ids came out empty and two
+  test rules were silently left in the store. Both were cleaned up and the store verified empty.
+
+  Verified live: adding a notification rule no longer crashes, a manual shell control runs and prints its
+  output, running a notification rule from the CLI is refused with the reason, and unknown tokens name the
+  valid ones (derived from the enums, so they cannot go stale). FBDCoreTests 715.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
