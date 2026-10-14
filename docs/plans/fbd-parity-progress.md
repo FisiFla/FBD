@@ -458,6 +458,24 @@ separate commit on the same branch.
   full cleanup back to "no saved devices" / "no attachments". `NetworkDeviceAttachmentTests` (9 cases)
   covers persistence through the injected suite, replacement, dangling detection, corrupt data, and the
   0…1 → 0…100 volume mapping with its clamping. FBDCoreTests 724.
+- **Gap-matrix row #29 — OSD style, notifications and Dock rules.** The HUD's look is now a stored
+  `OSDStyle` (position, continuous/segmented bar, dark-versus-adaptive background, shadow, corner radius,
+  segment count) and the Dock policy is settings-driven: a permanent Dock icon, or a brief one at launch.
+  The defaults are exactly the appearance FBD shipped before this was configurable, so an untouched install
+  changes nothing, and every field is clamped on both write and read — a stored radius cannot clip the
+  content, and a corrupt blob lands on the defaults.
+
+  One thing came out of it that was not the point: the HUD's content was relying on the default foreground,
+  which is a *system-appearance* colour, on a background that is always the dark HUD material — so in light
+  mode the text was dark on dark. The content now carries its own foreground per background style.
+
+  **Verification, stated honestly.** `OSDStyleTests` (8 cases) covers the defaults, clamping including
+  non-finite values, idempotence, the round-trip through an injected suite, and that saving clamps what is
+  stored. Build clean, `make ui-smoke` 5/5. But the HUD's *on-screen* rendering was **not** verified in this
+  session: the `fbdcli osd` path needs the app's HTTP API, which was switched off, so the probe reported no
+  window and I am recording that rather than claiming the smoke check the gap matrix asks for. The controls
+  are reachable from Settings → Application, so the style is not a dead setting, but no one has looked at
+  the HUD with a segmented bar or an adaptive background yet.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
