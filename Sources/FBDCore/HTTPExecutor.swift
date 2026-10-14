@@ -272,6 +272,65 @@ public enum HTTPExecutor {
         case .configKeyboardTarget(let target):
             Settings.keyboardControlTarget = target
             return (200, HTTPJSON.encode(["ok": true, "target": target.rawValue]))
+
+        case .configConnections(let action):
+            let descriptors = controller.displays.map { display in
+                DisplayDescriptor(
+                    displayID: display.id,
+                    isOnline: display.isOnline,
+                    isBuiltin: display.isBuiltin,
+                    isMain: CGDisplayIsMain(display.id) != 0,
+                    vendor: display.vendorNumber,
+                    model: display.modelNumber,
+                    serial: display.serialNumber
+                )
+            }
+            let steps = ConnectionPlanner.plan(
+                action: action,
+                displays: descriptors,
+                allowsAffectedBuiltInDisconnect: Settings.allowBuiltInDisconnectOnAffectedMacs
+            )
+            guard !steps.isEmpty else {
+                // Not failure: the planner declines `disconnectAllButMain` with no
+                // main display, and `swapIdentical` with anything but two matches.
+                return (200, HTTPJSON.encode(["ok": true, "steps": 0, "changed": 0]))
+            }
+            let changed = DisconnectController().apply(steps)
+            return (200, HTTPJSON.encode(["ok": true, "steps": steps.count, "changed": changed]))
+
+        case .configProtection(let displayID, let properties):
+            guard let display = controller.display(withID: displayID) else {
+                return (404, HTTPJSON.error("display not found"))
+            }
+            ConfigProtectionController().setProtectedProperties(properties, for: display)
+            // `names` renders in canonical order — the same rendering `fbdcli
+            // config protect` prints, so the two surfaces agree.
+            return (200, HTTPJSON.encode(["ok": true, "properties": properties.names]))
+
+        case .configDevice(let action):
+            switch action {
+            case .list:
+                let devices = NetworkDeviceRegistry.list().map { device in
+                    ["name": device.name, "brand": device.brand.rawValue, "host": device.host, "zone": device.zone ?? ""]
+                }
+                return (200, HTTPJSON.encode(["devices": devices]))
+
+            case .add(let name, let brand, let host, let zone):
+                switch NetworkDeviceRegistry.add(name: name, brand: brand, host: host, zone: zone) {
+                case .success(let device):
+                    return (201, HTTPJSON.encode(["ok": true, "name": device.name, "host": device.host]))
+                case .failure(let failure):
+                    // 409: the request was well-formed, it conflicts with what is
+                    // already stored.
+                    return (409, HTTPJSON.error(failure.message))
+                }
+
+            case .remove(let name):
+                guard NetworkDeviceRegistry.remove(named: name) else {
+                    return (404, HTTPJSON.error("no device named '\(name)'"))
+                }
+                return (200, HTTPJSON.encode(["ok": true]))
+            }
         }
     }
 }

@@ -85,6 +85,19 @@ final class HTTPConfigRouteTests: XCTestCase {
         )
     }
 
+    /// Regression: the boolean test must not catch the *numbers* 0 and 1. Swift
+    /// bridges NSNumber to Bool, so `value is Bool` is true for both.
+    func testLockDimAcceptsTheNumbersZeroAndOne() {
+        XCTAssertEqual(
+            route("POST", "/api/config/lockdim", body: #"{"enabled":true,"targetPercent":1}"#),
+            .route(.configLockDim(enabled: true, targetPercent: 1))
+        )
+        XCTAssertEqual(
+            route("POST", "/api/config/lockdim", body: #"{"enabled":true,"targetPercent":0}"#),
+            .route(.configLockDim(enabled: true, targetPercent: 0))
+        )
+    }
+
     // MARK: - Keyboard control target
 
     func testKeyboardTargetRoutes() {
@@ -137,5 +150,138 @@ final class HTTPConfigRouteTests: XCTestCase {
         XCTAssertEqual(route("DELETE", "/api/config"), .error(status: 405, message: "method not allowed"))
         XCTAssertEqual(route("GET", "/api/config/lockdim"), .error(status: 404, message: "not found"))
         XCTAssertEqual(route("GET", "/api/config/keytarget"), .error(status: 404, message: "not found"))
+    }
+
+    // MARK: - Connections
+
+    func testConnectionsRoutesEachAction() {
+        for action in ConnectionAction.allCases {
+            XCTAssertEqual(
+                route("POST", "/api/config/connections", body: #"{"action":"\#(action.rawValue)"}"#),
+                .route(.configConnections(action: action))
+            )
+        }
+    }
+
+    func testConnectionsRejectsAnUnknownActionAndNamesTheValidOnes() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/connections", body: #"{"action":"nope"}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("connectAll"), "should list the valid actions, got: \(message)")
+    }
+
+    func testConnectionsRequiresTheField() {
+        guard case .error(let status, _) = route("POST", "/api/config/connections", body: "{}") else {
+            return XCTFail("expected an error when action is absent")
+        }
+        XCTAssertEqual(status, 400)
+    }
+
+    // MARK: - Protection
+
+    func testProtectionRoutesAListOfProperties() {
+        XCTAssertEqual(
+            route("POST", "/api/config/protection", body: #"{"display":1,"properties":["resolution","brightness"]}"#),
+            .route(.configProtection(displayID: 1, properties: [.resolution, .brightness]))
+        )
+    }
+
+    func testProtectionAcceptsAll() {
+        XCTAssertEqual(
+            route("POST", "/api/config/protection", body: #"{"display":1,"properties":["all"]}"#),
+            .route(.configProtection(displayID: 1, properties: .all))
+        )
+    }
+
+    /// A display id may arrive as a number or as the string `/api/displays` returned.
+    func testProtectionAcceptsADisplayIDAsAString() {
+        XCTAssertEqual(
+            route("POST", "/api/config/protection", body: #"{"display":"7","properties":["preset"]}"#),
+            .route(.configProtection(displayID: 7, properties: [.preset]))
+        )
+    }
+
+    func testProtectionRejectsAnUnknownPropertyAndNamesTheValidOnes() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/protection", body: #"{"display":1,"properties":["resolution","nope"]}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("brightness"), "should list valid properties, got: \(message)")
+    }
+
+    func testProtectionRejectsAMissingDisplay() {
+        guard case .error(let status, _) = route(
+            "POST", "/api/config/protection", body: #"{"properties":["resolution"]}"#
+        ) else { return XCTFail("expected an error when display is absent") }
+        XCTAssertEqual(status, 400)
+    }
+
+    /// A JSON boolean bridges to NSNumber, so `true` must not read as display 1.
+    func testProtectionRejectsABooleanDisplay() {
+        guard case .error(let status, _) = route(
+            "POST", "/api/config/protection", body: #"{"display":true,"properties":["resolution"]}"#
+        ) else { return XCTFail("expected an error for a boolean display") }
+        XCTAssertEqual(status, 400)
+    }
+
+    // MARK: - Devices
+
+    func testDeviceList() {
+        XCTAssertEqual(
+            route("POST", "/api/config/device", body: #"{"action":"list"}"#),
+            .route(.configDevice(.list))
+        )
+    }
+
+    func testDeviceAdd() {
+        XCTAssertEqual(
+            route("POST", "/api/config/device", body: #"{"action":"add","name":"TV","brand":"lg","host":"tv.lan"}"#),
+            .route(.configDevice(.add(name: "TV", brand: .lg, host: "tv.lan", zone: nil)))
+        )
+    }
+
+    func testDeviceAddWithAZone() {
+        XCTAssertEqual(
+            route(
+                "POST", "/api/config/device",
+                body: #"{"action":"add","name":"Amp","brand":"yamaha","host":"amp.lan","zone":"2"}"#
+            ),
+            .route(.configDevice(.add(name: "Amp", brand: .yamaha, host: "amp.lan", zone: "2")))
+        )
+    }
+
+    /// The host is interpolated into a request URL by the controllers, so an
+    /// unusable one is refused here rather than stored to fail at use time.
+    func testDeviceAddRejectsAnUnusableHost() {
+        guard case .error(let status, _) = route(
+            "POST", "/api/config/device",
+            body: #"{"action":"add","name":"TV","brand":"lg","host":"http://tv.lan"}"#
+        ) else { return XCTFail("expected an error for an unusable host") }
+        XCTAssertEqual(status, 400)
+    }
+
+    func testDeviceAddRejectsAnUnknownBrandAndNamesTheValidOnes() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/device",
+            body: #"{"action":"add","name":"TV","brand":"sony","host":"tv.lan"}"#
+        ) else { return XCTFail("expected an error for an unknown brand") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("lg"), "should list valid brands, got: \(message)")
+    }
+
+    func testDeviceRemove() {
+        XCTAssertEqual(
+            route("POST", "/api/config/device", body: #"{"action":"remove","name":"TV"}"#),
+            .route(.configDevice(.remove(name: "TV")))
+        )
+    }
+
+    func testDeviceRejectsAnUnknownAction() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/device", body: #"{"action":"nope"}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("remove"), "should name the valid actions, got: \(message)")
     }
 }
