@@ -268,3 +268,11 @@
 "Menu settings" = "Menu settings";
 "Keyboard settings" = "Keyboard settings";
 "About settings" = "About settings";
+
+/* Interpolated strings. SwiftUI compiles these to *format* keys, so the text here is what the
+   runtime generates, not what the source spells: Text("\(nits) nits") looks up "%lld nits". A
+   translation may drop a placeholder (Chinese has no plural), but never add one. */
+"%lld nits" = "%lld nits";
+"%lld Hz" = "%lld Hz";
+"%lld display%@" = "%lld display%@";
+"%lldpx" = "%lldpx";

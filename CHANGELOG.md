@@ -50,8 +50,12 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   now spells its cases out in a `switch` returning `LocalizedStringKey` — which keeps every key a
   literal the test can verify (236 keys each). What the drift test cannot reach is an *interpolated*
   string: SwiftUI turns `Text("\(nits) nits")` into the format key `%lld nits`, which never appears
-  verbatim in the source, so the "every key still exists" check would reject an entry for it. Those
-  stay English, and the test says why. Two things worth
+  verbatim in the source, so the "every key still exists" check would reject an entry for it. That is
+  now fixed rather than accepted: the check understands format keys and verifies their literal
+  segments, so the interpolated strings are localised too — `%lld nits`, `%lld Hz`, `%lld display%@`
+  and `%lldpx`, 240 keys per language. The Chinese forms drop the English plural, which is why a
+  translation may omit a placeholder. What remains English is what a model supplies (the automation
+  row's labels) and numbers with no words in them. Two things worth
   recording — `Sources/FBD/Resources` is `exclude`d from the SwiftPM target (which is why Info.plist
   lives there and is copied by hand), so the `.lproj` directories have to be copied by the Makefile;
   and `CFBundleLocalizations` must **not** sit alongside real `.lproj` directories, because it made

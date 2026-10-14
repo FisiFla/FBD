@@ -143,8 +143,12 @@ sources linked. Paraphrased, the rules that bear on FBD:
    take `LocalizedStringKey` now, and the app's accessibility tree shows those titles in Chinese. The
    sidebar labels took the same path — `Text(item.rawValue)` was verbatim too — and now come from a
    `switch` over the cases, so their keys are literals the drift test can check; 236 keys each.
-   Still English: interpolated strings, which SwiftUI turns into *format* keys (`%lld nits`) that
-   never appear verbatim in the source, so the "every key still exists" check cannot verify them.
+   Still English: strings a *model* supplies (the automation row's event and kind labels) and numbers
+   with no words in them. The interpolated strings are localised too, through the **format** keys
+   SwiftUI generates for them (`%lld nits`, `%lld display%@`), which the drift test verifies by each
+   key's literal segments rather than the whole key — that still catches a rename. Their placeholders
+   are argued from the value's type, not observed: none of those four strings renders on a default
+   panel here.
 9. **Edge-crossing pointer** for displays whose edges do not line up.
 10. **Smooth scaling / the HiDPI-crisp flow** — **settled: not doable within FBD's constraints.**
     Two routes exist and neither works here. Creating a mode through a private API is impossible on
