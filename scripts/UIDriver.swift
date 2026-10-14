@@ -126,6 +126,54 @@ func findFrame(descriptionContains needle: String) -> CGRect? {
     return nil
 }
 
+// MARK: - Accessibility dump
+
+/// The name a control carries when its label is drawn *beside* it — the AppKit
+/// convention SwiftUI follows on macOS. Such a control exposes nothing through
+/// `AXDescription`/`AXTitle` and points at the label element with
+/// `AXTitleUIElement` instead, so reading only the former reports a perfectly
+/// well-labelled checkbox as unlabelled.
+func titleElementValue(of element: AXUIElement) -> String {
+    var ref: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, "AXTitleUIElement" as CFString, &ref) == .success,
+          let ref, CFGetTypeID(ref) == AXUIElementGetTypeID() else { return "" }
+    return axString(unsafeBitCast(ref, to: AXUIElement.self), kAXValueAttribute as String)
+}
+
+/// Print one line per interactive accessibility element, so a control that
+/// exposes no description — and therefore cannot be reached by assistive
+/// technology — is visible rather than guessed at.
+func dumpElement(_ element: AXUIElement, depth: Int) {
+    guard depth <= 8 else { return }
+    let role = axString(element, kAXRoleAttribute as String)
+    let description = axString(element, kAXDescriptionAttribute as String)
+    let title = axString(element, kAXTitleAttribute as String)
+    let identifier = axString(element, kAXIdentifierAttribute as String)
+    let frame = axFrame(element)
+    let indent = String(repeating: "  ", count: depth)
+    // Static text would drown the list; these are the roles a user can act on.
+    let interactive = [
+        "AXButton", "AXSlider", "AXCheckBox", "AXPopUpButton", "AXRadioButton",
+        "AXTextField", "AXMenuButton", "AXDisclosureTriangle", "AXTabGroup", "AXGroup",
+    ]
+    if interactive.contains(role) {
+        let place = frame.map { "@\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))" } ?? "@?"
+        let viaTitleElement = titleElementValue(of: element)
+        let label = !description.isEmpty ? description : (!title.isEmpty ? title : viaTitleElement)
+        let marker = label.isEmpty ? "   <-- NO LABEL" : ""
+        let source = viaTitleElement.isEmpty || !label.isEmpty && label != viaTitleElement
+            ? ""
+            : " (via AXTitleUIElement)"
+        print("\(indent)\(role) id='\(identifier)' label='\(label)'\(source) \(place)\(marker)")
+    }
+    var childrenRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+          let children = childrenRef as? [AXUIElement] else { return }
+    for child in children {
+        dumpElement(child, depth: depth + 1)
+    }
+}
+
 // MARK: - Status item sweep
 
 func statusSweep(maxX: CGFloat) -> Int {
@@ -144,7 +192,7 @@ func statusSweep(maxX: CGFloat) -> Int {
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    print("usage: UIDriver <click|key|panel-state|ax-frame|status-sweep> ...")
+    print("usage: UIDriver <click|key|panel-state|ax-frame|ax-dump|status-sweep> ...")
     exit(2)
 }
 
@@ -161,6 +209,20 @@ case "key":
 
 case "panel-state":
     print(panelState())
+
+case "ax-dump":
+    guard let pid = fbdPid() else {
+        print("FBD is not running")
+        exit(1)
+    }
+    let app = AXUIElementCreateApplication(pid)
+    var windowsRef: CFTypeRef?
+    if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+       let windows = windowsRef as? [AXUIElement] {
+        for window in windows {
+            dumpElement(window, depth: 0)
+        }
+    }
 
 case "ax-frame":
     guard args.count >= 3 else { exit(2) }
