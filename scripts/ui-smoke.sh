@@ -51,22 +51,14 @@ fi
 # --- 1. Open the panel via the status item ---------------------------------
 step "status-item click opens the panel"
 
-# Start from a *verified* closed panel. This matters: statusSweep starts at
-# x=1710 and returns as soon as any panel is open, so a stale panel makes it
-# report a click that never touched the status item — step 1 then passes while
-# the panel is on an unknown page, and every later AX lookup fails for reasons
-# that look like an app bug. Escape first, then fall back to the panel's own
-# close button, and refuse to continue if the panel will not close.
+# Start from a *verified* closed panel. A stale panel makes status-sweep report a
+# click that never touched the status item, and every later AX lookup then fails
+# for reasons that look like an app bug. `fbd://close` is the app's own teardown
+# path, so this needs no Escape guesswork; refuse to continue if it will not close.
 close_any_panel() {
-    local tries=0 frame
+    local tries=0
     while [ "$($DRIVER panel-state)" != "none" ] && [ "$tries" -lt 5 ]; do
-        frame=$($DRIVER ax-frame "Close FBD panel" 2>/dev/null) || frame=""
-        if [ -n "$frame" ]; then
-            IFS=, read -r CX CY _ _ <<<"$frame"
-            $DRIVER click "$((CX + 14))" "$((CY + 14))" >/dev/null
-        else
-            $DRIVER key 53 >/dev/null 2>&1
-        fi
+        open "fbd://close" 2>/dev/null || true
         sleep 1
         tries=$((tries + 1))
     done
@@ -84,8 +76,21 @@ if [ -n "$STATUS_X_OVERRIDE" ]; then
     sleep 1.5
     STATE=$($DRIVER panel-state)
 else
-    FOUND_X=$($DRIVER status-sweep 2>/dev/null)
-    STATE=$($DRIVER panel-state)
+    # Read the status item's real frame from the accessibility tree instead of
+    # clicking the menu bar every 8pt until a panel happens to open. The item
+    # spans x=1507..1531, so the old sweep's first "hit" at x=1534 was 3pt past
+    # its edge — which is how it came to report a click that never landed.
+    STATUS_FRAME=$($DRIVER status-frame 2>/dev/null) || STATUS_FRAME=""
+    if [ -n "$STATUS_FRAME" ]; then
+        IFS=, read -r SX SY SW SH <<<"$STATUS_FRAME"
+        FOUND_X=$((SX + SW / 2))
+        $DRIVER click "$FOUND_X" "$((SY + SH / 2))" >/dev/null
+        sleep 1.5
+        STATE=$($DRIVER panel-state)
+    else
+        FOUND_X=""
+        STATE="status-item-not-found"
+    fi
 fi
 # The panel remembers the last page (e.g. Settings from a previous session),
 # so the status-item click can land on Settings — back out to main first.
