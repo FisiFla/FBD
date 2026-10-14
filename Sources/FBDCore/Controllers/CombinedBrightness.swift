@@ -30,11 +30,26 @@ public protocol XDRUpscaling: AnyObject {
 
 extension XDRNativeController: XDRUpscaling {}
 
-/// The full-screen overlay surface (software brightness boost). @MainActor —
+/// The full-screen overlay surface (software brightness boost and dim). @MainActor —
 /// callers must hop to the main thread (see `withOverlay`).
 @MainActor
 public protocol OverlayControlling: AnyObject {
     @discardableResult func setSoftwareBoost(_ factor: Double, displayID: CGDirectDisplayID) -> Bool
+
+    /// Set the software *brightness* dim: `factor` 1 is undimmed, 0 is fully dimmed. Returns
+    /// whether the request could be carried out at all — false only when the display has no
+    /// usable geometry, which is the caller's signal to keep the hardware route.
+    @discardableResult func setSoftwareDim(_ factor: Double, displayID: CGDirectDisplayID) -> Bool
+
+    /// Whether a dim set through this surface is still in force afterwards.
+    ///
+    /// The dim is a window owned by this process, so it lives exactly as long as the process
+    /// does. The app's overlay persists and can hold a brightness level; a one-shot `fbdcli`
+    /// invocation would dim the screen for a tenth of a second and then vanish, which from the
+    /// user's side is the command silently failing. A surface that says no here keeps the
+    /// caller on the hardware route it has always used rather than accepting a write that will
+    /// not last.
+    var softwareDimPersists: Bool { get }
 }
 
 extension OverlayController: OverlayControlling {}
@@ -95,14 +110,23 @@ public final class CombinedBrightness {
     /// Current brightness 0…1 on the combined curve. When an upscale is
     /// active (native or software boost) the upscale target is reported as a
     /// fraction of `maxNits`; otherwise the hardware brightness.
+    /// Current brightness 0…1 on the combined curve — what the **screen** shows, not just what
+    /// the backlight is doing. When an upscale is active (native or software boost) the upscale
+    /// target is reported as a fraction of `maxNits`; otherwise the hardware brightness. Either
+    /// way the software dim in force multiplies in, because a read that disagrees with the
+    /// screen is the bug this class documents having fixed once already.
+    ///
+    /// Nil still means "no control path", exactly as before.
     public func get(for display: Display) -> Double? {
+        let dim = min(max(display.softwareDim, 0), 1)
         if isCombinedCapable(for: display), display.isXDRUpscaled,
            let target = display.xdrUpscaleTargetNits ?? xdr.upscaleTarget(for: display) {
             let top = maxNits(for: display)
             guard top > 0 else { return nil }
-            return min(max(Double(target) / Double(top), 0), 1)
+            return min(max(Double(target) / Double(top), 0), 1) * dim
         }
-        return hardwareBrightness(for: display)
+        guard let hardware = hardwareBrightness(for: display) else { return nil }
+        return min(max(hardware * dim, 0), 1)
     }
 
     /// Set brightness 0…1. Below the hardware ceiling the write goes to
@@ -137,15 +161,30 @@ public final class CombinedBrightness {
             // upscaling is off, full stop.
             withOverlay { $0.setSoftwareBoost(1, displayID: display.id) }
             display.updateSoftwareBoost(false, targetNits: nil)
+
+            if let route = dimRoute(value: clamped, on: display) {
+                applySoftwareDim(route.dim, on: display)
+                guard let hardware = route.hardware else { return true }
+                return setHardwareBrightness(hardware, on: display)
+            }
+            // No dim in play: release any a previous route applied, so the screen cannot stay
+            // dimmed after whatever dimmed it has gone.
+            applySoftwareDim(1, on: display)
             return setHardwareBrightness(fraction, on: display)
         case .nativeUpscale(let nits):
             // XDRNativeController updates the display state on success. The curve's ceiling
             // applies here as well as to the software boost: `upscaleMaxPercent` says how far
             // past the hardware ceiling an upscale may reach, and the native path is usually
             // the one doing it. A preference may only tighten the model.
+            //
+            // Above the ceiling the curve keeps dimming off, and a boost and a dim would fight
+            // each other, so any dim the dimming zone applied is released here.
+            applySoftwareDim(1, on: display)
             return xdr.setUpscaleTarget(cappedUpscaleNits(nits, ceiling: Double(hardwareMax)), for: display)
         case .softwareBoost(let factor):
             log.warning("set: native XDR upscaling unavailable for \(display.id); using software boost")
+            // A boost brightens and a dim darkens: they would fight, so the dim goes.
+            applySoftwareDim(1, on: display)
             let boost = boostFactor(from: factor, value: clamped, ceiling: Double(hardwareMax))
             let ok = withOverlay { $0.setSoftwareBoost(boost, displayID: display.id) }
             if ok {
@@ -261,6 +300,63 @@ public final class CombinedBrightness {
     }
 
     /// Hardware brightness write: Apple path when available, DDC otherwise.
+    /// Apply the software dim the route asks for, recording it so a read agrees with the screen.
+    /// A factor of 1 releases it.
+    @discardableResult
+    private func applySoftwareDim(_ factor: Double, on display: Display) -> Bool {
+        let carried = withOverlay { $0.setSoftwareDim(factor, displayID: display.id) }
+        display.updateSoftwareDim(carried ? factor : 1)
+        return carried
+    }
+
+    /// Whether a dim is worth routing to here: it has to be a surface that outlives the call.
+    /// Outside the app the overlay is transient, so the route keeps to hardware rather than
+    /// accepting a write that would vanish.
+    private func softwareDimIsUsable(on display: Display) -> Bool {
+        withOverlay { $0.softwareDimPersists }
+    }
+
+    /// The `(hardware, dim)` pair a request maps to when a dim is in play, or nil to use the
+    /// planner's hardware fraction unchanged.
+    ///
+    /// Two cases put a dim in play, and both are opt-in:
+    ///
+    /// - the curve's **dimming zone**, when the profile carries one of its knobs — there the
+    ///   model ramps the hardware *and* dims the rest, so both halves are applied;
+    /// - **prefer software brightness**, where the dim does the work so the slider is not on the
+    ///   hardware write path. A dim can only *lower* what the screen shows, so a request above
+    ///   the current backlight still needs the hardware, and returning nil says so.
+    ///
+    /// With the shipped profile and no preference set, this returns nil — which is what keeps
+    /// the default route byte-for-byte what it was.
+    private func dimRoute(
+        value: Double,
+        on display: Display
+    ) -> (hardware: Double?, dim: Double)? {
+        guard softwareDimIsUsable(on: display) else { return nil }
+        let profile = effectivePreferences.clamped()
+        let standard = BrightnessPreferences.standard
+
+        let curveKnobMoved = profile.minHardwarePercent != standard.minHardwarePercent
+            || profile.softwareZeroPercent != standard.softwareZeroPercent
+            || profile.dimmingSwitchoverPercent != standard.dimmingSwitchoverPercent
+        let ceiling = Double(hardwareMaxNits(for: display))
+        if curveKnobMoved, ceiling > 0 {
+            let curve = BrightnessCurve.evaluate(value, preferences: profile, hardwareCeiling: ceiling)
+            // `< 1` is exactly the dimming zone: the upscaling zone keeps dimming off.
+            guard curve.softwareDim < 1 else { return nil }
+            return (hardware: curve.hardware, dim: curve.softwareDim)
+        }
+
+        guard !profile.preferHardwareControl else { return nil }
+        let current = hardwareBrightness(for: display) ?? 1
+        guard current > 0 else { return nil }
+        let dim = min(max(value / current, 0), 1)
+        // Asked for more than the backlight gives: only the hardware can deliver that.
+        guard dim < 1 else { return nil }
+        return (hardware: nil, dim: dim)
+    }
+
     /// The curve's `upscaleMaxPercent` applied to a nits target, or the target unchanged
     /// when the profile carries no curve knob.
     ///

@@ -31,13 +31,26 @@ private enum OverlayError: Error {
 public final class OverlayController {
     /// Dim overlay windows by display id.
     private var dimWindows: [CGDirectDisplayID: NSWindow] = [:]
+    /// Opacity requested by the dim-to-black / lock path, per display.
+    private var controlDim: [CGDirectDisplayID: Double] = [:]
+    /// Opacity requested by the brightness route, per display — a separate source because
+    /// either can be released without the other, so the window takes the darkest of them.
+    private var brightnessDim: [CGDirectDisplayID: Double] = [:]
     /// Corner-mask overlay windows by display id (#21).
     private var cornerWindows: [CGDirectDisplayID: NSWindow] = [:]
     /// Active capture sessions (window + stream + renderer) by display id.
     private var boostSessions: [CGDirectDisplayID: BoostSession] = [:]
     private var screenObserver: NSObjectProtocol?
 
-    public init() {
+    /// Whether a dim set here outlives the call that set it.
+    ///
+    /// The dim is a window owned by this process, so it lives exactly as long as the process
+    /// does — true for the app, false for a one-shot CLI invocation, where a dim would appear
+    /// and vanish inside the same command. See `OverlayControlling.softwareDimPersists`.
+    public let softwareDimPersists: Bool
+
+    public init(softwareDimPersists: Bool = true) {
+        self.softwareDimPersists = softwareDimPersists
         // Keep overlays glued to their display when the desktop reconfigured
         // (resolution change, display moved, spaces changed).
         screenObserver = NotificationCenter.default.addObserver(
@@ -121,25 +134,61 @@ public final class OverlayController {
         dimWindows[displayID] != nil
     }
 
-    /// Set the dim overlay opacity, 0…1 (0 = no dimming, 1 = fully black).
-    /// Removing the overlay when factor <= 0.
+    /// Set the dim overlay opacity for the dim-to-black / lock path, 0…1 (0 = no dimming,
+    /// 1 = fully black). The brightness route's own dim is separate — see `setSoftwareDim`.
     public func setDimFactor(_ factor: Double, displayID: CGDirectDisplayID) {
+        controlDim[displayID] = min(max(factor, 0), 1)
+        _ = applyDim(displayID)
+    }
+
+    /// Set the software *brightness* dim: `factor` 1 is undimmed, 0 is fully dimmed. Returns
+    /// whether a dim of that strength is in force.
+    ///
+    /// A separate source rather than the same value `setDimFactor` writes, because the two mean
+    /// different things and either can be released alone: a brightness dim must not cancel a
+    /// dim-to-black, and vice versa, so the window takes whichever is darkest.
+    @discardableResult
+    public func setSoftwareDim(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         let clamped = min(max(factor, 0), 1)
-        guard clamped > 0 else {
+        brightnessDim[displayID] = 1 - clamped
+        return applyDim(displayID)
+    }
+
+    /// Push the combined dim onto the window, or remove it when nothing dims. Returns whether
+    /// the request could be carried out: clearing the dim is a success, not a failure.
+    @discardableResult
+    private func applyDim(_ displayID: CGDirectDisplayID) -> Bool {
+        let opacity = Self.combinedOpacity(control: controlDim[displayID], brightness: brightnessDim[displayID])
+        guard opacity > 0 else {
+            // Both sources are off: forget them so a later release cannot resurrect a stale
+            // value, take the window away, and report success.
+            controlDim.removeValue(forKey: displayID)
+            brightnessDim.removeValue(forKey: displayID)
             removeDim(for: displayID)
-            return
+            return true
         }
         let bounds = CGDisplayBounds(displayID)
         guard isUsable(bounds) else {
-            log.warning("setDimFactor: no valid bounds for display \(displayID)")
+            log.warning("dim: no valid bounds for display \(displayID)")
             removeDim(for: displayID)
-            return
+            return false
         }
         let window = dimWindows[displayID] ?? makeOverlayWindow(bounds: bounds, backgroundColor: .black)
         dimWindows[displayID] = window
-        window.alphaValue = CGFloat(clamped)
+        window.alphaValue = CGFloat(opacity)
         window.setFrame(bounds, display: true)
         window.orderFrontRegardless()
+        return true
+    }
+
+    /// The opacity two dim sources combine to: the darkest wins, and an absent source is no dim
+    /// at all. Split out deliberately — it is the whole of the interaction between the two, and
+    /// the window it feeds cannot be unit-tested.
+    ///
+    /// Clamped at both ends rather than trusting the callers: the value becomes a window's
+    /// `alphaValue`, where a negative would be meaningless.
+    static func combinedOpacity(control: Double?, brightness: Double?) -> Double {
+        min(max(max(control ?? 0, brightness ?? 0), 0), 1)
     }
 
     private func removeDim(for displayID: CGDirectDisplayID) {

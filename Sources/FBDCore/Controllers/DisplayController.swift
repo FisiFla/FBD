@@ -20,7 +20,13 @@ public final class DisplayController {
     private let ddc: DDCController
     private let resolution = ResolutionController()
     private let xdr = XDRNativeController()
-    private let overlay = OverlayController()
+    /// The overlay surface. `softwareDimPersists` is false outside the app bundle, because the
+    /// software dim is a window: a one-shot `fbdcli` invocation would dim the screen and then
+    /// vanish, so the brightness route keeps to hardware there instead of accepting a write
+    /// that will not last. Same bundle test `Settings` and `ConfigProtectionController` use.
+    private let overlay = OverlayController(
+        softwareDimPersists: Bundle.main.bundleIdentifier == "dev.fisifla.fbd"
+    )
     private let brightnessObserver = BrightnessChangeObserver()
     private let combined: CombinedBrightness
 
@@ -371,6 +377,19 @@ public final class DisplayController {
         let ok = overlay.setSoftwareBoost(factor, displayID: display.id)
         display.updateSoftwareBoost(factor > 1 && ok, targetNits: nil)
         return ok
+    }
+
+    /// Set the software brightness dim: 1 is undimmed, 0 is fully dimmed. Records what the
+    /// display is at, so a brightness read reports what the screen shows rather than only what
+    /// the backlight is doing.
+    ///
+    /// Returns false when the overlay cannot hold the dim — the caller's signal to fall back
+    /// rather than accept a write that will not last.
+    @discardableResult
+    public func setSoftwareDim(_ factor: Double, on display: Display) -> Bool {
+        let carried = overlay.setSoftwareDim(factor, displayID: display.id)
+        display.updateSoftwareDim(carried ? factor : 1)
+        return carried
     }
 
     /// Set the dim-to-black overlay opacity 0…1 (0 = none, 1 = fully black).

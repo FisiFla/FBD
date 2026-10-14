@@ -73,10 +73,20 @@ private final class FakeXDR: XDRUpscaling {
 private final class FakeOverlay: OverlayControlling {
     var accepts = true
     var boostCalls: [(factor: Double, displayID: CGDirectDisplayID)] = []
+    var dimCalls: [(factor: Double, displayID: CGDirectDisplayID)] = []
+    /// Whether the surface claims a dim set here would outlive the call. The app's overlay does;
+    /// a one-shot CLI's does not, which is the case worth testing.
+    var softwareDimPersists = true
 
     @discardableResult
     func setSoftwareBoost(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         boostCalls.append((factor, displayID))
+        return accepts
+    }
+
+    @discardableResult
+    func setSoftwareDim(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
+        dimCalls.append((factor, displayID))
         return accepts
     }
 }
@@ -411,5 +421,164 @@ final class CombinedBrightnessTests: XCTestCase {
         XCTAssertTrue(plain.set(1.0, on: display))
 
         XCTAssertEqual(xdr.lastTarget, 1600)
+    }
+
+    // MARK: - The read agrees with the screen (row 9 / 10's shared piece)
+
+    /// The point of tracking the dim: `get` reports what the screen shows rather than only what
+    /// the backlight is doing, so nothing downstream reads a value the display disagrees with.
+    func testGetReportsTheEffectiveBrightnessWhenADimIsInForce() {
+        apple.read = 0.8
+        display.updateSoftwareDim(0.5)
+
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.4, accuracy: 1e-9)
+    }
+
+    /// With nothing dimming the read is the hardware value, exactly as it always was — wiring
+    /// this must not move the ordinary case.
+    func testGetIsTheHardwareValueWhenNothingDims() {
+        apple.read = 0.8
+        XCTAssertEqual(display.softwareDim, 1, "a display starts undimmed")
+
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.8, accuracy: 1e-9)
+    }
+
+    /// `get` still means "no control path" by returning nil, which the dim must not turn into a
+    /// number: a display FBD cannot read has no brightness to report, dimmed or not.
+    func testGetStillReturnsNilWithoutAControlPath() {
+        let unreachable = Display(
+            id: 43,
+            name: "No path",
+            isBuiltin: false,
+            vendorNumber: 1,
+            modelNumber: 2,
+            serialNumber: 3,
+            bounds: .zero,
+            isOnline: true,
+            isActive: true
+        )
+        unreachable.updateSoftwareDim(0.5)
+
+        XCTAssertNil(module.get(for: unreachable))
+    }
+
+    /// The lock/dim-to-black path is a *different* source: it writes the overlay, never the
+    /// display's tracked dim, so it cannot move a brightness read. The control source is written
+    /// with 0 here — passing anything else would create a real overlay window over a real screen
+    /// from inside a unit test, and nothing in the test would remove it.
+    func testTheControlDimDoesNotWriteTheTrackedBrightnessDim() {
+        apple.read = 0.8
+        display.updateSoftwareDim(0.5)
+        let before = module.get(for: display)
+
+        let overlay = OverlayController()
+        overlay.setDimFactor(0, displayID: display.id)
+
+        XCTAssertEqual(display.softwareDim, 0.5, accuracy: 1e-9, "the control path does not write the tracked dim")
+        XCTAssertEqual(module.get(for: display) ?? -1, before ?? -1, accuracy: 1e-9, "so a brightness read cannot move")
+    }
+
+    // MARK: - The two routes the dim exists for (row 9's prefer-software, row 10's dimming zone)
+
+    /// Prefer-software: the request is delivered as a dim over the backlight, so the slider is
+    /// not on the hardware write path — and the read round-trips, which is the whole point.
+    func testPreferSoftwareDeliversTheRequestAsADimWithoutTouchingTheHardware() {
+        apple.read = 0.8
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(preferHardwareControl: false)
+        )
+
+        XCTAssertTrue(module.set(0.25, on: display))
+
+        XCTAssertEqual(overlay.dimCalls.last?.factor ?? -1, 0.3125, accuracy: 1e-9, "0.25 of a 0.8 backlight")
+        XCTAssertEqual(apple.writeCalls, 0, "the hardware is exactly what prefer-software avoids writing")
+        XCTAssertEqual(display.softwareDim, 0.3125, accuracy: 1e-9)
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.25, accuracy: 1e-9, "the read round-trips the request")
+    }
+
+    /// A dim can only lower what the screen shows, so a request *above* the backlight still needs
+    /// the hardware. Falling back is the honest answer; a dim there would silently under-deliver.
+    func testPreferSoftwareFallsBackToHardwareAboveTheBacklight() {
+        apple.read = 0.2
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(preferHardwareControl: false)
+        )
+
+        XCTAssertTrue(module.set(0.3, on: display))
+
+        XCTAssertEqual(apple.writeCalls, 1, "0.3 of a 0.2 backlight cannot be reached by dimming")
+        XCTAssertEqual(apple.lastWrite, 0.96, accuracy: 1e-9, "so the planner's fraction is written")
+        XCTAssertEqual(display.softwareDim, 1, accuracy: 1e-9)
+        XCTAssertEqual(overlay.dimCalls.last?.factor ?? -1, 1, accuracy: 1e-9, "and no dim is left in force")
+    }
+
+    /// A dim that only the app can hold must not be taken elsewhere: the CLI keeps the hardware
+    /// route it has always used rather than accepting a write that would vanish with the process.
+    func testATransientOverlayKeepsToTheHardwareRoute() {
+        apple.read = 0.8
+        overlay.softwareDimPersists = false
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(preferHardwareControl: false)
+        )
+
+        XCTAssertTrue(module.set(0.25, on: display))
+
+        XCTAssertEqual(apple.writeCalls, 1, "the hardware path still delivers the request")
+        XCTAssertEqual(apple.lastWrite, 0.8, accuracy: 1e-9)
+        XCTAssertEqual(display.softwareDim, 1, accuracy: 1e-9)
+    }
+
+    /// The curve's dimming zone: the model ramps the hardware *and* dims the rest, so both halves
+    /// have to be applied or the screen lands at the wrong level.
+    func testTheCurvesDimmingZoneAppliesBothHalves() {
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(minHardwarePercent: 20)
+        )
+
+        XCTAssertTrue(module.set(0.25, on: display))
+
+        // Half way up the dimming zone: hardware 0.2 + 0.8 × 0.5, dim 0 → 1 × 0.5.
+        XCTAssertEqual(apple.lastWrite, 0.6, accuracy: 1e-9, "the hardware ramps with the curve")
+        XCTAssertEqual(overlay.dimCalls.last?.factor ?? -1, 0.5, accuracy: 1e-9, "and the dim supplies the rest")
+        XCTAssertEqual(display.softwareDim, 0.5, accuracy: 1e-9)
+        // The read is what the screen shows — the model's own mapping, not the slider position.
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.3, accuracy: 1e-9)
+    }
+
+    /// Once the slider is above the ceiling the curve keeps dimming off, and a boost with a dim
+    /// left over would fight it — so the dim is released rather than left dimming the screen.
+    func testADimIsReleasedWhenTheRouteLeavesTheDimmingZone() {
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(minHardwarePercent: 20)
+        )
+
+        XCTAssertTrue(module.set(0.25, on: display))
+        XCTAssertEqual(display.softwareDim, 0.5, accuracy: 1e-9, "the dimming zone dimmed it")
+
+        XCTAssertTrue(module.set(1.0, on: display))
+
+        XCTAssertEqual(display.softwareDim, 1, accuracy: 1e-9, "the upscaling zone does not dim")
+        XCTAssertEqual(overlay.dimCalls.last?.factor ?? -1, 1, accuracy: 1e-9)
+    }
+
+    /// The shipped profile takes neither route, so a default install behaves exactly as it did:
+    /// the hardware fraction is written and no dim is applied.
+    func testTheShippedProfileStillAppliesNoDim() {
+        apple.read = 0.8
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: .standard
+        )
+
+        XCTAssertTrue(module.set(0.25, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.8, accuracy: 1e-9, "the planner's fraction, unchanged")
+        XCTAssertEqual(display.softwareDim, 1, accuracy: 1e-9)
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.8, accuracy: 1e-9)
     }
 }
