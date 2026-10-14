@@ -139,11 +139,15 @@ public final class CombinedBrightness {
             display.updateSoftwareBoost(false, targetNits: nil)
             return setHardwareBrightness(fraction, on: display)
         case .nativeUpscale(let nits):
-            // XDRNativeController updates the display state on success.
-            return xdr.setUpscaleTarget(nits, for: display)
+            // XDRNativeController updates the display state on success. The curve's ceiling
+            // applies here as well as to the software boost: `upscaleMaxPercent` says how far
+            // past the hardware ceiling an upscale may reach, and the native path is usually
+            // the one doing it. A preference may only tighten the model.
+            return xdr.setUpscaleTarget(cappedUpscaleNits(nits, ceiling: Double(hardwareMax)), for: display)
         case .softwareBoost(let factor):
             log.warning("set: native XDR upscaling unavailable for \(display.id); using software boost")
-            let ok = withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
+            let boost = boostFactor(from: factor, value: clamped, ceiling: Double(hardwareMax))
+            let ok = withOverlay { $0.setSoftwareBoost(boost, displayID: display.id) }
             if ok {
                 display.updateSoftwareBoost(true, targetNits: Int((Double(top) * clamped).rounded()))
             }
@@ -257,6 +261,46 @@ public final class CombinedBrightness {
     }
 
     /// Hardware brightness write: Apple path when available, DDC otherwise.
+    /// The curve's `upscaleMaxPercent` applied to a nits target, or the target unchanged
+    /// when the profile carries no curve knob.
+    ///
+    /// `upscaleMaxPercent` is a multiple of the *hardware* ceiling — 320 means "up to 3.2×
+    /// the ceiling" — so the cap is that multiple of the ceiling, never above the target
+    /// already asked for.
+    private func cappedUpscaleNits(_ nits: Int, ceiling: Double) -> Int {
+        let profile = effectivePreferences.clamped()
+        guard profile.upscaleMaxPercent != BrightnessPreferences.standard.upscaleMaxPercent,
+              ceiling > 0 else {
+            return nits
+        }
+        let cap = ceiling * profile.upscaleMaxPercent / 100
+        guard cap.isFinite, cap > 0 else { return nits }
+        return min(nits, Int(cap.rounded()))
+    }
+
+    /// The software-boost factor for a slider value.
+    ///
+    /// Normally the planner's own factor. When the profile carries a knob the linear model
+    /// has no notion of — `upscaleMaxPercent` or `dimmingSwitchoverPercent` — the boost
+    /// follows `BrightnessCurve`'s upscaling ramp instead, which is where those two live.
+    /// That is the call site the curve was written for and never had: four labelled sliders
+    /// in Settings shaped nothing at all before this.
+    ///
+    /// Only the boost path takes it. The curve's *dimming* zone wants a software dim (a
+    /// hardware ramp plus an overlay dim), and this process does not track software
+    /// brightness — `get` would then report a value the screen is not showing, which is the
+    /// read-back disagreement this class exists to fix. See the gap-matrix row.
+    private func boostFactor(from plannerFactor: Double, value: Double, ceiling: Double) -> Double {
+        let profile = effectivePreferences.clamped()
+        let standard = BrightnessPreferences.standard
+        guard profile.upscaleMaxPercent != standard.upscaleMaxPercent
+            || profile.dimmingSwitchoverPercent != standard.dimmingSwitchoverPercent else {
+            return plannerFactor
+        }
+        let curve = BrightnessCurve.evaluate(value, preferences: profile, hardwareCeiling: ceiling)
+        return max(curve.upscaleFactor, 1)
+    }
+
     private func setHardwareBrightness(_ value: Double, on display: Display) -> Bool {
         let clamped = min(max(value, 0), 1)
         if display.appleBrightnessAvailable {
