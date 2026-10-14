@@ -68,6 +68,13 @@ struct ArrangementGridView: View {
         )
         let isMain = display.id == CGMainDisplayID()
         let isDragging = draggingID == display.id
+        let tileWidth = max(rect.width, 24)
+        let tileHeight = max(rect.height, 14)
+        // A 9pt label plus its inset needs roughly 20pt of height, and a name
+        // needs real width to be legible. The tile is allowed to shrink to
+        // 14x24, so on a small tile the label used to spill past the border and
+        // read as overlapping it. Show it only when the tile can hold it.
+        let showsName = tileHeight >= 22 && tileWidth >= 64
 
         return RoundedRectangle(cornerRadius: 6, style: .continuous)
             .fill(isDragging ? Color.accentColor.opacity(0.85) : (isMain ? Color.accentColor.opacity(0.25) : Color.accentColor.opacity(0.55)))
@@ -76,18 +83,30 @@ struct ArrangementGridView: View {
                     .strokeBorder(Color.white.opacity(0.6), lineWidth: 1)
             )
             .overlay(
-                Text(display.name)
-                    .font(.system(size: 9, weight: .medium))
-                    // `.white` failed badly on the 25%-opacity accent fill the
-                    // main display gets (white on pale blue in light mode ≈1.5:1).
-                    // `.primary` adapts to the appearance and clears both.
-                    .foregroundStyle(isDragging ? Color.white : Color.primary)
-                    .lineLimit(1)
-                    .padding(3)
-                    .frame(maxWidth: .infinity, alignment: .leading),
+                Group {
+                    if showsName {
+                        Text(display.name)
+                            .font(.system(size: 9, weight: .medium))
+                            // `.white` failed badly on the 25%-opacity accent fill the
+                            // main display gets (white on pale blue in light mode ≈1.5:1).
+                            // `.primary` adapts to the appearance and clears both.
+                            .foregroundStyle(isDragging ? Color.white : Color.primary)
+                            .lineLimit(1)
+                            // A long display name shrinks rather than being truncated
+                            // to nothing on a modestly wide tile.
+                            .minimumScaleFactor(0.7)
+                            .allowsTightening(true)
+                            .padding(.horizontal, 4)
+                            .padding(.bottom, 4)
+                    }
+                }
+                // Filling the tile and aligning inside it keeps the label within
+                // the border at every size, instead of the label's own frame
+                // growing past it.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading),
                 alignment: .bottomLeading
             )
-            .frame(width: max(rect.width, 24), height: max(rect.height, 14))
+            .frame(width: tileWidth, height: tileHeight)
             .position(x: rect.midX, y: rect.midY)
             .shadow(color: .black.opacity(isDragging ? 0.4 : 0.2), radius: isDragging ? 6 : 3)
             .contentShape(Rectangle())
