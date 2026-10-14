@@ -112,4 +112,36 @@ final class PiPArgsTests: XCTestCase {
         fails(["7", "1", "1", "1", "1"])
         fails(["--window", "42", "1", "1", "1", "1"])
     }
+
+    // MARK: - Several sources in one invocation
+
+    func testParsesASecondSourceAfterTheFirst() throws {
+        let parsed = try parse(["7", "--window", "1234"])
+        XCTAssertEqual(parsed.sources, [.display(7), .window(1234)])
+        XCTAssertEqual(parsed.source, .display(7), "the first source is still what `source` means")
+    }
+
+    func testParsesThreeSourcesOfMixedKinds() throws {
+        let parsed = try parse(["--window", "1", "--window", "2", "--app", "com.apple.Safari"])
+        XCTAssertEqual(parsed.sources, [.window(1), .window(2), .application("com.apple.Safari")])
+    }
+
+    func testTheFilterStillFollowsTheSources() throws {
+        let parsed = try parse(["7", "--window", "1234", "0.5", "0.6", "0.7"])
+        XCTAssertEqual(parsed.sources, [.display(7), .window(1234)])
+        XCTAssertEqual(parsed.filter, [0.5, 0.6, 0.7])
+    }
+
+    /// A later source flag validates exactly as the leading one does — the shared
+    /// helper is what keeps the two from drifting apart.
+    func testALaterSourceFlagValidatesItsIdentifierTheSameWay() {
+        fails(["7", "--window"])
+        fails(["7", "--window", "not-a-number"])
+        fails(["7", "--app", ""])
+    }
+
+    func testASingleSourceIsUnchanged() throws {
+        XCTAssertEqual(try parse(["7"]).sources, [.display(7)])
+        XCTAssertEqual(try parse(["--window", "42"]).sources, [.window(42)])
+    }
 }

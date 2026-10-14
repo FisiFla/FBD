@@ -181,6 +181,13 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
   presentation does not end with the display asleep. It is app-side by necessity:
   the assertion belongs to the process that holds it, so a `fbdcli` invocation
   would drop it on exit — which is why there is no command-line switch for it.
+- **Several PiP windows at once.** Capture sessions are now keyed by their source,
+  so a second display's PiP opens a second window instead of closing the first, and
+  re-asking for a source replaces only that source's window. The app keeps one
+  window per display, which *is* one window per source. `fbdcli pip` takes several
+  sources in one invocation (`pip 1 --window 1234`), which is the only way to open
+  two at once on a single-display Mac. Verified live: two windows coexisted and both
+  tore down cleanly when the CLI's stdin closed.
 
 ### Changed
 - **The brightness/volume HUD is configurable.** Position (top centre/left/right, bottom

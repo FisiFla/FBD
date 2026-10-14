@@ -137,24 +137,37 @@ private func backingScaleFactor(containing frame: CGRect) -> CGFloat {
 /// failures tear the PiP down and log.
 @MainActor
 public final class PipStreamController: NSObject, NSWindowDelegate {
-    /// One PiP window process-wide: every UI entry point (display options
-    /// menu, footer) shares this instance so opening PiP reuses
-    /// the existing window instead of spawning more.
+    /// Every UI entry point (display options menu, footer) shares this instance.
+    ///
+    /// One window per **capture source**: a session is keyed by
+    /// `PiPCaptureSource.identifier`, so asking for PiP on a second display opens a
+    /// second window, while asking again for the same source replaces that source's
+    /// own window rather than a different one's. Before this there was a single
+    /// process-wide session and any new request closed whatever was already up.
     public static let shared = PipStreamController()
 
-    /// The active PiP window (nil when no PiP is showing).
-    private var window: NSWindow?
-    /// The active capture session (window + stream + renderer); at most one.
-    private var session: PipSession?
+    /// Live capture sessions, keyed by capture source. At most one per key.
+    private var sessions: [String: PipSession] = [:]
     /// Keeps the pointer off a streamed display while containment is requested
     /// (#14). Idle unless a stream asks for it *and* the experimental setting
     /// allows it.
     private let containment = CursorContainmentController()
 
-    /// Frames delivered by the active capture; 0 when idle. Lets a caller
+    /// Frames delivered across every live capture; 0 when idle. Lets a caller
     /// observe the per-stream frame-rate cap rather than only request it.
     public var deliveredFrames: UInt64 {
-        session?.deliveredFrames ?? 0
+        sessions.values.reduce(0) { $0 + $1.deliveredFrames }
+    }
+
+    /// Frames delivered by one source's capture — what a caller that started a
+    /// single stream wants, now that others can be running alongside it.
+    public func deliveredFrames(sessionID: String) -> UInt64 {
+        sessions[sessionID]?.deliveredFrames ?? 0
+    }
+
+    /// The capture sources with a window up right now, in a stable order.
+    public var activeSessionIDs: [String] {
+        sessions.keys.sorted()
     }
 
     public override init() { super.init() }
@@ -162,7 +175,7 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
     deinit {
         // Break the stream↔output retain cycle (SCStream retains its outputs)
         // if the controller goes away without an explicit stop().
-        session?.stop()
+        for session in sessions.values { session.stop() }
     }
 
     /// Open a PiP window for a display — the original entry point.
@@ -191,7 +204,9 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         fps: Int? = nil,
         containCursor: Bool = false
     ) -> Bool {
-        teardownPip()
+        // Replace only this source's session: a second display's stream, or a
+        // window capture running alongside, must not be closed by starting a new one.
+        teardownPip(sessionID: source.identifier)
         guard ScreenRecordingPermission.ensure() else {
             log.error("startPiP: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording, then relaunch FBD")
             return false
@@ -222,8 +237,7 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
                 renderer: renderer,
                 owner: self
             )
-            self.window = window
-            self.session = session
+            sessions[source.identifier] = session
             window.orderFrontRegardless()
             session.start(filter: filter, fps: fps)
             // Containment only makes sense for a display capture — a window or
@@ -276,65 +290,86 @@ public final class PipStreamController: NSObject, NSWindowDelegate {
         return candidates
     }
 
-    /// Update the active PiP's video filter (brightness/contrast/saturation uniforms).
+    /// Update every live capture's video filter (brightness/contrast/saturation uniforms).
     public func setFilter(_ filter: VideoFilter) {
-        guard let session else {
+        guard !sessions.isEmpty else {
             log.info("setFilter: no active PiP window")
             return
         }
-        session.setFilter(filter)
+        for session in sessions.values { session.setFilter(filter) }
     }
 
-    /// True when a PiP window is showing.
+    /// True when any PiP window is showing.
     public var isActive: Bool {
-        guard let session else { return false }
-        return session.isCapturing && (window?.isVisible ?? false)
+        sessions.values.contains { $0.isCapturing && $0.window.isVisible }
     }
 
-    /// Close the PiP window.
+    /// True when this capture source's window is showing.
+    public func isActive(_ sessionID: String) -> Bool {
+        guard let session = sessions[sessionID] else { return false }
+        return session.isCapturing && session.window.isVisible
+    }
+
+    /// Close every PiP window.
     public func stop() {
         teardownPip()
     }
 
+    /// Close one capture source's window.
+    public func stop(_ sessionID: String) {
+        teardownPip(sessionID: sessionID)
+    }
+
     // MARK: NSWindowDelegate
 
-    /// The title-bar close button: tear down the session (the window itself
-    /// is destroyed by teardown, so the close is fully handled here).
+    /// The title-bar close button: tear down the session that owns the window, so
+    /// closing one window cannot take another's down with it.
     public func windowShouldClose(_ sender: NSWindow) -> Bool {
-        teardownPip()
+        guard let id = sessions.first(where: { $0.value.window === sender })?.key else {
+            // Not one of ours, or already torn down: let AppKit close it.
+            return true
+        }
+        teardownPip(sessionID: id)
         return false
     }
 
     // MARK: - Teardown
 
-    /// Remove the active PiP (window + stream). Runs on the main actor, so it
+    /// Remove every PiP (windows + streams). Runs on the main actor, so it
     /// cannot race the async capture setup (which re-checks `isCurrentPipSession`).
     private func teardownPip() {
+        for id in Array(sessions.keys) { teardownPip(sessionID: id) }
         containment.stop()
-        guard let session else { return }
-        self.session = nil
-        window = nil
+    }
+
+    private func teardownPip(sessionID: String) {
+        guard let session = sessions.removeValue(forKey: sessionID) else { return }
+        // Containment watches one display at a time, so it only stops once the last
+        // stream that could have asked for it has gone.
+        if sessions.isEmpty { containment.stop() }
         session.stop()
     }
 
-    /// Tear down only if `session` is still the live one (used by the session's
-    /// own failure paths).
+    /// Tear down only if `session` is still live (used by the session's own failure
+    /// paths). Matched by **identity**, not by key: a session already replaced by a
+    /// newer one for the same source must not take the newer one down with it.
     fileprivate func teardownPip(_ session: PipSession) {
-        guard self.session === session else { return }
-        teardownPip()
+        guard let id = sessions.first(where: { $0.value === session })?.key else { return }
+        teardownPip(sessionID: id)
     }
 
-    /// Whether `session` is still the live PiP session — lets a capture setup
-    /// that raced with teardown cancel itself. Main-actor only, race-free.
+    /// Whether `session` is still live — lets a capture setup that raced with
+    /// teardown cancel itself. Main-actor only, race-free.
     fileprivate func isCurrentPipSession(_ session: PipSession) -> Bool {
-        self.session === session
+        sessions.values.contains { $0 === session }
     }
 
-    /// Window number of the PiP window, so the capture filter can exclude it
-    /// (no feedback loop).
-    fileprivate func pipWindowID() -> CGWindowID {
-        guard let window, window.windowNumber > 0 else { return 0 }
-        return CGWindowID(window.windowNumber)
+    /// Window number of one session's window, so that session's capture filter can
+    /// exclude its own window (no feedback loop). Each session excludes only its own,
+    /// which is what lets two of them run without capturing each other.
+    fileprivate func pipWindowID(_ session: PipSession) -> CGWindowID {
+        guard session.window.windowNumber > 0 else { return 0 }
+        return CGWindowID(session.window.windowNumber)
     }
 
     /// Where the PiP window goes when the caller did not say.
@@ -615,7 +650,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
             }
             // Never capture the PiP window itself — it would otherwise feed
             // back into the next frame. Everything else stays included.
-            let ownWindowID = owner?.pipWindowID() ?? 0
+            let ownWindowID = owner?.pipWindowID(self) ?? 0
             let excluded = content.windows.filter { $0.windowID == ownWindowID }
             // Capture at the panel's PHYSICAL pixel size. `SCDisplay.width/height`
             // are points, so on a 2x panel a point-sized capture is half the
@@ -654,7 +689,7 @@ private final class PipSession: NSObject, SCStreamOutput, SCStreamDelegate {
                 ?? content.displays.first else {
                 throw PipError.sourceUnavailable("display for application \(bundleID)")
             }
-            let ownWindowID = owner?.pipWindowID() ?? 0
+            let ownWindowID = owner?.pipWindowID(self) ?? 0
             let excluded = content.windows.filter { $0.windowID == ownWindowID }
             return (
                 SCContentFilter(display: scDisplay, including: applications, exceptingWindows: excluded),

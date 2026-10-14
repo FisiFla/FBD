@@ -1706,50 +1706,66 @@ func cmdPip(_ controller: DisplayController, args: [String]) -> Int32 {
         case .list:
             return cmdPipList()
         case .start:
-            guard let sourceArgs = parsed.source else {
+            guard !parsed.sources.isEmpty else {
                 print("fbdcli: pip: no capture source")
                 return 1
             }
-            // A display id gets the same early validation the display-only
-            // form used to do; window and app ids are resolved by
-            // ScreenCaptureKit, which reports an unknown one itself.
-            if case .display(let displayID) = sourceArgs,
-               requireDisplay(String(displayID), in: controller) == nil {
-                return 1
-            }
-            let source: PiPCaptureSource
-            switch sourceArgs {
-            case .display(let id): source = .display(id)
-            case .window(let id): source = .window(id)
-            case .application(let bundleID): source = .application(bundleID)
+            var sources: [PiPCaptureSource] = []
+            for sourceArgs in parsed.sources {
+                // A display id gets the same early validation the display-only form
+                // used to do; window and app ids are resolved by ScreenCaptureKit,
+                // which reports an unknown one itself.
+                if case .display(let displayID) = sourceArgs,
+                   requireDisplay(String(displayID), in: controller) == nil {
+                    return 1
+                }
+                switch sourceArgs {
+                case .display(let id): sources.append(.display(id))
+                case .window(let id): sources.append(.window(id))
+                case .application(let bundleID): sources.append(.application(bundleID))
+                }
             }
             // One shared controller instance for start and stop — a local
             // throwaway instance could never be stopped by `pip stop`.
             let filter = VideoFilter(
                 brightness: parsed.filter[0], contrast: parsed.filter[1], saturation: parsed.filter[2]
             )
-            guard cliPip.startPiP(
-                source: source,
-                filter: filter,
-                fps: parsed.fps,
-                containCursor: parsed.containCursor
-            ) else {
-                print("fbdcli: pip: failed to start PiP for \(source.identifier) (grant Screen Recording to FBD if prompted)")
-                return 2
+            // Several sources run side by side: the controller keys a session by its
+            // source, so starting the second one no longer closes the first. A start
+            // that fails tears the whole invocation down rather than leaving a window
+            // the user did not ask for standing on its own.
+            for source in sources {
+                guard cliPip.startPiP(
+                    source: source,
+                    filter: filter,
+                    fps: parsed.fps,
+                    containCursor: parsed.containCursor
+                ) else {
+                    print("fbdcli: pip: failed to start PiP for \(source.identifier) (grant Screen Recording to FBD if prompted)")
+                    cliPip.stop()
+                    return 2
+                }
             }
-            // isActive flips true asynchronously once the capture stream starts;
-            // give it a few seconds before declaring failure.
-            let startDeadline = Date().addingTimeInterval(3)
-            while !cliPip.isActive, Date() < startDeadline {
+            // isActive flips true asynchronously once a capture stream starts, so wait
+            // for every one of them before claiming success.
+            let startDeadline = Date().addingTimeInterval(5)
+            func allStreaming() -> Bool { sources.allSatisfy { cliPip.isActive($0.identifier) } }
+            while !allStreaming(), Date() < startDeadline {
                 RunLoop.main.run(until: Date().addingTimeInterval(0.05))
             }
-            guard cliPip.isActive else {
-                print("fbdcli: pip: stream failed to start for \(source.identifier) (screen-recording permission?)")
+            guard allStreaming() else {
+                print("fbdcli: pip: stream failed to start (screen-recording permission?)")
+                cliPip.stop()
                 return 2
             }
             let startFrames = cliPip.deliveredFrames
             let startTime = Date()
-            print("pip streaming \(source.identifier) (brightness \(parsed.filter[0]), contrast \(parsed.filter[1]), saturation \(parsed.filter[2]))")
+            for source in sources {
+                print("pip streaming \(source.identifier) (brightness \(parsed.filter[0]), contrast \(parsed.filter[1]), saturation \(parsed.filter[2]))")
+            }
+            if sources.count > 1 {
+                print("\(sources.count) PiP windows open — one per capture source")
+            }
             print("press any key to stop")
             while cliPip.isActive, !stdinHasInput() {
                 RunLoop.main.run(until: Date().addingTimeInterval(0.1))
