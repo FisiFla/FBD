@@ -131,7 +131,20 @@ public final class Display: ObservableObject, Identifiable {
     }
 
     /// Stable identity used for per-display persisted settings (DDC features, brightness).
-    public var identityKey: String { "\(vendorNumber)-\(modelNumber)-\(serialNumber)" }
+    ///
+    /// The method is a stored preference (`Settings.displayIdentityMethod`); its
+    /// default reproduces the historical `vendor-model-serial` string exactly, so
+    /// an existing install keeps every per-display setting attached. Changing it
+    /// re-keys them, which is what `DisplaySettingsTransfer` is for.
+    public var identityKey: String {
+        DisplayIdentity.key(
+            vendor: vendorNumber,
+            model: modelNumber,
+            serial: serialNumber,
+            name: name,
+            method: Settings.displayIdentityMethod
+        )
+    }
 }
 
 extension Display: Hashable {

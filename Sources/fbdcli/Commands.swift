@@ -2286,6 +2286,8 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "connections": return cmdConfigConnections(controller, rest)
     case "model": return cmdConfigModel(rest)
     case "device": return cmdConfigDevice(controller, rest)
+    case "identity": return cmdConfigIdentity(rest)
+    case "transfer": return cmdConfigTransfer(controller, args: rest)
     default:
         print("fbdcli: config: unknown subcommand '\(sub)'")
         printConfigUsage()
@@ -2307,6 +2309,75 @@ func printConfigSummary() -> Int32 {
         + "upscaleMax=\(Int(prefs.upscaleMaxPercent))% "
         + "startup=\(prefs.startupControlValuePolicy.rawValue)")
     print("configuration protection: \(Settings.configProtectionEnabled ? "on" : "off")")
+    return 0
+}
+
+/// `config identity [<method>]` — which key a display's stored settings are filed
+/// under.
+@MainActor
+func cmdConfigIdentity(_ args: [String]) -> Int32 {
+    let methods = DisplayIdentityMethod.allCases.map(\.rawValue).joined(separator: ", ")
+    guard let raw = args.first else {
+        print("identity method: \(Settings.displayIdentityMethod.rawValue)")
+        print("available: \(methods)")
+        for method in DisplayIdentityMethod.allCases {
+            print("  \(method.rawValue): \(method.label) — \(method.caveat)")
+        }
+        return 0
+    }
+    guard let method = DisplayIdentityMethod(rawValue: raw) else {
+        print("fbdcli: config identity: expected one of \(methods) (got '\(raw)')")
+        return 1
+    }
+    Settings.displayIdentityMethod = method
+    print("identity method = \(method.rawValue)")
+    print("Note: this re-keys per-display settings. Move an existing display's across with")
+    print("      `fbdcli config transfer <from-id> <to-id>`.")
+    return 0
+}
+
+/// `config transfer <from-id> <to-id> [--overwrite]` — copy one display's stored
+/// settings onto another.
+@MainActor
+func cmdConfigTransfer(_ controller: DisplayController, args: [String]) -> Int32 {
+    let overwrite = args.contains("--overwrite")
+    let ids = args.filter { !$0.hasPrefix("--") }
+    guard ids.count >= 2, let fromID = requireDisplayID(ids[0]), let toID = requireDisplayID(ids[1]) else {
+        print("fbdcli: config transfer: expected two display ids")
+        return 1
+    }
+    guard let from = controller.display(withID: fromID) else {
+        print("fbdcli: config transfer: no display with id \(fromID)")
+        return 1
+    }
+    guard let to = controller.display(withID: toID) else {
+        print("fbdcli: config transfer: no display with id \(toID)")
+        return 1
+    }
+    // Two displays that share an identity already share their settings, so
+    // "copying" between them would be a no-op reported as a success.
+    guard from.identityKey != to.identityKey else {
+        print("fbdcli: config transfer: ids \(fromID) and \(toID) share an identity "
+            + "(\(from.identityKey)) — nothing to move")
+        return 1
+    }
+    guard !DisplaySettingsTransfer.familiesPresent(for: from.identityKey).isEmpty else {
+        print("fbdcli: config transfer: nothing stored for \(from.identityKey)")
+        return 0
+    }
+    let outcome = DisplaySettingsTransfer.apply(
+        from: from.identityKey,
+        to: to.identityKey,
+        overwrite: overwrite
+    )
+    print("from \(from.identityKey) to \(to.identityKey)")
+    var moved = outcome.moved
+    if outcome.movedDeviceAttachment { moved.append(DisplaySettingsTransfer.sharedBlobFamily) }
+    print("moved: \(moved.isEmpty ? "nothing" : moved.joined(separator: ", "))")
+    if !outcome.kept.isEmpty {
+        print("kept (the destination already had these; pass --overwrite to replace): "
+            + outcome.kept.joined(separator: ", "))
+    }
     return 0
 }
 

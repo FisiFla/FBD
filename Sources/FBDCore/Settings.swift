@@ -359,6 +359,23 @@ public enum Settings {
         }
     }
 
+    /// How a display is matched to its stored settings. Persisted as the enum's
+    /// raw string, like every other enum key; an unrecognized stored value
+    /// degrades to the default rather than trapping.
+    @Storage(key: "displayIdentityMethod", defaultValue: DisplayIdentityMethod.default.rawValue)
+    public static var displayIdentityMethodRaw: String
+
+    /// Typed view of `displayIdentityMethodRaw`. The `@Storage` key above is the
+    /// single persisted home; callers use this seam.
+    ///
+    /// Changing this re-keys every per-display setting. It is deliberately not
+    /// migrated automatically: a silent re-key that guessed wrong would strand
+    /// settings, so `DisplaySettingsTransfer` is an explicit step instead.
+    public static var displayIdentityMethod: DisplayIdentityMethod {
+        get { DisplayIdentityMethod(rawValue: displayIdentityMethodRaw) ?? .default }
+        set { displayIdentityMethodRaw = newValue.rawValue }
+    }
+
     /// Per-display persisted DDC feature availability (VCP codes), keyed by display identity.
     public static func ddcFeatures(for identity: String) -> Set<UInt8> {
         let key = "ddcFeatures.\(identity)"
