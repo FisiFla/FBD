@@ -457,6 +457,7 @@ struct ApplicationSettingsPage: View {
                     Stepper(value: int(Settings.ddcCooldownMilliseconds) { Settings.ddcCooldownMilliseconds = max(0, $0) }, in: 0...10_000, step: 100) {
                         Text("\(Settings.ddcCooldownMilliseconds) ms").monospacedDigit()
                     }
+                    .accessibilityLabel("DDC/CI cooldown")
                 }
             } header: {
                 Label("DDC / CI", systemImage: "cable.connector")
@@ -471,6 +472,7 @@ struct ApplicationSettingsPage: View {
                     Stepper(value: int(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort) { Settings.httpServerPort = $0 }, in: 1024...65535) {
                         Text("\(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort)").monospacedDigit()
                     }
+                    .accessibilityLabel("HTTP port")
                 }
                 Toggle("Custom OSD", isOn: bool(Settings.customOSDEnabled) { Settings.customOSDEnabled = $0 })
                 Text("Shows a brightness HUD when the display brightness changes.")
@@ -560,21 +562,25 @@ struct ApplicationSettingsPage: View {
                 Stepper(value: doublePref(\.hardwareMinNits, step: 1, range: 0...40_000), in: 0...40_000, step: 1) {
                     Text("\(Int(Settings.brightnessPreferences.hardwareMinNits)) nits").monospacedDigit()
                 }
+                .accessibilityLabel("Hardware minimum")
             }
             SettingsRow(title: "Hardware maximum", caption: "Peak brightness in nits when the hardware control is at its maximum.") {
                 Stepper(value: doublePref(\.hardwareMaxNits, step: 50, range: 0...40_000), in: 0...40_000, step: 50) {
                     Text("\(Int(Settings.brightnessPreferences.hardwareMaxNits)) nits").monospacedDigit()
                 }
+                .accessibilityLabel("Hardware maximum")
             }
             SettingsRow(title: "HDR peak SDR", caption: "Peak SDR brightness in HDR mode.") {
                 Stepper(value: doublePref(\.hdrPeakSDRNits, step: 50, range: 0...40_000), in: 0...40_000, step: 50) {
                     Text("\(Int(Settings.brightnessPreferences.hdrPeakSDRNits)) nits").monospacedDigit()
                 }
+                .accessibilityLabel("HDR peak SDR")
             }
             SettingsRow(title: "HDR peak HDR", caption: "Peak HDR brightness.") {
                 Stepper(value: doublePref(\.hdrPeakHDRNits, step: 50, range: 0...40_000), in: 0...40_000, step: 50) {
                     Text("\(Int(Settings.brightnessPreferences.hdrPeakHDRNits)) nits").monospacedDigit()
                 }
+                .accessibilityLabel("HDR peak HDR")
             }
 
             SettingsSliderRow(
@@ -642,6 +648,7 @@ struct ApplicationSettingsPage: View {
                 Stepper(value: int(Settings.xdrUpscaleTargetNits) { Settings.xdrUpscaleTargetNits = $0 }, in: 100...1600, step: 100) {
                     Text("\(Settings.xdrUpscaleTargetNits) nits").monospacedDigit()
                 }
+                .accessibilityLabel("XDR upscale target")
             }
         } header: {
             Label("XDR / HDR", systemImage: "sun.max.trianglebadge.exclamationmark")
