@@ -143,8 +143,9 @@ sources linked. Paraphrased, the rules that bear on FBD:
    take `LocalizedStringKey` now, and the app's accessibility tree shows those titles in Chinese. The
    sidebar labels took the same path — `Text(item.rawValue)` was verbatim too — and now come from a
    `switch` over the cases, so their keys are literals the drift test can check; 236 keys each.
-   Still English: strings a *model* supplies (the automation row's event and kind labels) and numbers
-   with no words in them. The interpolated strings are localised too, through the **format** keys
+   Still English: numbers with no words in them. The automation row's event and kind labels are
+   localised in the UI, while the model's own `label`/`token` stay English deliberately — `FBD_EVENT_LABEL`
+   hands them to shell rules, which is a script contract. The interpolated strings are localised too, through the **format** keys
    SwiftUI generates for them (`%lld nits`, `%lld display%@`), which the drift test verifies by each
    key's literal segments rather than the whole key — that still catches a rename. Their placeholders
    are argued from the value's type, not observed: none of those four strings renders on a default

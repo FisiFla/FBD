@@ -271,3 +271,14 @@
 "%lld Hz" = "%lld Hz";
 "%lld display%@" = "%lld 台显示器";
 "%lldpx" = "%lld像素";
+
+/* 自动化：模型自带的 label/token 保持英文（FBD_EVENT_LABEL 会交给 Shell 规则，属于脚本契约），
+   因此由界面按枚举分支查表 */
+"display connected" = "已连接显示器";
+"display disconnected" = "显示器已断开";
+"system sleep" = "系统睡眠";
+"system wake" = "系统唤醒";
+"run manually" = "手动运行";
+"shell" = "Shell";
+"url" = "URL";
+"notify" = "通知";

@@ -276,3 +276,14 @@
 "%lld Hz" = "%lld Hz";
 "%lld display%@" = "%lld display%@";
 "%lldpx" = "%lldpx";
+
+/* Automation. The model's own `label`/`token` stay English — `FBD_EVENT_LABEL` hands them to shell
+   rules, which is a script contract — so the UI maps the cases here instead. */
+"display connected" = "display connected";
+"display disconnected" = "display disconnected";
+"system sleep" = "system sleep";
+"system wake" = "system wake";
+"run manually" = "run manually";
+"shell" = "shell";
+"url" = "url";
+"notify" = "notify";
