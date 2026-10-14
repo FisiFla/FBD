@@ -384,12 +384,20 @@ separate commit on the same branch.
   The corrected count for the page is 33, not 60. The lesson is the same one this session keeps teaching:
   suspect the instrument before the code.
 
-  **The one genuine remaining gap:** of those 33, 12 are container `AXGroup`s (not controls) and 14 are the
-  11×8 increment/decrement halves SwiftUI renders for a `Stepper`. A `Stepper`'s own label is not inherited by
-  the two buttons it decomposes into, so VoiceOver reaches a bare increment/decrement control with no idea
-  what it changes. It has to be fixed at each `Stepper` — they are used directly rather than through a shared
-  wrapper (`SettingsPages.swift:457,471,560,565,570,575,642` and `DisplayListView.swift:433`) — and confirmed
-  by re-dumping.
+  **The one genuine remaining gap — and a fix that measurably failed.** Of those 33, 12 are container
+  `AXGroup`s (not controls) and 14 are the 11×8 halves SwiftUI renders for a `Stepper`. I added
+  `.accessibilityLabel` to all eight `Stepper`s and re-measured: **the count went 33 → 32 and all 14 inner
+  buttons are still unlabelled.** `.accessibilityLabel` on a `Stepper` does not reach the buttons it
+  decomposes into, so that change did not achieve its goal. It is kept because it does name the stepper
+  element itself (which is what VoiceOver focuses), but it is **not** a fix for the inner buttons and is
+  recorded as unproven rather than as an improvement.
+
+  The fix that should work is collapsing the element instead of labelling it around the outside:
+  `.accessibilityElement(children: .ignore)` plus `.accessibilityLabel`, `.accessibilityValue` and
+  `.accessibilityAdjustableAction` on each stepper, which replaces the two unnamed buttons with one named
+  adjustable control. That is a larger change per site (eight of them) and was not attempted. A real
+  VoiceOver check is also still outstanding — raw AX enumeration and what VoiceOver actually announces are
+  not the same thing, and this whole pass has already taught that lesson twice.
 
 
 
