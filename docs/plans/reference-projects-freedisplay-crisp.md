@@ -144,9 +144,18 @@ sources linked. Paraphrased, the rules that bear on FBD:
    Still English: the Settings sidebar labels, built at runtime from `item.rawValue` (a format key is
    the fix), and any interpolated string.
 9. **Edge-crossing pointer** for displays whose edges do not line up.
-10. **Smooth scaling / the HiDPI-crisp flow** — the highest value and the highest
-    risk: it needs a new display mode, which FBD has not identified a safe API for
-    (row #22), and a wrong write can leave the only attached display unusable.
+10. **Smooth scaling / the HiDPI-crisp flow** — **settled: not doable within FBD's constraints.**
+    Two routes exist and neither works here. Creating a mode through a private API is impossible on
+    macOS 27: a fresh probe finds `SLSAddDisplayMode`, `SLSDisplayModeDescription` and
+    `SLSSetDisplayMode` **absent** (only `SLSConfigureDisplayMode`, which FBD already uses to
+    *select* a mode, resolves). The route Crisp actually ships is display override plists in
+    `/Library/Displays/Contents/Resources/Overrides`, and its own code states what that costs:
+    *"requires a display reconnect (or reboot) to apply."* That wants a privileged write to a
+    root-owned system directory — FBD ships no privileged helper, deliberately — and it is not live
+    even then, so calling it smooth scaling would be generous. `CGDisplayModeCreate` does resolve,
+    but it creates a mode for a **virtual** display, which FBD already supports (row #21); it cannot
+    add one to an attached panel. Row #22 carries the same conclusion, plus why it would need a
+    fallback: a wrong mode write can leave the only attached display unusable.
 
 Not pursued: notch hiding (FBD removed it deliberately), and the PiP work Crisp does
 not have.
