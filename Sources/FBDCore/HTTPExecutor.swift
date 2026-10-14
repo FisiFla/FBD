@@ -227,6 +227,51 @@ public enum HTTPExecutor {
                 return (404, HTTPJSON.error("no virtual display '\(id)'"))
             }
             return (200, HTTPJSON.encode(["ok": true]))
+        case .configStatus:
+            // Read-only, and the whole point of the endpoint: a script can see
+            // what the parity surfaces are set to without shelling out per key.
+            let model = Settings.brightnessPreferences
+            return (200, HTTPJSON.encode([
+                "lockDim": [
+                    "enabled": Settings.lockDimEnabled,
+                    "targetPercent": Settings.lockDimTargetPercent,
+                ],
+                "keyboardControlTarget": Settings.keyboardControlTarget.rawValue,
+                "keyboardControlTargets": KeyboardControlTarget.allCases.map(\.rawValue),
+                "configurationProtectionEnabled": Settings.configProtectionEnabled,
+                "brightnessModel": [
+                    "preferHardwareControl": model.preferHardwareControl,
+                    "hardwareMinNits": model.hardwareMinNits,
+                    "hardwareMaxNits": model.hardwareMaxNits,
+                    "hdrPeakSDRNits": model.hdrPeakSDRNits,
+                    "hdrPeakHDRNits": model.hdrPeakHDRNits,
+                    "softwareZeroPercent": model.softwareZeroPercent,
+                    "minHardwarePercent": model.minHardwarePercent,
+                    "dimmingSwitchoverPercent": model.dimmingSwitchoverPercent,
+                    "upscaleMaxPercent": model.upscaleMaxPercent,
+                    "startupControlValuePolicy": model.startupControlValuePolicy.rawValue,
+                ],
+            ]))
+
+        case .configLockDim(let enabled, let targetPercent):
+            // Omitted targetPercent keeps the stored one, so toggling the flag
+            // never silently rewrites the level. `clamped()` is the same
+            // normalisation the app and the CLI apply.
+            let policy = LockDimPolicy(
+                enabled: enabled,
+                targetPercent: targetPercent ?? Settings.lockDimTargetPercent
+            ).clamped()
+            Settings.lockDimEnabled = policy.enabled
+            Settings.lockDimTargetPercent = policy.targetPercent
+            return (200, HTTPJSON.encode([
+                "ok": true,
+                "enabled": policy.enabled,
+                "targetPercent": policy.targetPercent,
+            ]))
+
+        case .configKeyboardTarget(let target):
+            Settings.keyboardControlTarget = target
+            return (200, HTTPJSON.encode(["ok": true, "target": target.rawValue]))
         }
     }
 }

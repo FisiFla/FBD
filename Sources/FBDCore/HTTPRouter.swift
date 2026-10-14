@@ -22,6 +22,19 @@ public enum HTTPRoute: Equatable {
     /// CoreAudio import.
     case systemVolume(device: UInt32?, value: Double?)
     case systemAudioDevices
+    /// Settings-level configuration (the parity surfaces), not a display's
+    /// hardware.
+    ///
+    /// These write through `Settings` — the single write path the app and
+    /// `fbdcli` share — rather than through a controller, because that is
+    /// genuinely where the values live. Both writes are read back at use time
+    /// (lock dim re-reads its policy on every lock event, the media-key path
+    /// reads the control target on every press), so neither needs a restart.
+    /// `configLockDim` carries a nil `targetPercent` when the caller wants to
+    /// change only the flag.
+    case configStatus
+    case configLockDim(enabled: Bool, targetPercent: Double?)
+    case configKeyboardTarget(target: KeyboardControlTarget)
 }
 
 /// Validated display-control action (POST /api/displays/<id>/<action>).
@@ -106,6 +119,8 @@ public enum HTTPRouter {
             return routeVirtual(method: method, components: components, body: body)
         case "system":
             return routeSystem(method: method, components: components, body: body)
+        case "config":
+            return routeConfig(method: method, components: components, body: body)
         default:
             return .error(status: 404, message: "not found")
         }
@@ -322,6 +337,56 @@ public enum HTTPRouter {
                 return .error(status: 400, message: "id is required")
             }
             return .route(.virtualDestroy(id: id))
+        default:
+            return .error(status: 404, message: "unknown action '\(components[2])'")
+        }
+    }
+
+    // MARK: - /api/config
+
+    /// `/api/config/...` — the parity settings surfaces.
+    ///
+    /// Deliberately not under `/api/displays`: these are application settings,
+    /// not a display's hardware, so they are reached by a different mechanism
+    /// (`Settings`) and conflating them would misdescribe what a write does.
+    private static func routeConfig(method: String, components: [String], body: String?) -> HTTPRouteResult {
+        if components.count == 2, method == "GET" {
+            return .route(.configStatus)
+        }
+        guard components.count == 3, method == "POST" else {
+            return .error(status: 404, message: "not found")
+        }
+        guard let body, let object = HTTPJSON.parse(body) else {
+            return .error(status: 400, message: "invalid JSON body")
+        }
+        switch components[2] {
+        case "lockdim":
+            guard let enabled = object["enabled"] as? Bool else {
+                return .error(status: 400, message: "enabled is required")
+            }
+            // Omitting targetPercent keeps the stored one, so a caller can turn
+            // dimming on or off without having to know or restate the level.
+            var target: Double?
+            if let raw = object["targetPercent"] {
+                // A JSON boolean bridges to NSNumber, so it has to be excluded
+                // explicitly or `true` would silently mean 1%.
+                guard !(raw is Bool),
+                      let value = (raw as? NSNumber)?.doubleValue,
+                      (0...100).contains(value) else {
+                    return .error(status: 400, message: "targetPercent must be a number between 0 and 100")
+                }
+                target = value
+            }
+            return .route(.configLockDim(enabled: enabled, targetPercent: target))
+
+        case "keytarget":
+            guard let raw = object["target"] as? String,
+                  let target = KeyboardControlTarget(rawValue: raw) else {
+                let allowed = KeyboardControlTarget.allCases.map(\.rawValue).joined(separator: ", ")
+                return .error(status: 400, message: "target must be one of \(allowed)")
+            }
+            return .route(.configKeyboardTarget(target: target))
+
         default:
             return .error(status: 404, message: "unknown action '\(components[2])'")
         }

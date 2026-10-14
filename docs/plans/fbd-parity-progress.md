@@ -325,6 +325,27 @@ separate commit on the same branch.
 
   Both claims came from reading the script's step *labels* rather than the code behind them: `(460x860)` is
   descriptive text, not an assertion. The stale label has been corrected to `(760x860)`.
+- **The HTTP API now covers the parity settings.** `GET /api/config` reports lock dim, the keyboard control
+  target and its valid values, the brightness model and configuration protection; `POST /api/config/lockdim`
+  and `POST /api/config/keytarget` set them. `HTTPRouter.routeConfig` is pure — validation lives there, next
+  to the other namespaces — and the executor does the writes through `Settings`. The route namespace is
+  deliberately *not* `/api/displays`: these are application settings, not a display's hardware.
+
+  Both writes are honest about when they take effect, which the earlier audit established rather than
+  assumed: lock dim re-reads its policy on every lock event, and the media-key path reads the control target
+  on every press, so neither needs a restart.
+
+  `HTTPConfigRouteTests` (14 cases) covers authentication on both read and write, the method gate, the
+  bounds on `targetPercent`, the boolean-bridges-to-NSNumber trap (JSON `true` must not silently mean 1%),
+  and that an unknown target's error names the valid values.
+
+  Verified live against the rebuilt app, not just in unit tests: `401` without a token, the settings JSON on
+  read, both writes taking effect immediately (`keyboard control target: focusedScreen`, `lock dim: on at
+  25%`), the two refusals, and `404` for a GET on a write-only path.
+
+  Still not exposed over HTTP: resolution favourites, group *sync apply*, connection management, the
+  per-display protection-property selection and the saved-device registry. Those are actions against
+  hardware or per-display state, each needing its own validation and error contract.
 
 
 

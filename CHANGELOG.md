@@ -10,6 +10,15 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **The HTTP API covers the parity settings.** `GET /api/config` reports the new
+  settings — lock dim, the keyboard control target (with the valid values), the
+  brightness model and configuration protection; `POST /api/config/lockdim` and
+  `POST /api/config/keytarget` set them. Both writes take effect without a restart,
+  because each is read back at use time: lock dim re-reads its policy on every lock
+  event, and the media-key path reads the control target on every press. Both go
+  through `Settings`, the same single write path the app and `fbdcli` share. The
+  existing token gate and method gate apply unchanged, and an omitted
+  `targetPercent` keeps the stored level rather than resetting it.
 - **A saved network-device registry.** FBD already had working LG webOS, Samsung,
   Philips and Yamaha controllers, but reaching one meant repeating the brand and
   host on every single command and nothing remembered a device between runs.
@@ -91,7 +100,13 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 ### Not in this change
 - The menu-bar quick menu was **not** restructured to mirror BetterDisplay's
   grouped layout; only Settings was. Recorded as open.
-- The HTTP API and the Shortcuts intents were not extended to the new surfaces.
+- The Shortcuts intents were not extended to the new surfaces.
+- The HTTP API covers lock dim and the keyboard control target, but not the other
+  new surfaces: resolution favourites, group *sync apply*, connection management,
+  the per-display protection-property selection and the saved-device registry are
+  reachable from `fbdcli` and the app UI only. They are actions against hardware
+  or per-display state, and each needs its own validation and error contract, so
+  they are a deliberate follow-up rather than a silent omission.
 - No new private API was introduced, so `docs/PRIVATE_APIS.md` does not change.
 
 ## [1.6.0] — 2026-10-04
