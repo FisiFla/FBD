@@ -24,3 +24,18 @@ refer to these names, not file paths.
 - **Virtual screen** — a display created by FBD via the OS virtual-display
   framework; configured at creation (size/HDR/Hz) and not resizable or
   dimmable at runtime (see ADR-0001).
+- **HUD** (`OSDStyle`) — the transient brightness/volume readout. Its position,
+  bar style, background, shadow and corner radius are user settings whose
+  defaults reproduce the pre-settings look.
+- **Protected property** (`ProtectedProperties`) — one of the configuration values
+  a display's saved state may restore: resolution, refresh rate, brightness,
+  preset, HDR mode, main status.
+- **Activation policy** (`GroupActivationPolicy`) — when a display group's sync
+  applies, decided by which of its members are present.
+- **Manual control** — an automation rule whose event is `manual`: invoked by the
+  user, never by the system. ON and OFF are two of them, and a rule that prints
+  its state is a third.
+- **Notification action** — an automation rule that posts a user notification. It
+  runs in-process, unlike a shell or URL action, and only the app can post one.
+- **Attachment** (`NetworkDeviceAttachment`) — a saved network device bound to a
+  display **identity**, so the device follows that display's volume.
