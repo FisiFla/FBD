@@ -35,6 +35,22 @@ public enum HTTPRoute: Equatable {
     case configStatus
     case configLockDim(enabled: Bool, targetPercent: Double?)
     case configKeyboardTarget(target: KeyboardControlTarget)
+    /// Connection management: the same planner the Settings buttons and
+    /// `fbdcli config connections` use, so HTTP cannot diverge from them.
+    case configConnections(action: ConnectionAction)
+    /// The per-display protection-property selection.
+    case configProtection(displayID: CGDirectDisplayID, properties: ProtectedProperties)
+    /// The saved TV / AVR registry — the one surface here that touches no
+    /// display at all.
+    case configDevice(DeviceAction)
+}
+
+/// The registry operations, so one route case carries them rather than three
+/// near-identical ones.
+public enum DeviceAction: Equatable {
+    case list
+    case add(name: String, brand: NetworkDevice.Brand, host: String, zone: String?)
+    case remove(name: String)
 }
 
 /// Validated display-control action (POST /api/displays/<id>/<action>).
@@ -368,9 +384,10 @@ public enum HTTPRouter {
             // dimming on or off without having to know or restate the level.
             var target: Double?
             if let raw = object["targetPercent"] {
-                // A JSON boolean bridges to NSNumber, so it has to be excluded
-                // explicitly or `true` would silently mean 1%.
-                guard !(raw is Bool),
+                // Must exclude a real JSON boolean, or `true` would mean 1%.
+                // `isJSONBoolean`, not `is Bool` — see its note: the numbers 0
+                // and 1 also satisfy `is Bool` through NSNumber's bridging.
+                guard !isJSONBoolean(raw),
                       let value = (raw as? NSNumber)?.doubleValue,
                       (0...100).contains(value) else {
                     return .error(status: 400, message: "targetPercent must be a number between 0 and 100")
@@ -387,8 +404,87 @@ public enum HTTPRouter {
             }
             return .route(.configKeyboardTarget(target: target))
 
+        case "connections":
+            guard let raw = object["action"] as? String,
+                  let action = ConnectionAction(rawValue: raw) else {
+                let allowed = ConnectionAction.allCases.map(\.rawValue).joined(separator: ", ")
+                return .error(status: 400, message: "action must be one of \(allowed)")
+            }
+            return .route(.configConnections(action: action))
+
+        case "protection":
+            guard let displayID = displayID(from: object) else {
+                return .error(status: 400, message: "display is required")
+            }
+            guard let names = object["properties"] as? [String] else {
+                return .error(status: 400, message: "properties must be an array of property names")
+            }
+            // Parsed here, not in the executor, so an unknown name is a 400 with
+            // the valid names rather than a silent partial selection.
+            guard let properties = ProtectedProperties.parse(names.joined(separator: ",")) else {
+                let allowed = ProtectedProperties.ordered.map(\.name).joined(separator: ", ")
+                return .error(status: 400, message: "properties may only contain: \(allowed)")
+            }
+            return .route(.configProtection(displayID: displayID, properties: properties))
+
+        case "device":
+            guard let raw = object["action"] as? String else {
+                return .error(status: 400, message: "action must be list, add or remove")
+            }
+            switch raw {
+            case "list":
+                return .route(.configDevice(.list))
+            case "add":
+                guard let name = object["name"] as? String, !name.isEmpty,
+                      let brandRaw = object["brand"] as? String,
+                      let brand = NetworkDevice.Brand(rawValue: brandRaw),
+                      let host = object["host"] as? String else {
+                    let brands = NetworkDevice.Brand.allCases.map(\.rawValue).joined(separator: ", ")
+                    return .error(status: 400, message: "name, brand (\(brands)) and host are required")
+                }
+                // The host is interpolated into a request URL by the controllers,
+                // so an unusable one is refused here rather than stored to fail
+                // later at use time.
+                guard NetworkDeviceRegistry.validatedHost(host) != nil else {
+                    return .error(status: 400, message: "'\(host)' is not a usable host — give a hostname or IP address, without a scheme, port or path")
+                }
+                return .route(.configDevice(.add(name: name, brand: brand, host: host, zone: object["zone"] as? String)))
+            case "remove":
+                guard let name = object["name"] as? String, !name.isEmpty else {
+                    return .error(status: 400, message: "name is required")
+                }
+                return .route(.configDevice(.remove(name: name)))
+            default:
+                return .error(status: 400, message: "action must be list, add or remove")
+            }
+
         default:
             return .error(status: 404, message: "unknown action '\(components[2])'")
         }
+    }
+
+    /// A display id from a JSON body. Accepts a number or a numeric string, so a
+    /// caller can pass back whatever `/api/displays` handed them.
+    private static func displayID(from object: [String: Any]) -> CGDirectDisplayID? {
+        guard let raw = object["display"], !isJSONBoolean(raw) else { return nil }
+        if let number = raw as? NSNumber {
+            return number.uint32Value
+        }
+        if let text = raw as? String {
+            return HTTPJSON.parseDisplayID(text)
+        }
+        return nil
+    }
+
+    /// Whether a value parsed out of a JSON body is a boolean.
+    ///
+    /// `value is Bool` is the wrong test: Swift bridges `NSNumber` to `Bool`, so
+    /// the numbers **0 and 1** also satisfy it. Using it to exclude booleans
+    /// therefore rejects `{"display": 1}` — and display 1 is usually the main
+    /// display — and `{"targetPercent": 1}`. Comparing the CoreFoundation type
+    /// id is exact: JSON `true`/`false` parse to `CFBoolean`, numbers to
+    /// `CFNumber`.
+    private static func isJSONBoolean(_ value: Any) -> Bool {
+        CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID()
     }
 }
