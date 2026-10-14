@@ -17,6 +17,32 @@ public enum StartupControlValuePolicy: String, Codable, CaseIterable {
     case readFromDevice
 }
 
+/// What the startup policy asks for, for one display.
+public enum StartupControlAction: Equatable, Sendable {
+    /// Leave the device alone.
+    case nothing
+    /// Write FBD's stored value to the device.
+    case writeStored
+    /// Read the device's value back and store it.
+    case readFromDevice
+}
+
+extension StartupControlValuePolicy {
+    /// The action this policy implies for one display.
+    ///
+    /// `writeToDevice` with nothing stored falls back to **reading**, so the store gets
+    /// seeded instead of the policy doing nothing for ever on a display FBD has never
+    /// driven. The default policy, `assumeLastUsed`, is `.nothing` here — which is what
+    /// makes wiring this behaviour a no-op for anyone who never changed it.
+    public func action(hasStoredValue: Bool) -> StartupControlAction {
+        switch self {
+        case .assumeLastUsed: return .nothing
+        case .writeToDevice: return hasStoredValue ? .writeStored : .readFromDevice
+        case .readFromDevice: return .readFromDevice
+        }
+    }
+}
+
 /// BetterDisplay-parity brightness model parameters — the *global*
 /// (not per-display) knobs that shape FBD's combined-brightness curve.
 ///
