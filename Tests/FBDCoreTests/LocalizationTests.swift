@@ -111,6 +111,12 @@ final class LocalizationTests: XCTestCase {
     /// The other direction: a key that no SwiftUI call site uses any more will never resolve, so
     /// it is dead weight that hides the fact that a string was renamed. Keys are literal English
     /// text, so "used" means the literal appears somewhere in the app's sources.
+    ///
+    /// This check is also why interpolated strings are deliberately **not** in the .strings files:
+    /// SwiftUI turns `Text("\(nits) nits")` into the format key `%lld nits`, which never appears
+    /// verbatim in the source, so an entry for it would be rejected here. Keeping the check strict
+    /// is worth more than those strings: it is what makes a typo in a key fail loudly instead of
+    /// silently falling back to English.
     func testEveryKeyStillExistsInTheSource() throws {
         var source = ""
         for file in try FileManager.default.subpaths(atPath: packageRoot.appendingPathComponent("Sources/FBD").path) ?? [] {

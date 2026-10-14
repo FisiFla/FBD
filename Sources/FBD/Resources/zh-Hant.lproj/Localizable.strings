@@ -253,3 +253,16 @@
 "No automation rules." = "沒有自動化規則。";
 "Runs your command when a display connects or disconnects, or when the system sleeps or wakes. Shell rules execute as /bin/zsh -c, with FBD_EVENT and FBD_DISPLAY_NAME in the environment — add only commands you trust. Nothing runs until you add a rule." = "在顯示器連接或中斷連接，或系統進入睡眠或喚醒時執行您的指令。Shell 規則以 /bin/zsh -c 執行，環境中提供 FBD_EVENT 與 FBD_DISPLAY_NAME——請只加入您信任的指令。在加入規則之前不會執行任何內容。";
 
+/* 設定側邊欄（原先經 Text(item.rawValue)，即 String，因此不會查表） */
+"Displays" = "顯示器";
+"Groups" = "顯示器群組";
+"Application" = "應用程式";
+"Menu" = "選單";
+"Keyboard" = "鍵盤";
+"Displays settings" = "顯示器設定";
+"Groups settings" = "顯示器群組設定";
+"Application settings" = "應用程式設定";
+"Menu settings" = "選單設定";
+"Keyboard settings" = "鍵盤設定";
+"About settings" = "關於設定";
+

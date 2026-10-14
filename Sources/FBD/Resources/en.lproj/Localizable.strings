@@ -253,3 +253,18 @@
 "Display" = "Display";
 "No automation rules." = "No automation rules.";
 "Runs your command when a display connects or disconnects, or when the system sleeps or wakes. Shell rules execute as /bin/zsh -c, with FBD_EVENT and FBD_DISPLAY_NAME in the environment — add only commands you trust. Nothing runs until you add a rule." = "Runs your command when a display connects or disconnects, or when the system sleeps or wakes. Shell rules execute as /bin/zsh -c, with FBD_EVENT and FBD_DISPLAY_NAME in the environment — add only commands you trust. Nothing runs until you add a rule.";
+
+/* Settings sidebar. These went through `Text(item.rawValue)` — a String, so verbatim and never
+   looked up — until `SettingsPage` grew a `switch` returning `LocalizedStringKey`. "About" is
+   shared with the section header above. */
+"Displays" = "Displays";
+"Groups" = "Groups";
+"Application" = "Application";
+"Menu" = "Menu";
+"Keyboard" = "Keyboard";
+"Displays settings" = "Displays settings";
+"Groups settings" = "Groups settings";
+"Application settings" = "Application settings";
+"Menu settings" = "Menu settings";
+"Keyboard settings" = "Keyboard settings";
+"About settings" = "About settings";
