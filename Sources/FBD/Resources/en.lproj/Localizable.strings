@@ -1,0 +1,54 @@
+/* FBD — the panel's own strings.
+   English is the base: the key *is* the English text, so this file is the reference
+   set that the other languages are checked against (see LocalizationTests). Keys
+   added here must appear as literals in the source, or the test that guards drift
+   will refuse them. */
+
+/* Display list */
+"No displays" = "No displays";
+"Connect a display to control it here." = "Connect a display to control it here.";
+
+/* Per-display menu */
+"Manage Display" = "Manage Display";
+"Display Mode" = "Display Mode";
+"Refresh Rate" = "Refresh Rate";
+"Color Mode" = "Color Mode";
+"Resolution Favourites" = "Resolution Favourites";
+"Screen Rotation" = "Screen Rotation";
+"Mirror Display" = "Mirror Display";
+"Move Display" = "Move Display";
+"Disable display" = "Disable display";
+"Re-enable display" = "Re-enable display";
+"Display will go dark until re-enabled." = "Display will go dark until re-enabled.";
+"Arrange displays from the Settings per-display tab" = "Arrange displays from the Settings per-display tab";
+
+/* Sections */
+"Display Groups" = "Display Groups";
+"No groups yet. Create one to sync brightness or mirror displays." = "No groups yet. Create one to sync brightness or mirror displays.";
+"Virtual Screens" = "Virtual Screens";
+"Stream to" = "Stream to";
+"Apple Display Preset" = "Apple Display Preset";
+"XDR upscaling" = "XDR upscaling";
+"HDR mode" = "HDR mode";
+"HDR" = "HDR";
+"HiDPI" = "HiDPI";
+"Auto Brightness" = "Auto Brightness";
+
+/* Resolutions */
+"No modes available" = "No modes available";
+"No saved override" = "No saved override";
+
+/* DDC / CI */
+"DDC / CI" = "DDC / CI";
+"Input" = "Input";
+"Mute" = "Mute";
+"Target" = "Target";
+"Read capabilities" = "Read capabilities";
+"Read capabilities to list this display's inputs by name." = "Read capabilities to list this display's inputs by name.";
+"This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable." = "This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable.";
+
+/* Chrome */
+"Free Better Display" = "Free Better Display";
+"Settings" = "Settings";
+"Back to FBD" = "Back to FBD";
+"Close FBD panel" = "Close FBD panel";

@@ -46,6 +46,13 @@ app:
 	fi
 	@cp Sources/FBD/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
 	@cp Sources/FBD/Resources/FBD.icns $(APP_BUNDLE)/Contents/Resources/FBD.icns
+	@# Localisation: the .lproj directories go straight into the bundle, which is where
+	@# macOS looks for them. They are NOT SwiftPM resources — Sources/FBD/Resources is
+	@# excluded from the target — so this copy is what makes them reachable at runtime.
+	@for lproj in Sources/FBD/Resources/*.lproj; do \
+		[ -d "$$lproj" ] || continue; \
+		cp -R "$$lproj" $(APP_BUNDLE)/Contents/Resources/; \
+	done
 	@# Sign inside-out: nested code first, the bundle last. Signing the app and
 	@# then the framework invalidates the app's seal — `codesign --verify` then
 	@# reports "nested code is modified or invalid", and notarization would fail.

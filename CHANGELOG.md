@@ -10,6 +10,20 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **FBD speaks 简体中文 and 繁體中文 — starting with the panel.** Crisp ships en · 简体中文 · 繁體中文
+  and FBD shipped English only. The mechanism is deliberately the small one: three
+  `.lproj/Localizable.strings` beside the icon in `Sources/FBD/Resources`, copied into the bundle by
+  `make app`, which is where macOS looks for them — no SwiftPM resource bundle, and **no code
+  change**, because SwiftUI already resolves `Text("Display Mode")` against the app bundle. The
+  panel's own surface is translated (37 strings); everything else falls back to English, which is
+  what "scaffolded" means here. A test stops the three files drifting: the languages must agree on
+  every key, and every key must still appear in the source, since a renamed string would otherwise
+  silently stop resolving and look like "not translated yet" rather than broken. Two things worth
+  recording — `Sources/FBD/Resources` is `exclude`d from the SwiftPM target (which is why Info.plist
+  lives there and is copied by hand), so the `.lproj` directories have to be copied by the Makefile;
+  and `CFBundleLocalizations` must **not** sit alongside real `.lproj` directories, because it made
+  macOS report every language twice, a signal that sends the next person hunting a nested copy that
+  is not there.
 - **The DDC input menu marks the input in effect.** It marked nothing until now: reading VCP 0x60 was
   a blocking DDC read, so the panel deliberately refused to guess and its title said "Choose…". The
   read now rides in the *same* batched read as contrast/volume/mute — one more feature on the
