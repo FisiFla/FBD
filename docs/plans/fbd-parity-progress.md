@@ -488,6 +488,28 @@ separate commit on the same branch.
 
   The individual *style variations* — a segmented bar, an adaptive background, the three other positions —
   are still unobserved. The render path and the default style are confirmed; nobody has looked at the rest.
+- **Accessibility audit (the deferred VoiceOver pass, done at the level AX can settle).** Two findings, both
+  positive, and both measured rather than assumed:
+
+  - **No app control lacks an accessible name.** An AX sweep of all six Settings pages and the panel reports
+    only *window chrome* as unnamed: the traffic lights at `@903,40`/`@923,40`/`@943,40` (12x14, drawn by the
+    window server) and scrollbar parts at `x=1641`. Every `AXButton`, `AXCheckBox`, `AXSlider`, `AXPopUpButton`
+    belonging to FBD carries a name. (The sweep's own chrome filter had to be fixed first — it was written
+    against the *panel's* geometry, so the Settings window's chrome initially appeared as app findings.)
+  - **The hit-target finding is closed.** `.fbdIconButton()` (`FBDTheme.swift:50-53`) applies
+    `frame(minWidth: 28, minHeight: 28)` with `.contentShape(Rectangle())`, so the whole 28pt target is
+    hittable rather than just the glyph — and the AX tree confirms it, e.g. `Close FBD panel @1611,64 28x28`.
+    The old critique's "sub-28pt hit targets persist on icon-only controls" no longer holds, and the remaining
+    sub-28pt elements are the window's own traffic lights.
+
+  **What this does *not* establish, stated plainly.** Raw AX enumeration is not a VoiceOver session. It cannot
+  see announcement *order*, whether a group is read as one element or several, traits, hints, or the rotor —
+  and this session has already been wrong twice by treating AX evidence as equivalent to what VoiceOver says
+  (the "50 unlabelled controls" false positive, and the `.combine` measurement that silently read an empty
+  tree). A real VoiceOver run on the panel and the Application page is still the one thing nobody has done.
+
+  Still open from the same critique, and unrelated to names: no keyboard shortcuts on in-app controls, and the
+  panel's dead space on a single-display rig.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
