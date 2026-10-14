@@ -10,6 +10,12 @@ deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
 `docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
 
 ### Added
+- **`fbdcli report [file]` — an exportable display report.** A detailed, paste-ready block
+  per display (identity, kind, geometry, current mode with its colour encoding, mode count
+  and refresh rates, control paths, brightness, XDR/HDR state) under a header carrying the
+  FBD and macOS versions — the macOS version because display behaviour differs per release.
+  Prints, or writes to a file for attaching to a bug report. The formatting lives in
+  `DisplayReport` in FBDCore and is locked by format tests, so it cannot drift silently.
 - **The HTTP API covers four more of the parity settings.** `POST
   /api/config/connections` runs the connection planner through the same guarded
   disconnect chokepoint the Settings buttons use; `POST /api/config/protection` sets a

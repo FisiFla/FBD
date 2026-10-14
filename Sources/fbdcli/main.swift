@@ -16,6 +16,8 @@ Usage: fbdcli <command> [args]
 Commands:
   list [--json]                 List displays (one line per display, or JSON)
   info <id> [--json]            Show full detail for a display (or JSON)
+  report [file]                 Detailed report of every display, for a bug
+                                report (prints, or writes to <file>)
   brightness <id> [0-100]       Get or set brightness (Apple or DDC path)
   contrast <id> [0-100]         Get or set contrast (DDC)
   volume <id> [0-100]           Get or set speaker volume (DDC)
@@ -161,6 +163,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdList(controller, args: rest)
     case .info:
         return withDisplay(controller, rest) { cmdInfo($0, args: $1) }
+    case .report:
+        return cmdReport(controller, args: rest)
     case .brightness:
         return withDisplay(controller, rest) { cmdBrightness(controller, display: $0, args: $1) }
     case .contrast:

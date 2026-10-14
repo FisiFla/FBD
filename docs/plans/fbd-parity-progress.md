@@ -374,6 +374,23 @@ separate commit on the same branch.
   Two lessons: never round-trip preference values through `defaults read` — export the plist, or compare
   lengths and content instead of trusting the hex; and a file that survived the inspect step proves nothing
   unless the check could have failed.
+- **Gap-matrix row #30 — display reports / export.** `DisplayReport` in FBDCore renders a detailed,
+  paste-ready block per display under a header carrying the FBD and macOS versions, and `fbdcli report
+  [file]` prints it or writes it out for attaching to a bug report.
+
+  The formatter is split into a value-type `Snapshot` plus a pure `render`, which was forced by the type
+  rather than chosen for elegance: `Display`'s collections are `private(set)`, so a test cannot populate one
+  and the format-lock tests the gap matrix asks for would have been impossible against `Display` directly.
+  For the same reason the refresh-rate de-duplication is its own pure function — left inline in the snapshot
+  initialiser it would have been the one part of the report nobody could check.
+
+  `DisplayReportTests` (8 cases) locks the **whole block** rather than sampling lines, because the point of a
+  report is that two of them are comparable: a field that moves or disappears makes them not. It also pins
+  that absent data reads as absent — "no DDC", "not reported", "not capable" — rather than the line being
+  omitted, which would make "nothing there" indistinguishable from "nobody looked".
+
+  Verified live: it prints, exports to a file, appears in `fbdcli help`, and an unwritable path reports the
+  failure and exits 1 rather than failing silently. FBDCoreTests 702.
 - **Three Shortcuts actions for the parity surfaces.** `Set Lock Dim`, `Set Keyboard Control Target` and
   `Sync Display Group` join the existing display actions. Intents are discovered through the module's
   `AppIntentsPackage` conformance, so no registry needed updating. `SetKeyboardControlTargetIntent` takes a
