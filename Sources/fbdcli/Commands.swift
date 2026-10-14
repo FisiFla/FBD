@@ -2078,6 +2078,45 @@ func cmdNightShift(args: [String]) -> Int32 {
     return 0
 }
 
+// MARK: - Dark Mode
+
+/// `fbdcli dark-mode [on|off]` — read or switch the system appearance.
+///
+/// The same switch Control Center flips, so it is deliberately not stored anywhere: the system
+/// owns it and another app can change it, which a remembered copy would misreport.
+@MainActor
+func cmdDarkMode(args: [String]) -> Int32 {
+    let controller = DarkModeController()
+    guard controller.isAvailable else {
+        print("dark-mode: unavailable on this Mac")
+        return 2
+    }
+    guard let request = DarkModeRequest.parse(args.first) else {
+        print("fbdcli: dark-mode: expected on or off (got '\(args.first ?? "")')")
+        return 1
+    }
+    switch request {
+    case .on:
+        guard controller.setDark(true) else {
+            print("fbdcli: dark-mode: failed to switch")
+            return 2
+        }
+    case .off:
+        guard controller.setDark(false) else {
+            print("fbdcli: dark-mode: failed to switch")
+            return 2
+        }
+    case .report:
+        break
+    }
+    guard let dark = controller.isDark() else {
+        print("fbdcli: dark-mode: failed to read the appearance")
+        return 2
+    }
+    print("dark-mode = \(dark ? "on" : "off")")
+    return 0
+}
+
 // MARK: - True Tone (Tier 5)
 
 /// `fbdcli truetone [on|off]` — get or set True Tone.

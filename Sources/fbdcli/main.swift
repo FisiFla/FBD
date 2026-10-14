@@ -108,6 +108,7 @@ Commands:
                                 Mac's own output volume (CoreAudio)
   nightshift [0-100]            Get or set Night Shift strength
   truetone [on|off]             Get or set True Tone
+  dark-mode [on|off]            Get or set system Dark Mode
   ambient-light <display> [on|off]
                                 Apple display auto-brightness (ambient light);
                                 the state doubles as the capability probe
@@ -249,6 +250,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdNightShift(args: rest)
     case .truetone:
         return cmdTrueTone(args: rest)
+    case .darkMode:
+        return cmdDarkMode(args: rest)
     case .ambientLight:
         return withDisplay(controller, rest) { cmdAmbientLight(controller, display: $0, args: $1) }
     case .config:

@@ -37,6 +37,7 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 | `SLSDisplayGetActivePresetIndex` | ❌ always -1 on macOS 27 — use `SLSDisplayCopyActivePreset` + uniqueID match instead | SkyLightAPI.activePresetIndex |
 | `SLSDisplaySetActivePresetIndex` / `SLSDisplayCopyPresetData` | ✅ preset SWITCHING works on macOS 27 (live-verified 2026-08-02: `fbdcli preset <id> <index>` activates factory presets); only `SLSDisplaySetPresetData` (preset REWRITE) is write-protected | XDRNativeController, `fbdcli preset` |
 | `SLSDisplayCopyActivePreset(display)` | ✅ returns active preset dict | SkyLightAPI |
+| `SLSGetAppearanceThemeLegacy()` / `SLSSetAppearanceThemeLegacy(bool)` / `SLSSetAppearanceThemeNotifying(bool, bool)` | ✅ **live-verified 2026-10-14**: all three resolve in `SkyLight.framework`, and `fbdcli dark-mode on` / `off` both flip the system appearance (read back through the getter). Symbol names taken from Crisp's `CoreBrightnessService.swift`, which resolves the same three; the Notifying variant is preferred so the switch crossfades like Control Center's. Reached through `Sources/CPrivateAPI/fbd_appearance.c` — never declared in Swift | DarkModeController / `fbdcli dark-mode` |
 | `SLSDisplayIsPresetValid / IsPresetWritable` | ✅ 2-arg confirmed (11–15 blank & writable) | SkyLightAPI |
 | `SLSDisplayGetFactoryDefaultPresetIndex` | ✅ returns 0 | SkyLightAPI |
 | `SLSDisplaySupportsHDRMode / IsHDRModeEnabled / SetHDRModeEnabled` | reports 0 for built-in XDR (external HDR displays expected true) | XDRNativeController |

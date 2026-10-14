@@ -553,6 +553,12 @@ struct ApplicationSettingsPage: View {
                 if trueTone.isAvailable {
                     Toggle("True Tone", isOn: trueToneBinding)
                 }
+                if DarkModeController().isAvailable {
+                    Toggle("Dark Mode", isOn: darkModeBinding)
+                    Text("The system appearance — the switch Control Center flips, so another app can change it too.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } header: {
                 Label("Integrations", systemImage: "network")
             }
@@ -793,6 +799,17 @@ struct ApplicationSettingsPage: View {
                     launchAtLogin = !newValue
                 }
             }
+        )
+    }
+
+    /// Dark Mode belongs to the *system*, so this binding reads it live instead of caching it: the
+    /// value can change underneath us — Control Center, another app — and a remembered copy would
+    /// have the toggle reporting stale state until something forced a redraw. The controller holds
+    /// no state of its own, so one per access is free.
+    private var darkModeBinding: Binding<Bool> {
+        Binding(
+            get: { DarkModeController().isDark() ?? false },
+            set: { _ = DarkModeController().setDark($0) }
         )
     }
 

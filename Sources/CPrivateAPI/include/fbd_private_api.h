@@ -179,6 +179,29 @@ void *FBDNightShiftCreate(void *cls);
 bool FBDNightShiftSupportsBlueLightReduction(void *cls);
 bool FBDNightShiftGetStrength(void *client, float *strength);
 bool FBDNightShiftSetStrength(void *client, float strength, bool commit);
+
+#pragma mark - System appearance (Dark Mode)
+
+/* SkyLight's appearance theme — the switch Control Center flips. Read/toggle
+   system dark mode; symbols and signatures taken from Crisp's implementation
+   (Crisp/Services/CoreBrightnessService.swift), which resolves the same three:
+
+     SLSGetAppearanceThemeLegacy() -> bool
+     SLSSetAppearanceThemeLegacy(bool) -> void
+     SLSSetAppearanceThemeNotifying(bool on, bool notify) -> void
+
+   SkyLight is not linked by the package: these resolve at runtime and report
+   false when absent, so a Mac without them degrades instead of failing. */
+
+/* True when the appearance can be read *and* written here. */
+bool FBDAppearanceAvailable(void);
+
+/* Reads the current appearance into *out. False when it could not be read. */
+bool FBDAppearanceIsDark(bool *out);
+
+/* Sets the appearance; `animated` prefers the crossfade Control Center uses
+   when that entry point exists. False when neither setter is present. */
+bool FBDAppearanceSetDark(bool on, bool animated);
 void *FBDTrueToneCreate(void *cls);
 bool FBDTrueToneIsAvailable(void *client);
 bool FBDTrueToneIsEnabled(void *client);
