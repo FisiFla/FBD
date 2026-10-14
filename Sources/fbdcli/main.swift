@@ -106,6 +106,9 @@ Commands:
                                 Mac's own output volume (CoreAudio)
   nightshift [0-100]            Get or set Night Shift strength
   truetone [on|off]             Get or set True Tone
+  ambient-light <display> [on|off]
+                                Apple display auto-brightness (ambient light);
+                                the state doubles as the capability probe
   tv <brand> <host> [action]    Control a TV/AVR over the network: brand is
                                 lg, samsung, philips, or yamaha; action is
                                 volume <0-100>, power, or input <name>
@@ -240,6 +243,8 @@ func run(arguments: [String]) -> Int32 {
         return cmdNightShift(args: rest)
     case .truetone:
         return cmdTrueTone(args: rest)
+    case .ambientLight:
+        return withDisplay(controller, rest) { cmdAmbientLight(controller, display: $0, args: $1) }
     case .config:
         return cmdConfig(controller, args: rest)
     case .tv:

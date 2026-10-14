@@ -41,6 +41,7 @@ public enum Command: String, CaseIterable {
     case sysvolume
     case nightshift
     case truetone
+    case ambientLight = "ambient-light"
     case tv
     case config
     case report

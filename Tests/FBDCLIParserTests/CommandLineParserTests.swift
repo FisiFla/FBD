@@ -31,6 +31,32 @@ final class CommandLineParserTests: XCTestCase {
         )
     }
 
+    // MARK: - Ambient-light auto-brightness (#12)
+
+    func testAmbientLightBare() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["ambient-light"]),
+            .command(.ambientLight, raw: ["ambient-light"], direct: false)
+        )
+    }
+
+    func testAmbientLightWithIdAndValue() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["ambient-light", "1", "on"]),
+            .command(.ambientLight, raw: ["ambient-light", "1", "on"], direct: false)
+        )
+    }
+
+    func testAmbientLightValueWordsAreNotValidatedAtParseTime() {
+        // The handler rejects a bad word; the parser only splits the command,
+        // so an unknown value still reaches it rather than silently becoming
+        // the bare form.
+        XCTAssertEqual(
+            CLICommandLine.parse(["ambient-light", "2", "maybe"]),
+            .command(.ambientLight, raw: ["ambient-light", "2", "maybe"], direct: false)
+        )
+    }
+
     func testSetModeWithSpec() {
         XCTAssertEqual(
             CLICommandLine.parse(["set-mode", "2", "2560x1440@60"]),
