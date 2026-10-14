@@ -236,6 +236,34 @@ public final class DisplayGroupsController {
         return DispatchQueue.main.sync { MainActor.assumeIsolated(apply) }
     }
 
+    /// The brightness a synchronised apply should propagate for `id`: the value
+    /// currently on the group's first *connected* member, together with the
+    /// display it came from.
+    ///
+    /// Nil when the group is unknown or disabled, when no member is connected, or
+    /// when the source has no readable brightness — a caller must never sync from
+    /// a value it does not have. Returning the source lets the caller pin the
+    /// plan's reference to the display the value came from, so luminance matching
+    /// converts from the right panel rather than from whichever member happens to
+    /// sort first.
+    ///
+    /// Pure: brightness is read through `currentBrightness`, so this is testable
+    /// with no display attached, and no DDC read happens unless a caller asks.
+    public func syncValue(
+        inGroup id: String,
+        connectedIDs: Set<CGDirectDisplayID>,
+        currentBrightness: (CGDirectDisplayID) -> Double?
+    ) -> (value: Double, sourceDisplayID: CGDirectDisplayID)? {
+        guard let group = groups.first(where: { $0.id == id }), isEnabled(groupID: id) else {
+            return nil
+        }
+        guard let source = group.displayIDs.sorted().first(where: { connectedIDs.contains($0) }),
+              let value = currentBrightness(source) else {
+            return nil
+        }
+        return (value, source)
+    }
+
     /// Apply the same brightness (0…1) to every display in the group via `controller`.
     /// Synchronise brightness across a group **by luminance**, not by slider
     /// position: the source value is converted to nits and re-expressed against
