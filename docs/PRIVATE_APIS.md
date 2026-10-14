@@ -68,6 +68,17 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 
 ## Notes
 
+- **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch
+  `feat/betterdisplay-parity` → see `docs/plans/fbd-parity-progress.md`). Every new controller seam
+  in that change is built on public APIs plus symbols already listed above: the brightness model
+  uses the existing `DisplayServices`/`SkyLight` paths through `CombinedBrightness` and
+  `XDRBoostPlanner`, configuration protection re-applies through `ResolutionController`,
+  `SkyLightAPI` and `DisplayController`, connection management goes through the existing
+  `CGSConfigureDisplayEnabled` chokepoint, and the reminder of the change (safe mode, lock dim,
+  mode favourites, keyboard-control target, group sync policy) is pure logic over `Settings`.
+  No private symbol was newly declared, so there is nothing to record here — this note exists so a
+  future reader does not go looking for a missing entry.
+
 - ObjC classes are always reached via `NSClassFromString` + runtime messaging (never static link). Class-name strings verified in the BetterDisplay binary.
 - `VirtualDisplay.framework` does not exist on macOS 27 beta — Tier 3 must use the SidecarCore path there.
 - DDC (IOAVService) is Apple Silicon only and **does not work under Rosetta** — guarded by `IOAVServiceAPI.isAppleSilicon`.

@@ -3,6 +3,87 @@
 All notable changes to FBD. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: semver from 1.0.0 (the first release with an update feed).
 
+## [Unreleased]
+
+BetterDisplay-parity work agreed at the Phase 3 gate. Scope, evidence and the
+deliberate exclusions are in `docs/plans/betterdisplay-parity-scope.md`,
+`docs/plans/fbd-gap-matrix.md` and `docs/plans/fbd-parity-progress.md`.
+
+### Added
+- **Per-property configuration protection.** Protection was one opaque blob
+  (mode + brightness + preset). It now protects six properties independently —
+  resolution, refresh rate, preset, HDR mode, main status and brightness — each
+  selectable per display (`ProtectedProperties`, the Displays page, or
+  `fbdcli config protect <id> <properties>`). The default stays the old set, so
+  an existing install behaves exactly as before until the user widens it, and a
+  property the display cannot report is never forced.
+- **Display-group synchronisation and activation policy.** Groups gained an
+  enable flag, one of five activation policies, sync source/target member
+  filters, an optional nits-matching mode, and a pure `GroupSyncPlanner` that
+  reuses `BrightnessSync` for the nits maths. Managed on the new Groups page and
+  via `fbdcli config group-policy|group-enabled`.
+- **Resolution favourites.** Five recall slots per display, recorded and applied
+  from the Displays page or `fbdcli config favourite <id> save|apply|list`. A
+  slot is recalled exactly, then by an equivalent mode, otherwise it reports
+  itself unavailable rather than applying a wrong mode.
+- **Mode-list breadth and a refresh-rate list.** `ModeFilterOptions` plus a
+  deduplicated descending `refreshRates(from:)`. The unexposed (NTSC) timings
+  BetterDisplay lists are *not* faked: `docs/PRIVATE_APIS.md` records that the
+  private queries behind them need a live WindowServer connection and crash a
+  process without one, so the gap is documented.
+- **A tunable brightness model.** `BrightnessPreferences` exposes the combined
+  curve: hardware min/max nits, HDR peak SDR/HDR nits, a re-defined 0 % software
+  level, a minimum hardware level, the software-dimming switchover point, the
+  upscaling maximum, whether hardware control is preferred, and what to assume
+  about stored control values at startup. `BrightnessCurve` is the pure
+  mapping; every field is clamped, inverted bounds are repaired, and a
+  non-finite value falls back to its default rather than to the ceiling.
+- **Startup safe mode.** Holding ⇧ Shift at launch — or `FBD_SAFE_MODE=1` —
+  skips stored EDID overrides and configuration-protection restore for the
+  session. Fail-closed: it only ever suppresses an apply, and says so.
+- **Lock dim.** Dims to a chosen level while the screen is locked or the
+  screensaver is up, and restores the recorded brightness on unlock. The state
+  machine never dims blind, is idempotent on a repeated lock, and always has a
+  restore path.
+- **Keyboard control target.** The brightness and volume keys can act on the
+  screen under the pointer, the focused screen, every suitable screen, or the
+  display whose name matches the current audio device (exact or partial match),
+  with a deterministic fallback so a key press is never silently swallowed.
+- **Connection management.** `ConnectionPlanner` produces ordered
+  connect/disconnect/swap steps, executed through the existing guarded
+  `DisconnectController` chokepoint. It never emits a built-in-display disable
+  unless the explicit override is set, and refuses outright when there is no
+  main display.
+- **`fbdcli config`** — one command for the settings above (`show`, `protect`,
+  `favourite`, `lockdim`, `lockdim-target`, `keytarget`, `group-policy`,
+  `group-enabled`), running locally against the shared defaults with no second
+  write path. Unknown property names, targets and on/off words are refused
+  rather than silently ignored.
+- **A sidebar Settings layout.** Settings was a two-tab form; it is now a
+  sidebar of `Displays` · `Groups` · `Application` · `Menu` · `Keyboard` ·
+  `About` with long pages, and the panel grows to 760×860 for it.
+
+### Changed
+- `Settings.debugSummary` now includes the lock-dim, keyboard-target and
+  brightness-model settings.
+- `fbdcli help` documents `config`.
+
+### Verification
+- `swift build --disable-sandbox` — clean, **zero warnings**.
+- `swift test --disable-sandbox` — **765 tests, 0 failures** (FBDCoreTests
+  363 → 629; FBDCLIParserTests 136). 266 new tests cover the new seams.
+- `make ui-smoke` — 5/5 against the rebuilt app.
+- CLI round-trips verified against the live app for every `config` subcommand,
+  including the refusal paths.
+
+### Not in this change
+- The menu-bar quick menu was **not** restructured to mirror BetterDisplay's
+  grouped layout; only Settings was. Recorded as open.
+- The HTTP API and the Shortcuts intents were not extended to the new surfaces,
+  and `fbdcli` has no command for group *sync apply* or for connection
+  management (both are in the app UI).
+- No new private API was introduced, so `docs/PRIVATE_APIS.md` does not change.
+
 ## [1.6.0] — 2026-10-04
 
 ### Added

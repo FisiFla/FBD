@@ -1,0 +1,178 @@
+[AXApplication] t=FBD d= v= en=1
+  [AXWindow] t=FBD d= v= en=1
+    [AXGroup] t= d= v= en=1
+      [AXButton] t= d=Back to FBD v= en=1
+      [AXStaticText] t= d= v=Settings en=1
+      [AXButton] t= d=Close FBD panel v= en=1
+      [AXButton] t= d=Displays settings v= en=1
+      [AXButton] t= d=Groups settings v= en=1
+      [AXButton] t= d=Application settings v= en=1
+      [AXButton] t= d=Menu settings v= en=1
+      [AXButton] t= d=Keyboard settings v= en=1
+      [AXButton] t= d=About settings v= en=1
+      [AXScrollArea] t= d= v= en=1
+        [AXStaticText] t= d= v=General en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Launch at Login en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Show Rosetta warning en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Enable connect/disconnect for displays en=1
+          [AXCheckBox] t= d= v=1 en=1
+        [AXStaticText] t= d= v=Brightness model en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Prefer hardware brightness control en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=When off, brightness is reached through software dimming rather than the display's own backlight. en=1
+          [AXStaticText] t= d= v=Hardware minimum en=1
+          [AXStaticText] t= d= v=4 nits en=1
+          [AXIncrementor] t= d= v=4 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+          [AXStaticText] t= d= v=Peak brightness in nits when the hardware control is at its minimum. en=1
+          [AXStaticText] t= d= v=Hardware maximum en=1
+          [AXStaticText] t= d= v=500 nits en=1
+          [AXIncrementor] t= d= v=500 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+          [AXStaticText] t= d= v=Peak brightness in nits when the hardware control is at its maximum. en=1
+          [AXStaticText] t= d= v=HDR peak SDR en=1
+          [AXStaticText] t= d= v=500 nits en=1
+          [AXIncrementor] t= d= v=500 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+          [AXStaticText] t= d= v=Peak SDR brightness in HDR mode. en=1
+          [AXStaticText] t= d= v=HDR peak HDR en=1
+          [AXStaticText] t= d= v=1.600 nits en=1
+          [AXIncrementor] t= d= v=1600 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+          [AXStaticText] t= d= v=Peak HDR brightness. en=1
+          [AXStaticText] t= d= v=Redefine 0% software brightness en=1
+          [AXStaticText] t= d= v=0% en=1
+          [AXSlider] t= d= v=0 en=1
+            [AXValueIndicator] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Compresses the usable software range so 0% is not absolute black. en=1
+          [AXStaticText] t= d= v=Minimum hardware level en=1
+          [AXStaticText] t= d= v=0% en=1
+          [AXSlider] t= d= v=0 en=1
+            [AXValueIndicator] t= d= v=0 en=1
+          [AXStaticText] t= d= v=The lowest hardware brightness value before software dimming takes over. en=1
+          [AXStaticText] t= d= v=Software dimming switchover en=1
+          [AXStaticText] t= d= v=50% en=1
+          [AXSlider] t= d= v=50 en=1
+            [AXValueIndicator] t= d= v=50 en=1
+          [AXStaticText] t= d= v=Below this point on the combined scale, extra software dimming is applied. en=1
+          [AXStaticText] t= d= v=Upscaling maximum en=1
+          [AXStaticText] t= d= v=320% en=1
+          [AXSlider] t= d= v=320 en=1
+            [AXValueIndicator] t= d= v=320 en=1
+          [AXStaticText] t= d= v=The top of the XDR/HDR upscaling range on the combined scale. en=1
+          [AXStaticText] t= d= v=Stored control values on startup en=1
+          [AXPopUpButton] t= d= v=Assume last used or default values are valid en=1
+          [AXStaticText] t= d= v=Whether stored control values are assumed valid, written to the device, or read back at startup. en=1
+        [AXStaticText] t= d= v=XDR / HDR en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Combined brightness (hardware + XDR) en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Software upscaling (Metal overlay) en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Used when native XDR upscaling is unavailable. Requires Screen Recording permission. en=1
+          [AXStaticText] t= d= v=Dim to black en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Allows turning a display fully black. en=1
+          [AXStaticText] t= d= v=Experimental direct color-table method en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Entitlement-gated on macOS 26+; has no effect there. en=1
+          [AXStaticText] t= d= v=XDR upscale target en=1
+          [AXStaticText] t= d= v=1.600 nits en=1
+          [AXIncrementor] t= d= v=1600 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+        [AXStaticText] t= d= v=Lock dim en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Dim display on screen saver or lock en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock. en=1
+          [AXStaticText] t= d= v=Dim to en=1
+          [AXStaticText] t= d= v=10% en=1
+          [AXSlider] t= d= v=10 en=1
+            [AXValueIndicator] t= d= v=10 en=1
+          [AXStaticText] t= d= v=Brightness the display is reduced to while locked. en=1
+        [AXStaticText] t= d= v=DDC / CI en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Cooldown between writes en=1
+          [AXStaticText] t= d= v=1.000 ms en=1
+          [AXIncrementor] t= d= v=1000 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+          [AXStaticText] t= d= v=Minimum delay between consecutive DDC/CI writes per display. en=1
+        [AXStaticText] t= d= v=Integrations en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=HTTP API en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Port en=1
+          [AXStaticText] t= d= v=8.765 en=1
+          [AXIncrementor] t= d= v=8765 en=1
+            [AXButton] t= d= v= en=1
+            [AXButton] t= d= v= en=1
+          [AXStaticText] t= d= v=Serves the control API on 127.0.0.1. Applies immediately. en=1
+          [AXStaticText] t= d= v=Custom OSD en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Shows a brightness HUD when the display brightness changes. en=1
+          [AXStaticText] t= d= v=Night Shift strength en=1
+          [AXStaticText] t= d= v=50% en=1
+          [AXSlider] t= d= v=0.5 en=1
+            [AXValueIndicator] t= d= v=0.5 en=1
+          [AXStaticText] t= d= v=True Tone en=1
+          [AXCheckBox] t= d= v=1 en=1
+        [AXStaticText] t= d= v=Virtual Displays & Layout en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Allow unsafe modes en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Allows applying modes outside the safe-mode flag set — experimental. en=1
+          [AXStaticText] t= d= v=Reconnect virtual screens after wake en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Disconnect virtual screens while locked en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Auto-disconnect built-in when external connects en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Apple Silicon; experimental — screen goes dark while the external is connected. en=1
+          [AXStaticText] t= d= v=Layout protection en=1
+          [AXCheckBox] t= d= v=0 en=1
+          [AXStaticText] t= d= v=Re-applies the saved arrangement when the display layout changes. en=1
+        [AXStaticText] t= d= v=EDID & Protection en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Auto-apply saved EDID on connect en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Re-applies a saved custom EDID whenever the display connects. en=1
+          [AXStaticText] t= d= v=Restore factory EDID on quit en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Reverts any active EDID override when FBD quits. en=1
+          [AXStaticText] t= d= v=Configuration protection en=1
+          [AXCheckBox] t= d= v=1 en=1
+          [AXStaticText] t= d= v=Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays. en=1
+          [AXStaticText] t= d= v=Hold ⇧ Shift while launching, or set FBD_SAFE_MODE=1, to skip applying stored configuration for one session — the escape hatch after a bad EDID override. en=1
+        [AXStaticText] t= d= v=Automation en=1
+        [AXGroup] t= d= v= en=1
+          [AXStaticText] t= d= v=Runs your command when a display connects or disconnects, or when the system sleeps or wakes. Shell rules execute as /bin/zsh -c, with FBD_EVENT and FBD_DISPLAY_NAME in the environment — add only commands you trust. Nothing runs until you add a rule. en=1
+          [AXStaticText] t= d= v=No automation rules. en=1
+          [AXPopUpButton] t= d=Display v=Any display en=1
+          [AXPopUpButton] t= d=Event v=display connected en=1
+          [AXPopUpButton] t= d=Action v=shell en=1
+          [AXStaticText] t= d= v=Shell command en=1
+          [AXTextField] t= d= v= en=1
+          [AXButton] t= d=Add rule v= en=0
+        [AXScrollBar] t= d= v=0 en=1
+          [AXValueIndicator] t= d= v=0 en=1
+          [AXButton] t= d= v= en=1
+          [AXButton] t= d= v= en=1
+          [AXButton] t= d= v= en=1
+          [AXButton] t= d= v= en=1
+    [AXButton] t= d= v= en=1
+    [AXButton] t= d= v= en=1
+      [AXGroup] t= d= v= en=1
+        [AXGroup] t= d= v= en=1
+    [AXButton] t= d= v= en=0
+  [AXMenuBar] t= d= v= en=1
+    [AXMenuBarItem] t= d=FBD — display control v= en=1
