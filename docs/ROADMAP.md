@@ -1,14 +1,13 @@
 # FBD — Roadmap
 
-Status: **All five tiers shipped** (1020 unit tests green; CI green on every
-push). 40+ hardening cycles applied since the tiers: HTTP API auth +
-router extraction, EDID validation, virtual-display registry, DDC retries,
-parser fuzz, a11y, NSPanel glass UI, Sparkle release prep, XDR software
-boost (live-verified), UI regression harness. See CHANGELOG.md for the
-per-cycle record.
+Status: **All five tiers shipped** (CI green on every push). 40+ hardening cycles
+applied since the tiers: HTTP API auth + router extraction, EDID validation,
+virtual-display registry, DDC retries, parser fuzz, a11y, NSPanel glass UI,
+Sparkle release prep, XDR software boost (live-verified), UI regression harness,
+named display presets, pointer crossing between misaligned displays. See
+CHANGELOG.md for the per-cycle record.
 
-Remaining open items (all external/hardware-bound — see
-.ai_infinite_backlog.md Pending):
+Remaining open items (all external/hardware-bound):
 - Tier 1 stop condition ("DDC brightness works on an external monitor")
   still requires real hardware.
 - macOS 27 caveats (docs/PRIVATE_APIS.md): `SLSDisplaySetPresetData` is
@@ -29,7 +28,7 @@ Remaining open items (all external/hardware-bound — see
 - [x] CGS mode listing + apply (resolution picker, refresh rates), SLS rescan
 - [x] Rosetta detection + graceful degradation; UserDefaults persistence
 - [x] Unit tests: DDC wire format, capabilities parser (hex VCP), mode mapping, settings
-- [x] Docs: README, AGENTS.md, ARCHITECTURE.md, PRIVATE_APIS.md, ROADMAP.md
+- [x] Docs: README, ARCHITECTURE.md, PRIVATE_APIS.md, ROADMAP.md
 
 ## Tier 2 — XDR/HDR ✅ (shipped)
 

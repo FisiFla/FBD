@@ -11,11 +11,11 @@ Purpose: establish what FBD actually has, and **which seam owns it** — so the 
 
 | Tag | Source |
 |---|---|
-| **UI** | Live AX trees of FBD's own panel and Settings, captured this session → `docs/plans/fbd-ui-before/` |
+| **UI** | Live AX trees of FBD's own panel and Settings, captured this session (held locally — not committed) |
 | **CLI** | `swift run --disable-sandbox fbdcli help` (full command list) + `fbdcli list` |
 | **SRC** | The source tree itself (`Sources/`) |
 | **TEST** | `Tests/FBDCoreTests/` + `Tests/FBDCLIParserTests/` — what is actually *verified* |
-| **DOC** | `README.md`, `docs/ROADMAP.md`, `docs/PRIVATE_APIS.md`, `.ai_infinite_backlog.md` — claims to check |
+| **DOC** | `README.md`, `docs/ROADMAP.md`, `docs/PRIVATE_APIS.md` — claims to check |
 
 Status vocabulary: **full** (implemented and verified here) · **partial** (implemented but a
 documented limit applies) · **degrades** (implemented, deliberately unavailable on this macOS/hardware,
@@ -32,7 +32,7 @@ Every claim in `README.md`'s feature matrix and prose, checked against code and 
 | # | README claim | Status | Proof (seam / test / command) |
 |---|---|---|---|
 | 1 | Apple brightness control | **full** | `DisplayController` → `AppleController` → `DisplayServicesAPI` (`DisplayServicesGet/SetBrightness`, linear, can-change, ambient-light); CLI `fbdcli brightness <id>`; live value seen in the panel (63 %, 1.003 nits) |
-| 2 | DDC/CI brightness on external displays (Apple silicon) | **partial — hardware-unverified here** | `DDCController` → `ExternalController` → `IOAVServiceAPI` (I2C, `IOAVServiceAPI.isAppleSilicon` guard); `DDCProtocolTests` (21), `DDCControllerTests` (9), `DDCInputSourceTests` (11). No DDC-capable monitor is attached on this machine, so the *transport* is tested and the *hardware* is not — exactly as `.ai_infinite_backlog.md` P0 records. |
+| 2 | DDC/CI brightness on external displays (Apple silicon) | **partial — hardware-unverified here** | `DDCController` → `ExternalController` → `IOAVServiceAPI` (I2C, `IOAVServiceAPI.isAppleSilicon` guard); `DDCProtocolTests` (21), `DDCControllerTests` (9), `DDCInputSourceTests` (11). No DDC-capable monitor is attached on this machine, so the *transport* is tested and the *hardware* is not — the same limit the repo's backlog records. |
 | 3 | Volume / mute | **full (DDC path), hardware-unverified** | `DisplayController.setVolume/setMuted/readMuted`; CLI `volume`, `mute`; `fbdcli` help lists both |
 | 4 | Contrast | **full (DDC path), hardware-unverified** | `setContrast`/`readContrast`; CLI `contrast` |
 | 5 | Input switching | **full (DDC path), hardware-unverified** | `setInputSource`/`readInputSource`; CLI `input`; `DDCInputSourceTests` (11) |

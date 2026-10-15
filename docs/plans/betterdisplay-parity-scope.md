@@ -35,7 +35,7 @@ Two goals, in order:
   not modified. (It already carries a 2-byte patch from earlier, unrelated work — not added to.)
 - No BetterDisplay-derived material is redistributed.
 
-**FBD repo rules** (from the repo's own `AGENTS.md`):
+**FBD repo rules**:
 
 - Private C symbols: declared in `Sources/CPrivateAPI/include/fbd_private_api.h`, wrapped in
   `Sources/FBDCore/PrivateAPI/`, throwing + `os_log` + graceful degradation. Never called inline.
@@ -92,8 +92,8 @@ The user reviewed `docs/plans/fbd-gap-matrix.md` and decided:
 3. **BetterDisplay reference screenshots stay out of the repository — permanently.** They live at
    `~/Downloads/bd_poc/bd-ui-reference/` and are referenced by path only. They must never be
    committed, pushed, or otherwise leave this machine (no GitHub, no release artefacts). FBD's own
-   before/after screenshots may be committed under `docs/plans/fbd-ui-before/` and
-   `docs/plans/fbd-ui-after/`.
+   before/after screenshots and AX trees are captured locally for review and are not committed
+   either.
 
 This resolves the open question below in favour of the safer reading: §2's
 "do not redistribute BetterDisplay-derived material" wins over §5's suggested in-repo path.

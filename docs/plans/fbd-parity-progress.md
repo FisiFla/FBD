@@ -19,8 +19,8 @@ read-only oracle; not patched, re-signed or modified in this task.
 | Tests | `swift test --disable-sandbox` | ✅ **exit 0** — **477 tests, 0 failures** |
 | App bundle | `make app` | ✅ exit 0 → `build/FBD.app` (Mach-O universal x86_64+arm64, ad-hoc signed) |
 
-**Real test count: 477** — `FBDCoreTests` 341 + `FBDCLIParserTests` 136. This matches the
-figure in `README.md`/`AGENTS.md` exactly, so the drift the plan warned about has already been
+**Real test count: 477** — `FBDCoreTests` 341 + `FBDCLIParserTests` 136. This was the figure
+`README.md` carried at the time, so the drift the plan warned about had already been
 corrected upstream. (`grep -rc 'func test' Tests/` counts 478 — one helper is named
 `test`-prefixed but is not a test case; the executed count is the honest number.)
 
@@ -62,8 +62,8 @@ I claim as "green" later is measured on an otherwise-idle machine.
 
 ## Phase 0 (cont.) — FBD's current UI surfaces
 
-Screenshots + AX trees committed under **`docs/plans/fbd-ui-before/`** (FBD's own UI, so no
-licensing concern — these are the "before" half of the Phase 5 pair).
+Screenshots + AX trees captured locally for this phase (FBD's own UI, so no licensing concern —
+the "before" half of the Phase 5 pair). They are not committed; the names below are the captures.
 
 | # | Surface | File | Panel size |
 |---|---|---|---|
@@ -207,9 +207,9 @@ in `docs/PRIVATE_APIS.md`, so the ledger is deliberately unchanged.
 - **Panel menu**: the per-display `More` menu gained a **Resolution Favourites** submenu (five
   slots, each showing its recorded mode). The rest of the menu already had BetterDisplay's grouped
   submenu structure.
-- **Evidence**: `docs/plans/fbd-ui-after/` (7 screenshots + AX trees) with
-  `docs/plans/fbd-ui-after/PANE-MAPPING.md` mapping each BetterDisplay pane to its FBD screen and
-  stating plainly where FBD does *not* mirror it.
+- **Evidence**: the Phase 5 after-captures (7 screenshots + AX trees) and their pane-mapping
+  notes, held locally, mapping each BetterDisplay pane to its FBD screen and stating plainly
+  where FBD does *not* mirror it.
 
 ### Not delivered in Phase 5
 
