@@ -6,14 +6,15 @@ XDR/HDR brightness upscaling, full-screen software filters (contrast, saturation
 gamma, color temperature, invert, sharpening, zoom/pan, 3D LUT), screen rotation,
 EDID overrides, per-display event automation (shell, URL or notification), a configurable
 on-screen HUD and Dock behaviour, saved TV/AVR control over the network, display groups
-with sync policies, resolution favourites, lock-dim, and more.
+with sync policies, resolution favourites, named display presets, pointer crossing
+between misaligned displays, lock-dim, and more.
 
 **Goal: full feature parity with BetterDisplay — no Pro tier, no licensing, no telemetry.
 Updates via Sparkle (optional).**
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-All feature tiers are implemented (1020 unit tests, CI green per push). Apple locks down
+All feature tiers are implemented (CI green on every push). Apple locks down
 private display APIs differently per macOS release; FBD degrades gracefully (feature off,
 UI notes it) when a path is unavailable.
 
@@ -56,7 +57,6 @@ open build/FBD.app
 `make ui-smoke` drives the real panel via Accessibility/CGEvent (status-item
 click → brightness slider → Settings → Back → close); needs Accessibility
 permission for your terminal.
-```
 
 `fbdcli` (command-line interface) is built alongside:
 
@@ -101,7 +101,8 @@ CLI never races the DDC bus). CORS is enabled for web clients (`OPTIONS` → 204
 
 Alongside `/api/displays`, `/api/virtual` and `/api/system`, a `/api/config` namespace
 covers the settings surfaces: lock-dim, the keyboard control target, connection management,
-per-display protection, resolution favourites and the saved device registry. `GET
+per-display protection, resolution favourites, named display presets and the saved device
+registry. `GET
 /api/config` reports them all; writes are `POST /api/config/<what>` with a JSON body, and a
 refusal names the valid values rather than ignoring the request.
 
@@ -115,6 +116,7 @@ supported on Intel Macs.
 
 - `fbd://open` opens the settings panel (handy for Shortcuts / quick-launch
   tools; `fbd://open` is also what the CLI's `http` status hints at).
+- `fbd://close` closes the settings panel that `fbd://open` shows.
 - `fbd://brightness/<displayID>/<value>` (0…1) changes brightness, but now
   requires the local API token as `?token=<httpAPIToken>` (see above). Writes
   without a matching token are refused.
