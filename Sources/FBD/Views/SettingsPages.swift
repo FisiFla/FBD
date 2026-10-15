@@ -56,6 +56,7 @@ struct DisplaySettingsPage: View {
                             PerDisplayCardView(display: display)
                             DisplayProtectionSection(display: display)
                             DisplayFavouritesSection(display: display)
+                            DisplayPresetsSection(display: display)
                         }
                         .padding(.horizontal, 12)
                         // Scroll target for a caller that asked Settings to
@@ -327,6 +328,143 @@ private struct DisplayFavouritesSection: View {
             ? "Slot \(slot) no longer has a matching mode on this display."
             : "Applied slot \(slot)."
         refresh += 1
+    }
+}
+
+// MARK: - Presets
+
+/// Named presets for this display: a whole configuration, saved under a name and
+/// applied again later from here, from `fbdcli config preset` or from an App Intent.
+///
+/// A preset is captured and re-applied through the same path configuration
+/// protection uses, so it restores exactly what protection would — and, like it,
+/// reports the properties this display cannot report rather than claiming to have
+/// set them.
+@MainActor
+private struct DisplayPresetsSection: View {
+    let display: Display
+
+    private let resolution = ResolutionController()
+    @State private var presets: [DisplayPreset] = []
+    @State private var newName = ""
+    @State private var newSymbol: DisplayPresetSymbol = .default
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            Text("Display presets")
+                .font(.callout.weight(.medium))
+            Text("Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if presets.isEmpty {
+                Text("No presets saved.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            ForEach(presets) { preset in
+                HStack(spacing: FBDTheme.spacingM) {
+                    Image(systemName: preset.symbol.symbolName)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(preset.name)
+                            .font(.caption)
+                        Text(preset.properties.names.joined(separator: ", "))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Apply") { apply(preset) }
+                        .controlSize(.small)
+                    Button("Delete") { delete(preset) }
+                        .controlSize(.small)
+                }
+            }
+
+            HStack(spacing: FBDTheme.spacingS) {
+                TextField("New preset name", text: $newName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 180)
+                Picker("Icon", selection: $newSymbol) {
+                    ForEach(DisplayPresetSymbol.all, id: \.self) { symbol in
+                        Label(symbol.label, systemImage: symbol.symbolName)
+                            .tag(symbol)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 140)
+                Button("Save") { save() }
+                    .controlSize(.small)
+                    .disabled(DisplayPresets.sanitizedName(newName) == nil)
+            }
+
+            if let message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(FBDTheme.spacingM)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .onAppear { reload() }
+    }
+
+    private func reload() {
+        presets = DisplayPresets.presets(for: display.identityKey)
+    }
+
+    /// Saves the current configuration under the typed name. The symbol is the
+    /// picker's, and the property set is the default one — the CLI can choose
+    /// otherwise, but a preset that quietly excluded brightness would be worse
+    /// than one that reports brightness as skipped.
+    private func save() {
+        guard let name = DisplayPresets.sanitizedName(newName) else { return }
+        let preset = DisplayPreset(
+            name: name,
+            symbol: newSymbol,
+            properties: DisplayPresets.defaultProperties,
+            state: DisplayStateSnapshot.capture(
+                for: display,
+                resolution: resolution,
+                controller: DisplayController.shared
+            )
+        )
+        guard DisplayPresets.save(preset, for: display.identityKey) else {
+            message = "A preset named '\(name)' already exists."
+            return
+        }
+        message = "Saved preset '\(name)'."
+        newName = ""
+        reload()
+    }
+
+    private func apply(_ preset: DisplayPreset) {
+        let outcome = DisplayPresetApplier.apply(
+            preset,
+            to: display,
+            resolution: resolution,
+            controller: DisplayController.shared
+        )
+        if outcome.applied.isEmpty && !outcome.requested.isEmpty {
+            message = "Nothing in '\(preset.name)' applies to this display."
+        } else if outcome.unavailable.isEmpty {
+            message = "Applied '\(preset.name)'."
+        } else {
+            message = "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", "))."
+        }
+    }
+
+    private func delete(_ preset: DisplayPreset) {
+        _ = DisplayPresets.remove(id: preset.id, for: display.identityKey)
+        message = nil
+        reload()
     }
 }
 

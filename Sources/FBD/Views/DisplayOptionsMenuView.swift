@@ -27,7 +27,7 @@ struct DisplayOptionsMenuView: View {
     @State private var colorProfiles: [ColorProfile] = []
     @State private var colorProfilesLoaded = false
     @State private var colorProfileController = ColorProfileController()
-    /// Resolution controller backing the favourite slots in the menu.
+    /// Resolution controller backing the favourite slots and the presets in the menu.
     @State private var favouriteResolution = ResolutionController()
 
     var body: some View {
@@ -155,9 +155,26 @@ struct DisplayOptionsMenuView: View {
             }
         }
 
-        Divider()
+        // Display presets — a whole configuration saved under a name. This is
+        // the panel's quick way to apply one; naming and deleting them lives in
+        // Settings → Displays.
+        Menu("Display Presets") {
+            let presets = DisplayPresets.presets(for: display.identityKey)
+            if presets.isEmpty {
+                Button("No presets saved.") {}
+                    .disabled(true)
+            } else {
+                ForEach(presets) { preset in
+                    Button {
+                        applyPreset(preset)
+                    } label: {
+                        Label(preset.name, systemImage: preset.symbol.symbolName)
+                    }
+                }
+            }
+        }
 
-        // Mirror Display. With no other online display there is nothing to
+        Divider()
         // mirror onto, and the menu opened empty — a dead affordance. Disable it
         // and say why instead.
         Menu("Mirror Display") {
@@ -298,6 +315,28 @@ struct DisplayOptionsMenuView: View {
             return
         }
         FBDNotice.shared.report("Recorded resolution favourite \(slot).")
+        refreshTick += 1
+    }
+
+    /// Applies a named preset and says what actually happened: a preset can name
+    /// properties this display cannot report, and passing those off as applied
+    /// would be the one thing worse than not restoring them.
+    private func applyPreset(_ preset: DisplayPreset) {
+        let outcome = DisplayPresetApplier.apply(
+            preset,
+            to: display,
+            resolution: favouriteResolution,
+            controller: DisplayController.shared
+        )
+        if outcome.applied.isEmpty && !outcome.requested.isEmpty {
+            FBDNotice.shared.report("Nothing in '\(preset.name)' applies to this display.")
+        } else if outcome.unavailable.isEmpty {
+            FBDNotice.shared.report("Applied '\(preset.name)'.")
+        } else {
+            FBDNotice.shared.report(
+                "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", "))."
+            )
+        }
         refreshTick += 1
     }
 

@@ -27,6 +27,13 @@ public protocol DisplayControlling: AnyObject {
     func stopScreenFilter(on display: Display)
     func activeBoostDisplayIDs() -> [UInt32]
 
+    // The remaining state a display preset re-applies. They live on the seam so
+    // the preset path (HTTP/CLI/UI) shares one implementation with config
+    // protection's restore rather than reaching past it to DisplayController.
+    func setAsMainDisplay(_ display: Display) -> Bool
+    func selectPreset(_ index: Int, on display: Display) -> Bool
+    func setHDRMode(_ enabled: Bool, on display: Display) -> Bool
+
     // Virtual displays — routed through the single VirtualScreenController so
     // CLI, HTTP and UI share one surface.
     var virtualScreens: [VirtualScreenInstance] { get }
@@ -372,6 +379,71 @@ public enum HTTPExecutor {
                     return (500, HTTPJSON.error("the display refused that mode"))
                 }
                 return (200, HTTPJSON.encode(["ok": true, "slot": slot, "modeNumber": Int(mode.modeNumber)]))
+            }
+
+        case .configPreset(let displayID, let action):
+            guard let display = controller.display(withID: displayID) else {
+                return (404, HTTPJSON.error("display not found"))
+            }
+            // Like favourites, presets are stored per display *identity*, so
+            // they survive a reconnect that renumbers the display.
+            let presetIdentity = display.identityKey
+            switch action {
+            case .list:
+                let stored: [[String: Any]] = DisplayPresets.presets(for: presetIdentity).map { preset in
+                    [
+                        "id": preset.id.uuidString,
+                        "name": preset.name,
+                        "symbol": preset.symbol.symbolName,
+                        "properties": preset.properties.names,
+                    ]
+                }
+                return (200, HTTPJSON.encode(["presets": stored]))
+
+            case .save(let name, let symbol, let properties):
+                let preset = DisplayPreset(
+                    name: name,
+                    symbol: symbol,
+                    properties: properties,
+                    state: DisplayStateSnapshot.capture(
+                        for: display,
+                        resolution: ResolutionController(),
+                        controller: controller
+                    )
+                )
+                guard DisplayPresets.save(preset, for: presetIdentity) else {
+                    // The name is validated by the router, so the only refusal
+                    // left here is a name already taken — a conflict with what
+                    // is stored, not a malformed request.
+                    return (409, HTTPJSON.error("a preset named '\(name)' already exists"))
+                }
+                return (201, HTTPJSON.encode(["ok": true, "id": preset.id.uuidString, "name": preset.name]))
+
+            case .apply(let reference):
+                guard let preset = DisplayPresets.resolve(reference, for: presetIdentity) else {
+                    return (404, HTTPJSON.error("no preset '\(reference)' for this display"))
+                }
+                let outcome = DisplayPresetApplier.apply(
+                    preset,
+                    to: display,
+                    resolution: ResolutionController(),
+                    controller: controller
+                )
+                return (200, HTTPJSON.encode([
+                    "ok": true,
+                    "id": preset.id.uuidString,
+                    "applied": outcome.applied.names,
+                    "unavailable": outcome.unavailable.names,
+                ]))
+
+            case .delete(let reference):
+                guard let preset = DisplayPresets.resolve(reference, for: presetIdentity) else {
+                    return (404, HTTPJSON.error("no preset '\(reference)' for this display"))
+                }
+                guard DisplayPresets.remove(id: preset.id, for: presetIdentity) else {
+                    return (500, HTTPJSON.error("the preset could not be removed"))
+                }
+                return (200, HTTPJSON.encode(["ok": true, "id": preset.id.uuidString]))
             }
         }
     }

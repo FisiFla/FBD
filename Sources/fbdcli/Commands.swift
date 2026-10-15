@@ -2424,6 +2424,7 @@ func printConfigUsage() {
     print("usage: fbdcli config [show]")
     print("       fbdcli config protect <id> [all|<property>[,<property>…]]")
     print("       fbdcli config favourite <id> list|save|apply [slot]")
+    print("       fbdcli config preset <id> list|save <name>|apply <name|id>|delete <name|id>")
     print("       fbdcli config lockdim [on|off]")
     print("       fbdcli config lockdim-target [0-100]")
     print("       fbdcli config keytarget [mouse|focused|all|audio]")
@@ -2434,13 +2435,15 @@ func printConfigUsage() {
     print("       fbdcli config model <key> [value]")
     print("       fbdcli config device list|add|remove|attach|detach|attachments …")
     print("properties: \(ProtectedProperties.ordered.map(\.name).joined(separator: ", "))")
+    print("preset symbols: \(DisplayPresetSymbol.all.map(\.symbolName).joined(separator: ", "))")
     print("model keys: prefer-hardware, hardware-min, hardware-max, hdr-sdr-peak, hdr-hdr-peak, "
         + "software-zero, min-hardware, switchover, upscale-max, startup-policy")
 }
 
 /// `fbdcli config …` — the settings behind the BetterDisplay-parity features:
-/// per-property configuration protection, resolution favourites, lock
-/// dimming, the keyboard control target, and display-group sync policy.
+/// per-property configuration protection, resolution favourites, named display
+/// presets, lock dimming, the keyboard control target, and display-group sync
+/// policy.
 ///
 /// These are *settings*, not hardware writes, so they run locally against the
 /// same `Settings.defaults` suite the app reads: one write path, no DDC bus
@@ -2453,6 +2456,7 @@ func cmdConfig(_ controller: DisplayController, args: [String]) -> Int32 {
     case "show": return printConfigSummary()
     case "protect": return cmdConfigProtect(controller, args: rest)
     case "favourite", "favorite": return cmdConfigFavourite(controller, args: rest)
+    case "preset": return cmdConfigPreset(controller, args: rest)
     case "lockdim": return cmdConfigLockDim(rest)
     case "lockdim-target": return cmdConfigLockDimTarget(rest)
     case "keytarget": return cmdConfigKeyTarget(rest)
@@ -2840,6 +2844,140 @@ func cmdConfigFavourite(_ controller: DisplayController, args: [String]) -> Int3
     }
     print("applied slot \(slot)")
     return 0
+}
+
+/// `config preset <id> list|save <name>|apply <ref>|delete <ref>` — named display
+/// presets: a display's whole configuration recorded under a name, so a setup
+/// made once (a scaled mode for a projector, dim and no HDR for night work) can
+/// be recalled by name from the CLI, the HTTP API, the menu or Siri.
+///
+/// Which properties a preset carries is chosen when it is saved; `mainStatus` is
+/// left out of the default set because moving the menu bar is a property of the
+/// desktop, not of this display, and applying a preset should not silently
+/// rearrange the user's other screens.
+@MainActor
+func cmdConfigPreset(_ controller: DisplayController, args: [String]) -> Int32 {
+    guard args.count >= 2, let id = requireDisplayID(args[0]) else {
+        print("fbdcli: config preset: expected <id> list|save <name>|apply <ref>|delete <ref>")
+        return 1
+    }
+    guard let display = controller.display(withID: id) else {
+        print("fbdcli: config preset: no display with id \(id)")
+        return 1
+    }
+    let action = args[1]
+    let rest = Array(args.dropFirst(2))
+
+    switch action {
+    case "list":
+        let presets = DisplayPresets.presets(for: display.identityKey)
+        if presets.isEmpty {
+            print("no presets recorded")
+            return 0
+        }
+        for preset in presets {
+            let properties = preset.properties.names.joined(separator: ",")
+            print("\(preset.name) [\(preset.symbol.symbolName)] \(properties)")
+        }
+        return 0
+
+    case "save":
+        guard let rawName = rest.first else {
+            print("fbdcli: config preset save: expected a name")
+            return 1
+        }
+        guard let name = DisplayPresets.sanitizedName(rawName) else {
+            print("fbdcli: config preset save: a preset needs a name")
+            return 1
+        }
+        var symbol: DisplayPresetSymbol = .default
+        var properties = DisplayPresets.defaultProperties
+        var index = 1
+        while index < rest.count {
+            let flag = rest[index]
+            guard index + 1 < rest.count else {
+                print("fbdcli: config preset save: \(flag) expects a value")
+                return 1
+            }
+            let value = rest[index + 1]
+            switch flag {
+            case "--symbol":
+                guard let parsed = DisplayPresetSymbol.named(value) else {
+                    print("fbdcli: config preset save: unknown symbol '\(value)'")
+                    print("preset symbols: \(DisplayPresetSymbol.all.map(\.symbolName).joined(separator: ", "))")
+                    return 1
+                }
+                symbol = parsed
+            case "--properties":
+                guard let parsed = ProtectedProperties.parse(value) else {
+                    print("fbdcli: config preset save: unknown property in '\(value)'")
+                    print("properties: \(ProtectedProperties.ordered.map(\.name).joined(separator: ", "))")
+                    return 1
+                }
+                properties = parsed
+            default:
+                print("fbdcli: config preset save: unexpected argument '\(flag)'")
+                printConfigUsage()
+                return 1
+            }
+            index += 2
+        }
+        let state = DisplayStateSnapshot.capture(
+            for: display,
+            resolution: ResolutionController(),
+            controller: controller
+        )
+        let preset = DisplayPreset(
+            name: name,
+            symbol: symbol,
+            properties: properties,
+            state: state
+        )
+        guard DisplayPresets.save(preset, for: display.identityKey) else {
+            print("fbdcli: config preset save: a preset named '\(name)' already exists")
+            return 2
+        }
+        print("saved preset '\(name)'")
+        return 0
+
+    case "apply", "delete":
+        guard let reference = rest.first else {
+            print("fbdcli: config preset \(action): expected a preset name or id")
+            return 1
+        }
+        guard let preset = DisplayPresets.resolve(reference, for: display.identityKey) else {
+            print("fbdcli: config preset \(action): no preset '\(reference)' for this display")
+            return 2
+        }
+        if action == "delete" {
+            guard DisplayPresets.remove(id: preset.id, for: display.identityKey) else {
+                print("fbdcli: config preset delete: could not remove '\(preset.name)'")
+                return 2
+            }
+            print("deleted preset '\(preset.name)'")
+            return 0
+        }
+        let outcome = DisplayPresetApplier.apply(
+            preset,
+            to: display,
+            resolution: ResolutionController(),
+            controller: controller
+        )
+        if outcome.applied.isEmpty && !outcome.requested.isEmpty {
+            print("fbdcli: config preset apply: no part of '\(preset.name)' applies to this display")
+            return 2
+        }
+        print("applied preset '\(preset.name)'")
+        if !outcome.unavailable.isEmpty {
+            print("skipped: \(outcome.unavailable.names.joined(separator: ","))")
+        }
+        return 0
+
+    default:
+        print("fbdcli: config preset: expected list, save, apply or delete (got '\(action)')")
+        printConfigUsage()
+        return 1
+    }
 }
 
 @MainActor

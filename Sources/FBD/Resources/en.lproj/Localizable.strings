@@ -14,6 +14,7 @@
 "Refresh Rate" = "Refresh Rate";
 "Color Mode" = "Color Mode";
 "Resolution Favourites" = "Resolution Favourites";
+"Display Presets" = "Display Presets";
 "Screen Rotation" = "Screen Rotation";
 "Mirror Display" = "Mirror Display";
 "Move Display" = "Move Display";
@@ -70,6 +71,7 @@
 "DDC/CI cooldown" = "DDC/CI cooldown";
 "Display groups" = "Display groups";
 "Display list" = "Display list";
+"Display presets" = "Display presets";
 "EDID & Protection" = "EDID & Protection";
 "General" = "General";
 "HTTP API" = "HTTP API";
@@ -119,6 +121,7 @@
 "Minimum hardware level" = "Minimum hardware level";
 "Mirror" = "Mirror";
 "New group name" = "New group name";
+"New preset name" = "New preset name";
 "Night Shift strength" = "Night Shift strength";
 "Port" = "Port";
 "Prefer hardware brightness control" = "Prefer hardware brightness control";
@@ -159,6 +162,7 @@
 "No groups yet." = "No groups yet.";
 "No main display — nothing to do." = "No main display — nothing to do.";
 "No current mode to record." = "No current mode to record.";
+"No presets saved." = "No presets saved.";
 "Night Shift is unavailable on this Mac." = "Night Shift is unavailable on this Mac.";
 "Media keys unavailable — allow Accessibility for FBD in System Settings" = "Media keys unavailable — allow Accessibility for FBD in System Settings";
 "FBD — Free Better Display" = "FBD — Free Better Display";
@@ -198,6 +202,7 @@
 "Record the current display mode into a slot and recall it later." = "Record the current display mode into a slot and recall it later.";
 "Reverts any active EDID override when FBD quits." = "Reverts any active EDID override when FBD quits.";
 "Right-click the status item for Show FBD, Settings…, Check for Updates… and Quit." = "Right-click the status item for Show FBD, Settings…, Check for Updates… and Quit.";
+"Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one." = "Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one.";
 "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays." = "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays.";
 "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock." = "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock.";
 "Serves the control API on 127.0.0.1. Applies immediately." = "Serves the control API on 127.0.0.1. Applies immediately.";
@@ -276,6 +281,14 @@
 "%lld Hz" = "%lld Hz";
 "%lld display%@" = "%lld display%@";
 "%lldpx" = "%lldpx";
+
+/* Display preset messages. The preset's name is user data, so it is quoted here rather than
+   interpolated into the sentence's grammar. */
+"Saved preset '%@'." = "Saved preset '%@'.";
+"A preset named '%@' already exists." = "A preset named '%@' already exists.";
+"Applied '%@'." = "Applied '%@'.";
+"Applied '%@' — skipped %@." = "Applied '%@' — skipped %@.";
+"Nothing in '%@' applies to this display." = "Nothing in '%@' applies to this display.";
 
 /* Automation. The model's own `label`/`token` stay English — `FBD_EVENT_LABEL` hands them to shell
    rules, which is a script contract — so the UI maps the cases here instead. */
