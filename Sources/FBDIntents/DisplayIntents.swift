@@ -315,3 +315,56 @@ struct SyncDisplayGroupIntent: AppIntent {
         return .result(value: written)
     }
 }
+
+// MARK: - Display presets
+
+/// Applies one of a display's named presets — the same operation as the Presets
+/// section in Settings, so "set the desk up for work" becomes one Shortcuts
+/// action.
+@available(macOS 13, *)
+struct ApplyDisplayPresetIntent: AppIntent {
+    static var title: LocalizedStringResource = "Apply Display Preset"
+    static var description: IntentDescription? = IntentDescription("Applies a named preset to a display, restoring the configuration the preset recorded.")
+    static var openAppWhenRun = false
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Apply preset \(\.$preset) to \(\.$display)")
+    }
+
+    @Parameter(title: "Preset", description: "The name of the preset to apply.")
+    var preset: String
+
+    @Parameter(title: "Display", description: "The display the preset belongs to.")
+    var display: DisplayEntity
+
+    func perform() async throws -> some IntentResult {
+        let name = preset.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            throw DisplayIntentError.invalidValue("A preset name is required.")
+        }
+        guard let target = await DisplayEntity.liveDisplay(id: display.id) else {
+            throw DisplayIntentError.displayNotFound
+        }
+        // Resolve the preset before applying it, so an unknown name is reported
+        // as unknown rather than as a preset that quietly changed nothing.
+        let resolved = await MainActor.run {
+            DisplayPresets.preset(named: name, for: target.identityKey)
+        }
+        guard let preset = resolved else {
+            throw DisplayIntentError.invalidValue("No preset is named '\(name)' on this display.")
+        }
+
+        let outcome = await MainActor.run {
+            DisplayPresetApplier.apply(
+                preset,
+                to: target,
+                resolution: ResolutionController(),
+                controller: DisplayController.shared
+            )
+        }
+        guard !outcome.applied.isEmpty || outcome.requested.isEmpty else {
+            throw DisplayIntentError.operationFailed("no part of '\(preset.name)' applies to this display.")
+        }
+        return .result(dialog: IntentDialog(stringLiteral: "Applied preset '\(preset.name)'."))
+    }
+}

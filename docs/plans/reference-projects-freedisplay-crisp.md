@@ -42,8 +42,8 @@ FBD should rely on, so nothing is taken from it beyond "this feature exists".
 | Virtual displays / HiDPI | ✅ | ✅ | ✅ | — |
 | **Smooth, fine-grained scaling** | — | ✅ | ✗ | **gap** — FBD row #22 (high risk: needs the mode-list private API) |
 | "Make my external crisp" HiDPI flow (auto for 1440p+) | ✅ | ✅ | ✗ (manual modes only) | **gap** |
-| Named display presets, with an icon | ✅ | ✅ | ✗ (mode favourites + XDR presets only) | **gap** |
-| Shortcuts / App Intents | — | ✅ broad | ✅ 8 intents, no preset/input/disconnect action | **narrow gap** |
+| Named display presets, with an icon | ✅ | ✅ | ✅ named presets, 12 icons, CLI · Settings · panel · App Intent | — |
+| Shortcuts / App Intents | — | ✅ broad | ✅ 9 intents, no input/disconnect action | **narrow gap** |
 | Arrangement canvas + main-display switch | ✅ | ✅ drag-to-arrange | ✅ `ArrangementGridView` | Crisp's is interactive |
 | **Edge-crossing pointer** between misaligned displays | — | ✅ | ✗ | **gap** |
 | Disconnect displays, remembered across sleep/reboot | — | ✅ | ✅ per-display enable/disable + auto-disconnect built-in | close |
@@ -133,7 +133,16 @@ sources linked. Paraphrased, the rules that bear on FBD:
    preferred, and the mode in effect always present) with **Show all N modes** one click away.
    A flat list of all 132 modes would have been a wall, not a list.
 6. **Uniform section chips** (rule 4).
-7. **Named display presets with icons**, plus the App Intent to apply one.
+7. **Named display presets with icons**, plus the App Intent to apply one — **done.** A preset is a
+   display's whole configuration — mode and refresh rate, brightness, the XDR preset, HDR mode,
+   rotation and the colour profile — saved under a name and an icon, and applied again from
+   Settings → Displays, the panel's own menu, `fbdcli config preset`, or the `Apply Display Preset`
+   App Intent. It is built on `DisplayStateSnapshot`, the state `ConfigProtectionController` already
+   captured to restore a display after a reconnect, so there is one apply path rather than two.
+   Two choices worth naming. The icon is a closed SF-Symbol set like the menu-bar icon's, because a
+   name that fails to resolve draws a blank row. And a preset does **not** carry main-display status
+   by default: applying one must not silently move the menu bar off another display. Apply reports
+   the properties the display could not accept rather than counting them as restored.
 8. **Localisation** — **done for the panel and Settings.** en · 简体中文 · 繁體中文, the same three
    Crisp ships, at 225 keys each. Three `.lproj/Localizable.strings` sit beside the icon and the
    Makefile copies them into the bundle, with a drift test keeping the languages in agreement and

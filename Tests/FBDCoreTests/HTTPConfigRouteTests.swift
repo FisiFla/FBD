@@ -341,4 +341,123 @@ final class HTTPConfigRouteTests: XCTestCase {
         XCTAssertEqual(status, 400)
         XCTAssertTrue(message.contains("apply"), "should name the valid actions, got: \(message)")
     }
+
+    // MARK: - Display presets
+
+    func testPresetList() {
+        XCTAssertEqual(
+            route("POST", "/api/config/preset", body: #"{"display":1,"action":"list"}"#),
+            .route(.configPreset(displayID: 1, action: .list))
+        )
+    }
+
+    /// Omitting `properties` keeps the default selection, so a caller saving
+    /// "everything about this display" need not enumerate it.
+    func testPresetSaveUsesTheDefaultSelectionWhenPropertiesAreOmitted() {
+        XCTAssertEqual(
+            route("POST", "/api/config/preset", body: #"{"display":1,"action":"save","name":"Desk"}"#),
+            .route(.configPreset(
+                displayID: 1,
+                action: .save(name: "Desk", symbol: .default, properties: DisplayPresets.defaultProperties)
+            ))
+        )
+    }
+
+    func testPresetSaveCarriesTheSymbolAndProperties() {
+        XCTAssertEqual(
+            route(
+                "POST", "/api/config/preset",
+                body: #"{"display":1,"action":"save","name":"Desk","symbol":"tv","properties":["resolution","brightness"]}"#
+            ),
+            .route(.configPreset(
+                displayID: 1,
+                action: .save(name: "Desk", symbol: .screen, properties: [.resolution, .brightness])
+            ))
+        )
+    }
+
+    func testPresetSaveTrimsTheName() {
+        XCTAssertEqual(
+            route("POST", "/api/config/preset", body: #"{"display":1,"action":"save","name":"  Desk  "}"#),
+            .route(.configPreset(
+                displayID: 1,
+                action: .save(name: "Desk", symbol: .default, properties: DisplayPresets.defaultProperties)
+            ))
+        )
+    }
+
+    func testPresetSaveRejectsAnUnusableName() {
+        for body in [#"{"display":1,"action":"save"}"#, #"{"display":1,"action":"save","name":"   "}"#] {
+            guard case .error(let status, _) = route("POST", "/api/config/preset", body: body) else {
+                return XCTFail("expected an error for \(body)")
+            }
+            XCTAssertEqual(status, 400)
+        }
+    }
+
+    func testPresetSaveRejectsAnUnknownSymbolAndNamesTheValidOnes() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/preset",
+            body: #"{"display":1,"action":"save","name":"Desk","symbol":"not.a.symbol"}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("tv"), "should name the valid symbols, got: \(message)")
+    }
+
+    func testPresetSaveRejectsAnUnknownPropertyAndNamesTheValidOnes() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/preset",
+            body: #"{"display":1,"action":"save","name":"Desk","properties":["resolution","nope"]}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("brightness"), "should name the valid properties, got: \(message)")
+    }
+
+    func testPresetApplyAcceptsAName() {
+        XCTAssertEqual(
+            route("POST", "/api/config/preset", body: #"{"display":1,"action":"apply","name":"Desk"}"#),
+            .route(.configPreset(displayID: 1, action: .apply(reference: "Desk")))
+        )
+    }
+
+    /// `id` is the other accepted reference — a caller that listed the presets
+    /// has one, and a UUID survives a rename.
+    func testPresetApplyAcceptsAnIdentifier() {
+        let id = "11111111-1111-1111-1111-111111111111"
+        XCTAssertEqual(
+            route("POST", "/api/config/preset", body: #"{"display":1,"action":"apply","id":"\#(id)"}"#),
+            .route(.configPreset(displayID: 1, action: .apply(reference: id)))
+        )
+    }
+
+    func testPresetDeleteAcceptsAName() {
+        XCTAssertEqual(
+            route("POST", "/api/config/preset", body: #"{"display":1,"action":"delete","name":"Desk"}"#),
+            .route(.configPreset(displayID: 1, action: .delete(reference: "Desk")))
+        )
+    }
+
+    func testPresetApplyAndDeleteRequireAReference() {
+        for action in ["apply", "delete"] {
+            guard case .error(let status, _) = route(
+                "POST", "/api/config/preset", body: #"{"display":1,"action":"\#(action)"}"#
+            ) else { return XCTFail("expected an error for \(action)") }
+            XCTAssertEqual(status, 400)
+        }
+    }
+
+    func testPresetRequiresADisplay() {
+        guard case .error(let status, _) = route(
+            "POST", "/api/config/preset", body: #"{"action":"list"}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+    }
+
+    func testPresetRejectsAnUnknownAction() {
+        guard case .error(let status, let message) = route(
+            "POST", "/api/config/preset", body: #"{"display":1,"action":"nope"}"#
+        ) else { return XCTFail("expected an error") }
+        XCTAssertEqual(status, 400)
+        XCTAssertTrue(message.contains("save"), "should name the valid actions, got: \(message)")
+    }
 }

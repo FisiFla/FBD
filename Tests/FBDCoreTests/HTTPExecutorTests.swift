@@ -75,6 +75,20 @@ private final class FakeDisplayController: DisplayControlling {
     }
     func stopScreenFilter(on display: Display) { filterStopped = true }
     func activeBoostDisplayIDs() -> [UInt32] { boostIDs }
+    @discardableResult
+    func setAsMainDisplay(_ display: Display) -> Bool { mainAccepts }
+    @discardableResult
+    func selectPreset(_ index: Int, on display: Display) -> Bool {
+        presetIndexes.append(index)
+        return presetAccepts
+    }
+    @discardableResult
+    func setHDRMode(_ enabled: Bool, on display: Display) -> Bool { hdrAccepts }
+
+    var mainAccepts = true
+    var presetAccepts = true
+    var hdrAccepts = true
+    var presetIndexes: [Int] = []
 }
 
 // MARK: - Tests
@@ -233,5 +247,55 @@ final class HTTPExecutorTests: XCTestCase {
         XCTAssertEqual(run(.virtualDestroy(id: config.id)).0, 200)
         XCTAssertEqual(fake.destroyedIDs, [config.id])
         XCTAssertEqual(run(.virtualDestroy(id: "nonexistent")).0, 404)
+    }
+
+    // MARK: - Display presets
+
+    /// The preset routes write through the shared `Settings` suite — the
+    /// executor has no injection point, exactly as for resolution favourites —
+    /// so this runs against an identity no real display has and cleans it up.
+    func testPresetRoundTrip() {
+        let presetDisplay = Display(
+            id: 99,
+            name: "Preset",
+            isBuiltin: false,
+            vendorNumber: 0x10AC,
+            modelNumber: 0xF00D_BEEF,
+            serialNumber: 0x9,
+            bounds: .zero,
+            isOnline: true,
+            isActive: true
+        )
+        fake.displays.append(presetDisplay)
+        let key = "displayPresets.\(presetDisplay.identityKey)"
+        defer { Settings.defaults.removeObject(forKey: key) }
+
+        let (saveStatus, saveBody) = run(.configPreset(
+            displayID: 99,
+            action: .save(name: "Desk", symbol: .screen, properties: [.brightness])
+        ))
+        XCTAssertEqual(saveStatus, 201)
+        XCTAssertTrue(saveBody.contains("Desk"))
+
+        // The same name (any case) is a conflict with what is stored, not a
+        // malformed request.
+        XCTAssertEqual(run(.configPreset(
+            displayID: 99, action: .save(name: "desk", symbol: .screen, properties: [.brightness])
+        )).0, 409)
+
+        let (listStatus, listBody) = run(.configPreset(displayID: 99, action: .list))
+        XCTAssertEqual(listStatus, 200)
+        XCTAssertTrue(listBody.contains("\"tv\""), "the stored preset's symbol should be listed")
+
+        // A bare display exposes no brightness path, so applying reports it as
+        // unavailable rather than pretending it landed.
+        let (applyStatus, applyBody) = run(.configPreset(displayID: 99, action: .apply(reference: "desk")))
+        XCTAssertEqual(applyStatus, 200)
+        XCTAssertTrue(applyBody.contains("brightness"))
+
+        XCTAssertEqual(run(.configPreset(displayID: 99, action: .delete(reference: "Desk"))).0, 200)
+        XCTAssertNil(Settings.defaults.object(forKey: key), "deleting the last preset must leave no residue")
+
+        XCTAssertEqual(run(.configPreset(displayID: 99, action: .apply(reference: "Desk"))).0, 404)
     }
 }

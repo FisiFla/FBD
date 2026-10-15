@@ -14,6 +14,7 @@
 "Refresh Rate" = "重新整理頻率";
 "Color Mode" = "色彩模式";
 "Resolution Favourites" = "解析度收藏";
+"Display Presets" = "顯示器預設";
 "Screen Rotation" = "螢幕旋轉";
 "Mirror Display" = "鏡像顯示器";
 "Move Display" = "移動顯示器";
@@ -69,6 +70,7 @@
 "DDC/CI cooldown" = "DDC/CI 冷卻時間";
 "Display groups" = "顯示器群組";
 "Display list" = "顯示器列表";
+"Display presets" = "顯示器預設";
 "EDID & Protection" = "EDID 與保護";
 "General" = "一般";
 "HTTP API" = "HTTP API";
@@ -118,6 +120,7 @@
 "Minimum hardware level" = "最低硬體等級";
 "Mirror" = "鏡像";
 "New group name" = "新增群組名稱";
+"New preset name" = "新增預設名稱";
 "Night Shift strength" = "夜覽強度";
 "Port" = "埠";
 "Prefer hardware brightness control" = "優先使用硬體亮度控制";
@@ -158,6 +161,7 @@
 "No groups yet." = "尚無顯示器群組。";
 "No main display — nothing to do." = "沒有主顯示器，無需操作。";
 "No current mode to record." = "沒有可記錄的目前模式。";
+"No presets saved." = "尚未儲存預設。";
 "Night Shift is unavailable on this Mac." = "此 Mac 不支援夜覽。";
 "Media keys unavailable — allow Accessibility for FBD in System Settings" = "多媒體鍵無法使用——請在「系統設定」中允許 FBD 使用輔助使用";
 "FBD — Free Better Display" = "FBD——自由、更好的顯示器";
@@ -197,6 +201,7 @@
 "Record the current display mode into a slot and recall it later." = "將目前顯示模式記錄到某個槽位，以便稍後調回。";
 "Reverts any active EDID override when FBD quits." = "結束 FBD 時還原任何生效中的 EDID 覆寫。";
 "Right-click the status item for Show FBD, Settings…, Check for Updates… and Quit." = "以右鍵點按選單列圖示可顯示 FBD、打開「設定…」、「檢查更新…」與「結束」。";
+"Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one." = "將這台顯示器的目前設定儲存為名稱，之後可以再次套用。預設不會變更哪台顯示器是主顯示器。";
 "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays." = "儲存每台顯示器所選的屬性，並在其重新連接時重新套用。請在「顯示器」中為每台顯示器選擇屬性。";
 "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock." = "螢幕鎖定或螢幕保護程式執行時會降低螢幕亮度，解鎖後回復。";
 "Serves the control API on 127.0.0.1. Applies immediately." = "在 127.0.0.1 上提供控制 API。立即生效。";
@@ -271,6 +276,14 @@
 "%lld Hz" = "%lld Hz";
 "%lld display%@" = "%lld 台顯示器";
 "%lldpx" = "%lld像素";
+
+/* Display preset messages. The preset's name is user data, so it is quoted here rather than
+   interpolated into the sentence's grammar. */
+"Saved preset '%@'." = "已儲存預設「%@」。";
+"A preset named '%@' already exists." = "名為「%@」的預設已存在。";
+"Applied '%@'." = "已套用「%@」。";
+"Applied '%@' — skipped %@." = "已套用「%@」——已略過 %@。";
+"Nothing in '%@' applies to this display." = "「%@」中沒有適用於這台顯示器的內容。";
 
 /* 自動化：模型自帶的 label/token 保持英文（FBD_EVENT_LABEL 會交給 Shell 規則，屬於指令稿契約），
    因此由介面依列舉分支查表 */

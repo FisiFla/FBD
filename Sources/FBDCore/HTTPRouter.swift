@@ -46,6 +46,10 @@ public enum HTTPRoute: Equatable {
     /// Resolution favourites: list them, record the current mode into a slot, or
     /// recall one. Recall reports an unmatched favourite rather than guessing.
     case configFavourite(displayID: CGDirectDisplayID, action: FavouriteAction)
+    /// Named display presets: list them, capture the current state under a name,
+    /// apply one, or delete one. Apply reports what the display no longer
+    /// exposes rather than guessing.
+    case configPreset(displayID: CGDirectDisplayID, action: PresetAction)
 }
 
 /// The favourite operations, so one route case carries them.
@@ -53,6 +57,15 @@ public enum FavouriteAction: Equatable {
     case list
     case save(slot: Int)
     case apply(slot: Int)
+}
+
+/// The preset operations. Apply and delete take a *reference* — a preset name or
+/// its UUID — because that is what a caller has; the store resolves either.
+public enum PresetAction: Equatable {
+    case list
+    case save(name: String, symbol: DisplayPresetSymbol, properties: ProtectedProperties)
+    case apply(reference: String)
+    case delete(reference: String)
 }
 
 /// The registry operations, so one route case carries them rather than three
@@ -492,6 +505,62 @@ public enum HTTPRouter {
                 return .route(.configDevice(.remove(name: name)))
             default:
                 return .error(status: 400, message: "action must be list, add or remove")
+            }
+
+        case "preset":
+            guard let displayID = displayID(from: object) else {
+                return .error(status: 400, message: "display is required")
+            }
+            guard let raw = object["action"] as? String else {
+                return .error(status: 400, message: "action must be list, save, apply or delete")
+            }
+            switch raw {
+            case "list":
+                return .route(.configPreset(displayID: displayID, action: .list))
+
+            case "save":
+                // The name is validated here, not in the executor, so an
+                // unusable one is a 400 naming the rule rather than a save that
+                // silently does nothing.
+                guard let rawName = object["name"] as? String,
+                      let name = DisplayPresets.sanitizedName(rawName) else {
+                    return .error(status: 400, message: "name is required")
+                }
+                var symbol = DisplayPresetSymbol.default
+                if let rawSymbol = object["symbol"] {
+                    guard let text = rawSymbol as? String, let resolved = DisplayPresetSymbol(rawValue: text) else {
+                        let allowed = DisplayPresetSymbol.all.map(\.symbolName).joined(separator: ", ")
+                        return .error(status: 400, message: "symbol must be one of \(allowed)")
+                    }
+                    symbol = resolved
+                }
+                // Omitting `properties` keeps the default selection, so a caller
+                // saving "everything about this display" need not list it.
+                var properties = DisplayPresets.defaultProperties
+                if let names = object["properties"] as? [String] {
+                    guard let parsed = ProtectedProperties.parse(names.joined(separator: ",")) else {
+                        let allowed = ProtectedProperties.ordered.map(\.name).joined(separator: ", ")
+                        return .error(status: 400, message: "properties may only contain: \(allowed)")
+                    }
+                    properties = parsed
+                }
+                return .route(.configPreset(
+                    displayID: displayID,
+                    action: .save(name: name, symbol: symbol, properties: properties)
+                ))
+
+            case "apply", "delete":
+                guard let reference = (object["id"] as? String ?? object["name"] as? String),
+                      !reference.trimmingCharacters(in: .whitespaces).isEmpty else {
+                    return .error(status: 400, message: "id or name is required")
+                }
+                return .route(.configPreset(
+                    displayID: displayID,
+                    action: raw == "apply" ? .apply(reference: reference) : .delete(reference: reference)
+                ))
+
+            default:
+                return .error(status: 400, message: "action must be list, save, apply or delete")
             }
 
         default:

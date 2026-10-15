@@ -35,33 +35,6 @@ public final class ConfigProtectionController {
 
     // MARK: - Persistence
 
-    /// Everything configuration protection can record for one display. All
-    /// fields are optional so a blob written by an older FBD (which only had
-    /// mode/brightness/preset) still decodes.
-    private struct SavedState: Codable {
-        /// CGS mode number of the current mode (nil when none could be read).
-        var modeNumber: Int32?
-        /// The saved mode's refresh rate in Hz (used when only `.refreshRate`
-        /// is protected, so the exact mode need not still exist).
-        var refreshRate: Double?
-        /// Last known brightness, 0…1 (nil when the display has no control path).
-        var brightness: Double?
-        /// Active XDR preset index (nil = factory default / non-XDR display).
-        var activePresetIndex: Int?
-        /// HDR framebuffer mode state (nil when the display cannot report it).
-        var isHDRModeEnabled: Bool?
-        /// Whether the display was the main display.
-        var isMain: Bool?
-        /// Rotation FBD last applied, in degrees (nil when it never applied one).
-        ///
-        /// Taken from `Settings.storedRotation` because rotation cannot be read back, so what
-        /// FBD applied is the only value there is to protect.
-        var rotationDegrees: Int?
-        /// The colour profile FBD last applied, by path (nil when it never applied one).
-        /// Same reasoning as `rotationDegrees`.
-        var colourProfilePath: String?
-    }
-
     /// Same suite selection as Settings: the app bundle's standard domain IS
     /// dev.fisifla.fbd; CLI/tests target the suite explicitly so both read the
     /// same plist.
@@ -110,19 +83,7 @@ public final class ConfigProtectionController {
     /// restore time by the per-display `ProtectedProperties` selection, so
     /// changing the selection never requires re-saving.
     public func saveCurrentState(for display: Display, resolution: ResolutionController, controller: DisplayController) {
-        let mode = resolution.currentMode(for: display)
-        let state = SavedState(
-            modeNumber: mode?.modeNumber,
-            refreshRate: mode?.refreshRate,
-            brightness: display.brightness ?? controller.getBrightness(for: display),
-            activePresetIndex: display.activePresetIndex,
-            isHDRModeEnabled: display.isHDRModeCapable ? display.isHDRModeEnabled : nil,
-            isMain: CGDisplayIsMain(display.id) != 0,
-            // Neither of these can be read from the display, so the saved state captures what
-            // FBD itself last applied — see `Settings.storedRotation`.
-            rotationDegrees: Settings.storedRotation(for: display.identityKey),
-            colourProfilePath: Settings.storedColourProfile(for: display.identityKey)
-        )
+        let state = DisplayStateSnapshot.capture(for: display, resolution: resolution, controller: controller)
         guard let data = try? JSONEncoder().encode(state) else {
             log.warning("saveCurrentState: encode failed for \(display.identityKey)")
             return
@@ -140,66 +101,25 @@ public final class ConfigProtectionController {
     /// A property the user selected but the display no longer exposes is
     /// skipped rather than forced — every step is individually guarded, so a
     /// display that lost a capability cannot be driven into an invalid state.
+    /// Re-apply the *selected* properties that this display exposes, for a
+    /// display that just (re)appeared. The apply itself lives on
+    /// `DisplayStateSnapshot` — the same code a named preset runs — with a small
+    /// delay before brightness so the mode switch settles.
+    /// No-op unless Settings.configProtectionEnabled and saved state exists.
     public func restoreIfNeeded(for display: Display, resolution: ResolutionController, controller: DisplayController) {
         guard Settings.configProtectionEnabled,
               let data = defaults.data(forKey: key(for: display.identityKey)),
-              let state = try? JSONDecoder().decode(SavedState.self, from: data) else {
+              let state = try? JSONDecoder().decode(DisplayStateSnapshot.self, from: data) else {
             return
         }
 
-        let applicable = applicableProperties(for: display)
-
-        if applicable.contains(.resolution) {
-            if let modeNumber = state.modeNumber,
-               let mode = resolution.modes(for: display).first(where: { $0.modeNumber == modeNumber }) {
-                resolution.applyMode(mode, to: display)
-                log.info("restored mode \(modeNumber) for \(display.identityKey)")
-            }
-        } else if applicable.contains(.refreshRate), let hz = state.refreshRate, hz > 0 {
-            // Only the refresh rate is protected: prefer the saved rate rather
-            // than a specific mode, which need not still be offered.
-            resolution.setRefreshRate(hz, for: display)
-            log.info("restored refresh rate \(hz) for \(display.identityKey)")
-        }
-
-        if applicable.contains(.preset),
-           let index = state.activePresetIndex,
-           display.isXDRCapable,
-           display.presets.indices.contains(index) {
-            controller.selectPreset(index, on: display)
-        }
-
-        if applicable.contains(.hdrMode), let enabled = state.isHDRModeEnabled, display.isHDRModeCapable {
-            _ = controller.setHDRMode(enabled, on: display)
-        }
-
-        if applicable.contains(.mainStatus), state.isMain == true, CGDisplayIsMain(display.id) == 0 {
-            _ = controller.setAsMainDisplay(display)
-        }
-
-        if applicable.contains(.rotation), let degrees = state.rotationDegrees {
-            if controller.setRotation(degrees, on: display) == nil {
-                log.warning("restore: rotation \(degrees) refused for \(display.identityKey)")
-            }
-        }
-
-        if applicable.contains(.colourProfile),
-           let path = state.colourProfilePath,
-           !path.isEmpty {
-            if !ColorProfileController().applyProfile(URL(fileURLWithPath: path), for: display) {
-                log.warning("restore: colour profile \(path) refused for \(display.identityKey)")
-            }
-        }
-
-        if applicable.contains(.brightness), let brightness = state.brightness {
-            let displayID = display.id
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                Task { @MainActor in
-                    guard let display = controller.display(withID: displayID) else { return }
-                    _ = controller.setBrightness(brightness, on: display)
-                }
-            }
-        }
+        state.apply(
+            to: display,
+            properties: applicableProperties(for: display),
+            resolution: resolution,
+            controller: controller,
+            brightnessDelay: 0.5
+        )
     }
 
     // MARK: - Observation

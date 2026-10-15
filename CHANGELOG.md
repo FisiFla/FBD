@@ -5,6 +5,34 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Added
+- **Named display presets: a display's whole configuration saved under a name, with an icon.**
+  FBD could recall a resolution (`config favourite`) and restore a set of protected properties on
+  reconnect, but it could not name and re-apply a display's *whole* configuration — which is what
+  BetterDisplay's presets and the Crisp review's feature list both call for. A preset records the
+  state `ConfigProtectionController` already knew how to capture — mode, refresh rate, brightness,
+  the XDR preset, HDR mode, rotation and the colour profile — under a name the user chooses and one
+  of a closed set of twelve SF Symbols, closed for the reason the menu-bar icon's set is: a symbol
+  name that fails to resolve would draw a blank row. Three surfaces, plus Shortcuts:
+  `fbdcli config preset <id> list|save|apply|delete`, a per-display **Display presets** section in
+  Settings → Displays (icon, name, the properties it carries, apply and delete), a quick apply menu
+  in the panel, and an `Apply Display Preset` App Intent. The store reuses the resolution-favourite
+  shape — one JSON array per display under `displayPresets.<identity>`, the key dropped when the
+  last preset goes — refuses a name already in use on that display, and applies through the same
+  path reconnect-restore uses.
+
+  Two choices are deliberate. A preset **does not** carry main-display status by default: applying
+  one must not silently move the menu bar out from under another display, so `mainStatus` is
+  restored only when it is asked for explicitly. And apply **reports** what it could not restore: a
+  preset can name properties a display cannot accept (brightness on a panel with no brightness path,
+  the XDR preset on a display that is not XDR-capable), and counting those as applied would be a
+  lie — `fbdcli` prints a `skipped:` line, the panel says so in its notice, and Settings names them
+  in the row.
+
+  The extraction that made it possible is `DisplayStateSnapshot`: the private `SavedState` struct
+  `ConfigProtectionController` wrote and read, made public. The stored blob is **byte-identical**, so
+  a configuration saved by an older FBD still restores.
+
 ## [1.7.0] - 2026-10-14
 
 BetterDisplay-parity work agreed at the Phase 3 gate. Scope, evidence and the

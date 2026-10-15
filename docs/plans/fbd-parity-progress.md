@@ -597,6 +597,60 @@ separate commit on the same branch.
   `UIDriver` also gains `windows` (FBD's windows with layer and bounds — the command that showed the status
   item has no window). `status-sweep` is marked superseded in place rather than deleted, so nothing that
   still calls it breaks silently.
+- **Named display presets** — the one item the Crisp review's value order still listed as unbuilt
+  (`docs/plans/reference-projects-freedisplay-crisp.md`, item 7). FBD could already recall a resolution
+  per slot and restore protected properties on reconnect, but it had no way to name and re-apply a
+  display's *whole* configuration.
+
+  The feature is built on an extraction rather than a new mechanism. `ConfigProtectionController` already
+  captured and re-applied exactly the state a preset needs — mode, refresh rate, brightness, the XDR
+  preset, HDR mode, main-display status, rotation and the colour profile — in a private `SavedState`
+  struct. That struct is now the public `DisplayStateSnapshot`, with `capture` and `apply` on it;
+  `ConfigProtectionController` calls the same two methods, so reconnect-restore and preset-apply cannot
+  drift apart. It was a **byte-compatible** move: the fields and their names are unchanged, so a blob an
+  older FBD wrote still decodes, which `ConfigProtectionControllerTests` pins.
+
+  What sits on top:
+
+  - `DisplayPreset` (id, name, symbol, the properties it carries, the snapshot) and a store that mirrors
+    `ModeFavourites` exactly — one JSON array per display under `displayPresets.<identity>`, saved order,
+    the key removed when the last preset goes. It refuses an empty name and a name already in use on that
+    display, case-insensitively, which is what makes `apply <name>` unambiguous.
+  - A **closed** symbol set (`DisplayPresetSymbol`, twelve SF names) for the same reason the menu-bar icon
+    is closed: a name that fails to resolve would draw a blank row. A stored name that no longer resolves
+    decodes to the default rather than failing the whole preset.
+  - `DisplayPresetApplier`, which intersects the preset's properties with what the display can actually
+    accept and returns both halves. `ProtectedProperties.available(for:)` already decided what a display
+    can report; the applier is where that becomes an honest result instead of a silent partial apply.
+  - Four surfaces: `fbdcli config preset <id> list|save|apply|delete`, the `POST`/`GET`/`DELETE` route
+    under `/api/config/preset`, a Settings → Displays section, a quick apply menu in the panel, and the
+    `Apply Display Preset` App Intent.
+
+  One deliberate default: `mainStatus` is **not** in a preset's property set. A preset restores a display's
+  own configuration; taking the menu bar off another display as a side effect of "apply Desk preset" is
+  not what anyone means by it, so it is restored only when named explicitly.
+
+  Verified as far as this machine allows.
+
+  - `swift test --disable-sandbox`: **910 + 146 tests, 0 failures**, exit 0. New: `DisplayPresetsTests`
+    (22), 13 router tests in `HTTPConfigRouteTests` (51 in the file), one executor round trip in
+    `HTTPExecutorTests`. Touched and still green: `ConfigProtectionControllerTests` (13 — including the
+    legacy-blob decode, which is what proves the snapshot extraction was format-compatible) and
+    `LocalizationTests` (5, the new strings in all three languages).
+  - The live path was exercised end to end against the built-in panel: `fbdcli config preset 1
+    list|save|apply|delete` (save → list → apply by name and in lower case → delete → delete again
+    returning 2), and the same four actions over `POST /api/config/preset` with the app running and
+    its API enabled through `fbdcli http on` — save, a duplicate refused 409, list, apply reporting
+    `unavailable: []`, and apply-after-delete replying `no preset`. The HTTP setting was turned back
+    off afterwards and the store left no residue (`displayPresets.*` absent from the suite).
+  - **`make ui-smoke` did not run here, and that is an environment fact, not a result.** The gate
+    needs Accessibility permission for the calling process, and a trust probe from this shell reports
+    `AXIsProcessTrusted = false`; every step fails at the AX read (`status-item-not-found`), with the
+    app itself up and running. Two things bound the risk that it would have caught something: the
+    gate's five steps never reach the presets section (panel opens, brightness slider, gear → Settings,
+    back, close), and the panel sizes it asserts are hardcoded constants in `StatusItemController`
+    (`settingsSize`, `mainSize`), not content-driven, so a section added inside Settings' scroll view
+    cannot move them. The section still wants a real look on a machine with the permission granted.
 
 
 
