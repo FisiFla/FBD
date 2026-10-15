@@ -32,6 +32,26 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   The extraction that made it possible is `DisplayStateSnapshot`: the private `SavedState` struct
   `ConfigProtectionController` wrote and read, made public. The stored blob is **byte-identical**, so
   a configuration saved by an older FBD still restores.
+- **The pointer can cross between displays whose edges do not line up.** macOS stops the pointer at an
+  edge no other display covers, so a short display beside a tall one — or one lowered out of line —
+  traps it in the gap between them. `Settings.edgeCrossingEnabled` (Settings → Displays, or
+  `fbdcli layout edge-crossing [on|off]`) carries it over instead: FBD watches pointer movement and,
+  when a push reaches an edge a neighbour's facing edge continues, lands the pointer just inside that
+  neighbour at the height it was pushed at.
+
+  Three things were measured rather than assumed, and each changed the design. **The pointer cannot be
+  polled for its direction:** macOS clamps it to the displays' bounds, so a pointer pinned at an edge
+  reports *zero* movement between samples — the push has to come from the event's own hardware delta
+  (`CGGetLastMouseDelta` is gone from the Swift SDK). **Warping needs no permission, and neither does
+  a mouse-moved monitor** — only *key* events need Accessibility, which is the trade
+  `CursorContainmentController` refuses for an event tap and this feature does not have to make. And
+  **a warp holds hardware input back for a quarter of a second** by default, which reads as the pointer
+  sticking, so the suppression interval is zeroed before each warp.
+
+  It fails closed. A neighbouring display that does not actually meet the edge means nothing happens —
+  a deliberate gap is respected, and the geometry refuses to move a pointer macOS would have crossed by
+  itself. It is inert with one display, and if the monitor never fires it simply does nothing: it can
+  never fight the user for the pointer. Off by default, like everything else in FBD that moves it.
 
 ## [1.7.0] - 2026-10-14
 

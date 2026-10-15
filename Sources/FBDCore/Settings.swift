@@ -32,6 +32,7 @@ public enum Settings {
         add("autoDisconnectBuiltInOnExternal", autoDisconnectBuiltInOnExternal)
         add("allowBuiltInDisconnectOnAffectedMacs", allowBuiltInDisconnectOnAffectedMacs)
         add("layoutProtectionEnabled", layoutProtectionEnabled)
+        add("edgeCrossingEnabled", edgeCrossingEnabled)
         add("showOfflineDisplays", showOfflineDisplays)
         add("enableDisconnectOption", enableDisconnectOption)
         add("experimentalCursorContainment", experimentalCursorContainment)
@@ -159,6 +160,14 @@ public enum Settings {
     /// Re-apply the saved display arrangement when the layout changes.
     @Storage(key: "layoutProtectionEnabled", defaultValue: false)
     public static var layoutProtectionEnabled: Bool
+
+    /// Move the pointer across displays whose facing edges do not line up.
+    ///
+    /// Off by default because it moves the user's pointer — the same reason
+    /// `experimentalCursorContainment` is off by default. It never fights the
+    /// user for the pointer, only carries it over an edge macOS would stop at.
+    @Storage(key: "edgeCrossingEnabled", defaultValue: false)
+    public static var edgeCrossingEnabled: Bool
 
     /// Show currently-offline displays in the Settings per-display tab.
     @Storage(key: "showOfflineDisplays", defaultValue: true)

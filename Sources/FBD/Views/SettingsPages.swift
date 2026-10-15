@@ -48,6 +48,9 @@ struct DisplaySettingsPage: View {
                     ArrangementGridView()
                         .padding(.horizontal, 12)
 
+                    edgeCrossingSection
+                        .padding(.horizontal, 12)
+
                     connectionManagementSection(displays)
                         .padding(.horizontal, 12)
 
@@ -112,6 +115,32 @@ struct DisplaySettingsPage: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Pointer crossing between displays whose edges do not line up (Crisp item 9).
+    ///
+    /// A plain toggle over a stored preference: the controller's own timer picks
+    /// the change up, so there is nothing to start or stop here.
+    private var edgeCrossingSection: some View {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            Toggle(
+                "Cross misaligned display edges",
+                isOn: bool(Settings.edgeCrossingEnabled) { Settings.edgeCrossingEnabled = $0 }
+            )
+            Text("Lets the pointer move between displays whose edges do not line up, instead of stopping at the gap.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The same shape as the page's own helper: the `@autoclosure @escaping
+    /// @Sendable` signatures are what keep the closure out of the main actor, and
+    /// without them SwiftUI's `Binding` init warns about a non-Sendable capture.
+    private func bool(
+        _ get: @autoclosure @escaping @Sendable () -> Bool,
+        set: @escaping @Sendable (Bool) -> Void
+    ) -> Binding<Bool> {
+        Binding(get: get, set: set)
     }
 
     private func run(_ action: ConnectionAction, _ displays: [Display]) {

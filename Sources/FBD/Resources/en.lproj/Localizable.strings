@@ -67,6 +67,8 @@
 "Brightness model" = "Brightness model";
 "Configuration protection" = "Configuration protection";
 "Connection management" = "Connection management";
+"Cross misaligned display edges" = "Cross misaligned display edges";
+"Lets the pointer move between displays whose edges do not line up, instead of stopping at the gap." = "Lets the pointer move between displays whose edges do not line up, instead of stopping at the gap.";
 "Custom OSD" = "Custom OSD";
 "DDC/CI cooldown" = "DDC/CI cooldown";
 "Display groups" = "Display groups";
