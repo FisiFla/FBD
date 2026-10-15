@@ -1036,7 +1036,7 @@ func cmdDisableEnable(displayID: CGDirectDisplayID, enabled: Bool) -> Int32 {
 @MainActor
 func cmdLayout(args: [String]) -> Int32 {
     guard let sub = args.first else {
-        print("fbdcli: layout: expected save, restore, or protect [on|off]")
+        print("fbdcli: layout: expected save, restore, protect, or edge-crossing [on|off]")
         return 1
     }
     let rest = Array(args.dropFirst())
@@ -1047,6 +1047,8 @@ func cmdLayout(args: [String]) -> Int32 {
         return cmdLayoutRestore()
     case "protect":
         return cmdLayoutProtect(args: rest)
+    case "edge-crossing":
+        return cmdLayoutEdgeCrossing(args: rest)
     default:
         print("fbdcli: layout: unknown subcommand '\(sub)'")
         return 1
@@ -1094,6 +1096,29 @@ func cmdLayoutProtect(args: [String]) -> Int32 {
         Settings.layoutProtectionEnabled = enabled
     }
     print("layout protection: \(Settings.layoutProtectionEnabled ? "on" : "off")")
+    return 0
+}
+
+/// `fbdcli layout edge-crossing [on|off]` — get or set pointer crossing between
+/// displays whose facing edges do not line up.
+///
+/// A setting, not a hardware write: the app picks it up within a couple of
+/// seconds and installs or removes its pointer monitor. Nothing else to report,
+/// so this mirrors `layout protect`.
+@MainActor
+func cmdLayoutEdgeCrossing(args: [String]) -> Int32 {
+    if let arg = args.first {
+        let enabled: Bool
+        switch arg {
+        case "on": enabled = true
+        case "off": enabled = false
+        default:
+            print("fbdcli: layout edge-crossing: expected on or off (got '\(arg)')")
+            return 1
+        }
+        Settings.edgeCrossingEnabled = enabled
+    }
+    print("edge crossing: \(Settings.edgeCrossingEnabled ? "on" : "off")")
     return 0
 }
 

@@ -51,6 +51,7 @@ Commands:
   layout save                   Save the current display arrangement
   layout restore                Restore the saved arrangement
   layout protect [on|off]       Get or set layout protection
+  layout edge-crossing [on|off] Get or set pointer crossing between misaligned displays
   group list                    List display groups and their members
   group create <name> [id...]   Create a group (member ids optional)
   group delete <name>           Delete a group

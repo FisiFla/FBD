@@ -45,7 +45,7 @@ FBD should rely on, so nothing is taken from it beyond "this feature exists".
 | Named display presets, with an icon | ✅ | ✅ | ✅ named presets, 12 icons, CLI · Settings · panel · App Intent | — |
 | Shortcuts / App Intents | — | ✅ broad | ✅ 9 intents, no input/disconnect action | **narrow gap** |
 | Arrangement canvas + main-display switch | ✅ | ✅ drag-to-arrange | ✅ `ArrangementGridView` | Crisp's is interactive |
-| **Edge-crossing pointer** between misaligned displays | — | ✅ | ✗ | **gap** |
+| **Edge-crossing pointer** between misaligned displays | — | ✅ | ✅ `EdgeCrossingMath` + a pointer monitor; Settings · CLI | — |
 | Disconnect displays, remembered across sleep/reboot | — | ✅ | ✅ per-display enable/disable + auto-disconnect built-in | close |
 | Input switching over DDC | — | ✅ in the menu | ✅ CLI + DDC only | **surface it in the UI** |
 | System toggles: Dark Mode / Night Shift / True Tone | Night Shift only | ✅ all three | ✅ Night Shift + True Tone | **gap: Dark Mode** |
@@ -159,7 +159,22 @@ sources linked. Paraphrased, the rules that bear on FBD:
    key's literal segments rather than the whole key — that still catches a rename. Their placeholders
    are argued from the value's type, not observed: none of those four strings renders on a default
    panel here.
-9. **Edge-crossing pointer** for displays whose edges do not line up.
+9. **Edge-crossing pointer** for displays whose edges do not line up — **done.** macOS stops the
+   pointer at an edge no other display covers, which strands it in the gap between a short display and
+   a tall one. FBD now watches pointer movement and carries it through such an edge, landing it just
+   inside the neighbouring display at the height it was pushed at. Two choices were forced by
+   measurement, and they are where this differs from Crisp's. **The push direction cannot come from
+   polling the pointer:** macOS clamps it to the displays' bounds, so a pointer pinned at an edge
+   reports no movement at all between samples (a probe warping past an edge read back clamped to the
+   display's edge), so the direction comes from the mouse-moved event's own hardware delta — and
+   `CGGetLastMouseDelta` is no longer in the Swift SDK. **The monitor needs no Accessibility grant,**
+   because only *key* events do; that is the trade `CursorContainmentController` refuses for a
+   `CGEventTap`, and it does not arise for a mouse-moved monitor. A third measured fact is in the code:
+   a warp holds hardware input back for a quarter of a second, which reads as the pointer sticking
+   until the event source's suppression interval is zeroed. Off by default
+   (`Settings.edgeCrossingEnabled`; Settings → Displays or `fbdcli layout edge-crossing [on|off]`). No
+   HTTP route and no App Intent: it is a preference, like `layout protect`, and it has none either.
+   A monitor that never fires leaves the feature inert rather than fighting the user for the pointer.
 10. **Smooth scaling / the HiDPI-crisp flow** — **settled: not doable within FBD's constraints.**
     Two routes exist and neither works here. Creating a mode through a private API is impossible on
     macOS 27: a fresh probe finds `SLSAddDisplayMode`, `SLSDisplayModeDescription` and

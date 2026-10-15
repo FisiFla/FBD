@@ -57,6 +57,9 @@ final class AppCore {
         virtualScreens.start()
         disconnect.start()
         layoutProtection.start()
+        // Pointer crossing between displays whose edges do not line up (Crisp
+        // item 9). Inert until the preference is on and there are two displays.
+        edgeCrossing.start()
         // Startup safe mode (BetterDisplay parity): when the user held Shift at
         // launch — or set FBD_SAFE_MODE — do NOT re-apply stored configuration
         // for the session. A bad custom EDID override or a stored
@@ -148,6 +151,7 @@ final class AppCore {
     let virtualScreens = VirtualScreenController.shared
     let disconnect = DisconnectController()
     let layoutProtection = LayoutProtectionController()
+    let edgeCrossing = EdgeCrossingController()
     let edid = EDIDController()
     let configProtection = ConfigProtectionController()
     let lockDim = LockDimController()

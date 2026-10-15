@@ -654,3 +654,59 @@ separate commit on the same branch.
 
 
 
+- **Pointer crossing between displays whose edges do not line up** — the last item the Crisp review's
+  value order still listed as unbuilt (`docs/plans/reference-projects-freedisplay-crisp.md`, item 9), and
+  the one of the two that remained that was not settled as not-doable. macOS stops the pointer at an edge
+  no other display covers, so a short display beside a tall one traps it in the gap.
+
+  `EdgeCrossingMath.landing(from:push:displays:slack:)` is the whole decision, pure and testable without
+  moving anyone's pointer: it finds the display the pointer is on — or the nearest one, because macOS
+  clamps the pointer a fraction past an edge, which is exactly where the feature matters — and for the
+  pushed edge offers each neighbour whose facing edge meets it within a point a landing point clamped
+  inside that neighbour, keeping the smallest slide along the shared axis. It returns nothing when macOS
+  would cross there by itself, when the edges do not meet (a deliberate gap is a gap), or when no display
+  is under the pointer.
+
+  `EdgeCrossingController` supplies the bounds, the events and the reconcile timer. Three measured facts
+  shaped it:
+
+  - **The push direction cannot come from polling.** A probe warping the pointer at and past an edge found
+    macOS clamping it to the displays' bounds — a warp to (-400,300) reads back as (0,300) — so a pointer
+    pinned at an edge reports zero movement between samples. The direction comes from the mouse-moved
+    event's own hardware delta. (`CGGetLastMouseDelta` is no longer in the Swift SDK: the overlay marks it
+    unavailable.)
+  - **A mouse-moved monitor needs no Accessibility grant,** only key events do. That is the trade
+    `CursorContainmentController` refuses for a `CGEventTap`, and it does not arise here, so this is a
+    monitor rather than a tap. If it never fires the feature is inert — it cannot fight the user.
+  - **A warp holds hardware input back for a quarter of a second** by default, which reads as the pointer
+    sticking. On macOS 27 only zeroing the event source's `localEventsSuppressionInterval` lifts it;
+    `CGAssociateMouseAndMouseCursorPosition` does not.
+
+  Off by default (`Settings.edgeCrossingEnabled`; Settings → Displays, or `fbdcli layout edge-crossing
+  [on|off]`). A 1.5 s reconcile timer installs or removes the monitor as the preference changes, because
+  the CLI writes it from another process and `UserDefaults` does not notify across processes — the same
+  reason AppCore polls for the HTTP server setting. Settings and CLI only: like `layout protect`, which
+  has none either, a preference gets no HTTP route, and it is not an App Intent.
+
+  Verified as far as this machine allows.
+
+  - `swift test --disable-sandbox`: **928 + 146 tests, 0 failures**, exit 0 — the 18 new
+    `EdgeCrossingMathTests` included, and `LocalizationTests` still green with the two new strings in all
+    three languages. `make app` builds `build/FBD.app` clean.
+  - The CLI path was exercised live: `layout edge-crossing` reports off by default, `on`/`off` set it and
+    read back, an unknown word is refused with exit 1, and a bare `layout` prints the usage line.
+  - **The monitor path was exercised end to end with a temporary second display**, because this Mac has
+    one. With a virtual display created through the running app's own API, the log shows
+    `edge crossing: watching the pointer across 2 display(s)`; toggling the preference off and on *from
+    the CLI process* produced that line a second time, which can only happen if the setting was picked up
+    across processes and the monitors were first removed and then installed again. With one display the
+    controller logs nothing at all — it removes its monitors rather than watching. Cleanup: the virtual
+    display was destroyed, the HTTP setting turned back off, and the store left no residue.
+  - **The warp itself is unverified here.** It needs two real displays *misaligned at an edge* and a
+    genuine hand movement — warps do not generate `NSEvent` moves, and synthesised events need the
+    Accessibility trust this shell does not have (`AXIsProcessTrusted()` is false). The geometry is pinned
+    by the 18 pure tests instead, including the invariant that every landing point lies inside the display
+    it crosses to, which is what makes a warp stick rather than being clamped straight back.
+  - `make ui-smoke` cannot run from this shell either (the same Accessibility fact, recorded above for
+    item 7). The one new UI surface is a toggle and a caption in Settings → Displays, which the gate's
+    five steps do not reach.

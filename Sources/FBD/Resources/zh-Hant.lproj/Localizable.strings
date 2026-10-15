@@ -66,6 +66,8 @@
 "Brightness model" = "亮度模型";
 "Configuration protection" = "設定保護";
 "Connection management" = "連線管理";
+"Cross misaligned display edges" = "讓指標跨越未對齊的顯示器邊緣";
+"Lets the pointer move between displays whose edges do not line up, instead of stopping at the gap." = "當相鄰顯示器的邊緣沒有對齊時，讓指標可以跨越過去，而不是停在缺口處。";
 "Custom OSD" = "自訂 OSD";
 "DDC/CI cooldown" = "DDC/CI 冷卻時間";
 "Display groups" = "顯示器群組";
