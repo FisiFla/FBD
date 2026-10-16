@@ -425,7 +425,6 @@ extension Notification.Name {
     static let fbdOpenSettings = Notification.Name("FBDOpenSettings")
     /// Posted when the Settings window closes.
     static let fbdSettingsClosed = Notification.Name("FBDSettingsClosed")
-    static let fbdPanelCloseRequested = Notification.Name("FBDPanelCloseRequested")
     /// Posted once at startup when DDC is unavailable under Rosetta.
     static let fbdRosettaWarningActive = Notification.Name("FBDRosettaWarningActive")
     /// Posted when virtual screen state changes (created/destroyed/reconnected).
