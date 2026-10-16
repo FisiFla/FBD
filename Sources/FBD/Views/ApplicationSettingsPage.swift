@@ -16,8 +16,8 @@ struct ApplicationSettingsPage: View {
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPane("Application") {
+            SettingsGroup {
                 Toggle("Launch at Login", isOn: launchAtLoginBinding)
                 Toggle("Show Rosetta warning", isOn: bool(Settings.showRosettaWarning) { Settings.showRosettaWarning = $0 })
                 Toggle("Enable connect/disconnect for displays", isOn: bool(Settings.enableDisconnectOption) { Settings.enableDisconnectOption = $0 })
@@ -34,7 +34,7 @@ struct ApplicationSettingsPage: View {
             brightnessSection
             lockDimSection
 
-            Section {
+            SettingsGroup {
                 SettingsRow(
                     title: "Cooldown between writes",
                     caption: "Minimum delay between consecutive DDC/CI writes per display."
@@ -50,7 +50,7 @@ struct ApplicationSettingsPage: View {
                 Label("DDC / CI", systemImage: "cable.connector")
             }
 
-            Section {
+            SettingsGroup {
                 Toggle("HTTP API", isOn: bool(Settings.httpServerEnabled) { Settings.httpServerEnabled = $0 })
                 SettingsRow(
                     title: "Port",
@@ -89,7 +89,7 @@ struct ApplicationSettingsPage: View {
                 Label("Integrations", systemImage: "network")
             }
 
-            Section {
+            SettingsGroup {
                 Toggle("Allow unsafe modes", isOn: bool(Settings.allowUnsafeInvalidModes) { Settings.allowUnsafeInvalidModes = $0 })
                 Text("Allows applying modes outside the safe-mode flag set — experimental.")
                     .font(.caption)
@@ -114,7 +114,7 @@ struct ApplicationSettingsPage: View {
                 Label("Virtual Displays & Layout", systemImage: "rectangle.3.group")
             }
 
-            Section {
+            SettingsGroup {
                 Toggle("Auto-apply saved EDID on connect", isOn: bool(Settings.autoApplyEDIDOverride) { Settings.autoApplyEDIDOverride = $0 })
                 Text("Re-applies a saved custom EDID whenever the display connects.")
                     .font(.caption)
@@ -136,7 +136,6 @@ struct ApplicationSettingsPage: View {
 
             AutomationSettingsView()
         }
-        .formStyle(.grouped)
         .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
     }
 
@@ -145,7 +144,7 @@ struct ApplicationSettingsPage: View {
     /// The knobs that shape the combined-brightness curve. Global rather than
     /// per-display, because they describe the model, not one monitor.
     private var brightnessModelSection: some View {
-        Section {
+        SettingsGroup {
             Toggle("Prefer hardware brightness control", isOn: prefs(\.preferHardwareControl))
             Text("When off, brightness is reached through software dimming rather than the display's own backlight.")
                 .font(.caption)
@@ -231,7 +230,7 @@ struct ApplicationSettingsPage: View {
     }
 
     private var brightnessSection: some View {
-        Section {
+        SettingsGroup {
             Toggle("Combined brightness (hardware + XDR)", isOn: bool(Settings.combinedBrightnessEnabled) { Settings.combinedBrightnessEnabled = $0 })
             Toggle("Software upscaling (Metal overlay)", isOn: bool(Settings.softwareUpscalingEnabled) { Settings.softwareUpscalingEnabled = $0 })
             Text("Used when native XDR upscaling is unavailable. Requires Screen Recording permission.")
@@ -259,7 +258,7 @@ struct ApplicationSettingsPage: View {
     }
 
     private var lockDimSection: some View {
-        Section {
+        SettingsGroup {
             Toggle("Dim display on screen saver or lock", isOn: bool(Settings.lockDimEnabled) { Settings.lockDimEnabled = $0 })
             Text("Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock.")
                 .font(.caption)

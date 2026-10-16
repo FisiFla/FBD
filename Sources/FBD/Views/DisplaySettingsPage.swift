@@ -25,19 +25,19 @@ struct DisplaySettingsPage: View {
         let shown = Settings.showOfflineDisplays ? displays : displays.filter(\.isOnline)
 
         return ScrollViewReader { proxy in
-            Form {
+            SettingsPane("Displays") {
                 if shown.isEmpty {
-                    Section {
+                    SettingsGroup {
                         Text("No displays")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                Section {
+                SettingsGroup {
                     ArrangementGridView()
                 } header: {
-                    Text("Arrangement")
+                    Label("Arrangement", systemImage: "rectangle.3.group")
                 }
 
                 edgeCrossingSection
@@ -52,8 +52,7 @@ struct DisplaySettingsPage: View {
                     DisplayPresetsSection(display: display)
                 }
             }
-            .formStyle(.grouped)
-            .onAppear {
+                .onAppear {
                 hasSavedArrangement = layoutProtection.hasSavedArrangement
                 guard let targetDisplayID,
                       shown.contains(where: { $0.id == targetDisplayID }) else { return }
@@ -71,7 +70,7 @@ struct DisplaySettingsPage: View {
     /// Bulk connect/disconnect, planned by the pure `ConnectionPlanner` and
     /// executed through the guarded `DisconnectController` chokepoint.
     private func connectionManagementSection(_ displays: [Display]) -> some View {
-        Section {
+        SettingsGroup {
             HStack(spacing: FBDTheme.spacingM) {
                 Button("Connect all") { run(.connectAll, displays) }
                     .controlSize(.small)
@@ -93,7 +92,7 @@ struct DisplaySettingsPage: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Connection management")
+            Label("Connection management", systemImage: "cable.connector")
         } footer: {
             Text("Disconnecting a display turns it off until it is re-enabled. The built-in display is never disconnected on Macs where it may not come back without a reboot.")
                 .fbdLeadingFooter()
@@ -113,7 +112,7 @@ struct DisplaySettingsPage: View {
     /// A plain toggle over a stored preference: the controller's own timer picks
     /// the change up, so there is nothing to start or stop here.
     private var edgeCrossingSection: some View {
-        Section {
+        SettingsGroup {
             Toggle(
                 "Cross misaligned display edges",
                 isOn: bool(Settings.edgeCrossingEnabled) { Settings.edgeCrossingEnabled = $0 }
@@ -183,7 +182,7 @@ private struct DisplayProtectionSection: View {
     }
 
     var body: some View {
-        Section {
+        SettingsGroup {
             ForEach(ProtectedPropertyLabels.ordered, id: \.rawValue) { property in
                 let isAvailable = available.contains(property)
                 Toggle(ProtectedPropertyLabels.label(for: property), isOn: binding(for: property))
@@ -219,7 +218,7 @@ private struct DisplayFavouritesSection: View {
     @State private var message: String?
 
     var body: some View {
-        Section {
+        SettingsGroup {
             ForEach(1...ModeFavourites.slotCount, id: \.self) { slot in
                 let favourite = ModeFavourites.favourite(slot: slot, for: display.identityKey)
                 HStack(spacing: FBDTheme.spacingM) {
@@ -298,7 +297,7 @@ private struct DisplayPresetsSection: View {
     @State private var message: String?
 
     var body: some View {
-        Section {
+        SettingsGroup {
             if presets.isEmpty {
                 Text("No presets saved.")
                     .font(.caption)

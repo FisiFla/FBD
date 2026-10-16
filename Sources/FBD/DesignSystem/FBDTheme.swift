@@ -35,6 +35,11 @@ enum FBDTheme {
     static let tileSize: CGFloat = 44
     static let maxHeightFraction: CGFloat = 0.85
 
+    // MARK: Settings window
+
+    static let settingsPanePadding: CGFloat = 24
+    static let settingsPaneMaxWidth: CGFloat = 640
+
     enum Font {
         static let displayName = SwiftUI.Font.system(size: 13, weight: .semibold)
         static let secondary = SwiftUI.Font.system(size: 11)

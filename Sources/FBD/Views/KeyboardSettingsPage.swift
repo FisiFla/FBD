@@ -8,8 +8,8 @@ struct KeyboardSettingsPage: View {
     @ObservedObject private var settingsObserver = SettingsObserver.shared
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPane("Keyboard") {
+            SettingsGroup {
                 Toggle("Intercept media keys", isOn: Binding(
                     get: { Settings.interceptMediaKeys },
                     set: { Settings.interceptMediaKeys = $0 }
@@ -26,7 +26,7 @@ struct KeyboardSettingsPage: View {
                 Label("Media keys", systemImage: "keyboard")
             }
 
-            Section {
+            SettingsGroup {
                 Picker("Brightness and volume keys affect", selection: targetBinding) {
                     ForEach(KeyboardControlTarget.allCases, id: \.self) { target in
                         Text(label(for: target)).tag(target)
@@ -39,7 +39,6 @@ struct KeyboardSettingsPage: View {
                 Label("Keyboard control target", systemImage: "cursorarrow.rays")
             }
         }
-        .formStyle(.grouped)
     }
 
     private var targetBinding: Binding<KeyboardControlTarget> {

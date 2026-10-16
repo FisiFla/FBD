@@ -64,6 +64,17 @@ struct SettingsView: View {
             }
         }
 
+        var tint: Color {
+            switch self {
+            case .displays: return .blue
+            case .groups: return .purple
+            case .application: return .gray
+            case .menu: return .orange
+            case .keyboard: return .teal
+            case .about: return .indigo
+            }
+        }
+
         /// Resolves a page from a caller-supplied name, still accepting the tab
         /// names that predate the sidebar so existing callers keep working.
         static func named(_ raw: String?) -> SettingsPage {
@@ -96,6 +107,7 @@ struct SettingsView: View {
         NavigationSplitView {
             List(SettingsPage.allCases, selection: $page) { item in
                 Label(item.title, systemImage: item.symbol)
+                    .labelStyle(FBDSidebarLabelStyle(tint: item.tint))
                     .tag(item)
                     .accessibilityLabel(item.settingsLabel)
             }

@@ -24,7 +24,7 @@ struct PerDisplayCardView: View {
     @State private var xdrSyncRequest = 0
 
     var body: some View {
-        Section {
+        SettingsGroup {
             if display.isOnline {
                 BrightnessSliderView(display: display)
                     // Scroll anchor for DisplaySettingsPage: one concrete first row per display
