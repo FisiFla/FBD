@@ -69,11 +69,12 @@ public enum DDC {
     // MARK: VCP read
 
     /// [0x82, 0x01, code, chk] — "get VCP feature" payload (m1ddc `prepareDDCRead`).
-    /// m1ddc's read checksum is 0x6E ^ bytes, i.e. WITHOUT the 0x51 term the write
-    /// checksum has; it is reproduced as-is because that is what is known to work.
+    /// m1ddc's read checksum omits the 0x51 term its write checksum has; the DDC/CI spec
+    /// (and Lunar) include it. Monitors that work with m1ddc evidently ignore the read
+    /// checksum, so the spec-correct form is the one that also satisfies strict monitors.
     public static func readVCPRequest(code: UInt8) -> [UInt8] {
         let body: [UInt8] = [0x82, 0x01, code]
-        return body + [checksum(body, includeSource: false)]
+        return body + [checksum(body)]
     }
 
     /// Bytes to read back for a VCP reply (m1ddc reads 12).

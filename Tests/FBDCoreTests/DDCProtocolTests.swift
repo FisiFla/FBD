@@ -29,10 +29,10 @@ final class DDCProtocolTests: XCTestCase {
 
     // MARK: - VCP read request
 
-    func testReadVCPRequestMatchesM1DDCGetFeature() {
-        // m1ddc: [0x82, 0x01, code, 0x6E ^ 0x82 ^ 0x01 ^ code] -- no 0x51 term on reads.
-        // 0x6E^0x82^0x01^0x10 = 0xFD
-        XCTAssertEqual(DDC.readVCPRequest(code: 0x10), [0x82, 0x01, 0x10, 0xFD])
+    func testReadVCPRequestIsSpecFramedGetFeature() {
+        // Payload as m1ddc, checksum per DDC/CI: 0x6E ^ 0x51 ^ 0x82 ^ 0x01 ^ code.
+        // 0x6E^0x51^0x82^0x01^0x10 = 0xAC
+        XCTAssertEqual(DDC.readVCPRequest(code: 0x10), [0x82, 0x01, 0x10, 0xAC])
     }
 
     // MARK: - VCP reply parsing
