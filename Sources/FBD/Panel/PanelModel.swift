@@ -31,14 +31,19 @@ final class PanelModel: ObservableObject {
     }
 
     static func live() -> PanelModel {
-        let groups = DisplayGroupsController()
         let model = PanelModel(
             displays: DisplayController.shared.displays,
             toggleBackend: SystemQuickToggleBackend(),
-            counts: { (VirtualScreenController.shared.screens.count, groups.groups.count) }
+            counts: { (VirtualScreenController.shared.screens.count, liveGroupCount()) }
         )
         model.observeSystem()
         return model
+    }
+
+    /// Reads the persisted groups afresh on every call: `GroupsPage` edits them
+    /// through its own `DisplayGroupsController`, so one held here would go stale.
+    static func liveGroupCount(defaults: UserDefaults = FBDCore.Settings.defaults) -> Int {
+        DisplayGroupsController(defaults: defaults).groups.count
     }
 
     // MARK: Navigation

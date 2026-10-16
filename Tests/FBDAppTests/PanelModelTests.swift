@@ -22,6 +22,16 @@ final class PanelModelTests: XCTestCase {
         PanelModel(displays: displays, toggleBackend: toggles, counts: { (2, 1) })
     }
 
+    func testLiveGroupCountSeesGroupsCreatedElsewhere() {
+        let suite = "PanelModelTests.groups.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(PanelModel.liveGroupCount(defaults: defaults), 0)
+        // GroupsPage owns its own controller; the count must still follow it.
+        DisplayGroupsController(defaults: defaults).createGroup(name: "Desk")
+        XCTAssertEqual(PanelModel.liveGroupCount(defaults: defaults), 1)
+    }
+
     func testStartsAtHomeAndBackIsNoOpThere() {
         let m = makeModel()
         XCTAssertEqual(m.route, .home)
