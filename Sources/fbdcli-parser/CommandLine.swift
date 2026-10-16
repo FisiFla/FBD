@@ -66,15 +66,45 @@ public enum ParseResult: Equatable {
 /// Pure argument parsing for fbdcli.
 public enum CLICommandLine {
     /// Parse raw CLI arguments (already dropped from the process name).
-    /// `--direct` may appear anywhere and is stripped before matching.
+    /// `--direct` is a top-level flag: it may appear anywhere among the
+    /// command's own arguments, but never inside a free-form payload
+    /// (`automation add <id> <event> shell|url|notify <payload…>`), where it
+    /// is part of the user's script and must reach the rule verbatim.
     public static func parse(_ arguments: [String]) -> ParseResult {
-        var args = arguments
-        let direct = args.contains("--direct")
-        args.removeAll { $0 == "--direct" }
+        let limit = payloadStart(arguments) ?? arguments.count
+        var direct = false
+        var args: [String] = []
+        for (index, argument) in arguments.enumerated() {
+            if index < limit, argument == "--direct" {
+                direct = true
+            } else {
+                args.append(argument)
+            }
+        }
         guard let raw = args.first else { return .usage }
         if raw == "help" { return .help }
         guard let command = Command(rawValue: raw) else { return .unknown(raw) }
         return .command(command, raw: args, direct: direct)
+    }
+
+    /// Index of the first free-form payload token, or nil when the arguments
+    /// carry none. Only `automation add … <shell|url|notify> <payload…>` has one.
+    static func payloadStart(_ arguments: [String]) -> Int? {
+        let words = arguments.enumerated().filter { $0.element != "--direct" }
+        guard words.count >= 2, words[0].element == "automation", words[1].element == "add" else {
+            return nil
+        }
+        let kinds: Set<String> = ["shell", "url", "notify"]
+        return words.dropFirst(2).first { kinds.contains($0.element) }?.offset
+    }
+
+    /// True when the invocation asks for `--json` output. Only `list` and
+    /// `info` implement JSON, and only in direct mode (the HTTP-routed
+    /// versions print the human format), so for those two the flag selects
+    /// direct execution. For every other command `--json` is not a flag and
+    /// must not change how the command is routed.
+    public static func wantsDirectJSON(_ command: Command, raw: [String]) -> Bool {
+        (command == .list || command == .info) && raw.dropFirst().contains("--json")
     }
 }
 

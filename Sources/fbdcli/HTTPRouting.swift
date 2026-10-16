@@ -15,10 +15,24 @@ enum HTTPRouting {
     /// the plan builder (the tested single source); no second list to drift.
     static let routable: Set<Command> = HTTPRoutingPlanBuilder.supportedCommands
 
-    /// Route `command` over HTTP. Returns the exit code, or nil when the app
-    /// is not running (caller falls back to direct execution).
+    /// Route `command` over HTTP. Returns the exit code, or nil only when the
+    /// app is not listening (caller falls back to direct execution). An app
+    /// that is up but erroring, slow or rejecting the token yields exit 2.
     static func route(_ command: Command, args: [String]) -> Int32? {
-        guard HTTPAPIClient.isAppRunning() else { return nil }
+        switch HTTPAPIClient.probe() {
+        case .notRunning:
+            return nil
+        case .running:
+            break
+        case .unauthorized:
+            print("fbdcli: the app rejected the API token (HTTP 401). Not falling back to direct control; "
+                + "check the token with `fbdcli auth-token`, or pass --direct to bypass the app.")
+            return 2
+        case .unresponsive(let reason):
+            print("fbdcli: the app's HTTP API is up but not usable (\(reason)). Not falling back to direct "
+                + "control while the app may own the display bus; pass --direct to override.")
+            return 2
+        }
         let rest = Array(args.dropFirst())
         switch command {
         case .list: return routedList()
