@@ -3,8 +3,12 @@
 // Subcommands:
 //   click <x> <y>             Post a left mouse click at screen coordinates.
 //   key <keycode>             Post a key down+up (e.g. 53 = Escape).
-//   panel-state               Print "none" | "main" | "settings" for the
-//                             FBD panel (main = 460x650, settings = 460x860).
+//   panel-state               Print "none" | "open" for the FBD popover.
+//   trusted                   Exit 0 if this process has Accessibility access.
+//   ax-id <prefix>            Print "x,y,w,h" of the first FBD AX element whose
+//                             identifier starts with <prefix>.
+//   window-titled <title>     Exit 0 if FBD has a window titled <title>.
+//   close-window <title>      Press the close button of that window.
 //   ax-frame <desc>           Print "x,y,w,h" of the first FBD-process AX
 //                             element whose accessibility description
 //                             contains <desc> (screen coordinates).
@@ -23,6 +27,11 @@ import Foundation
 
 func postClick(_ x: CGFloat, _ y: CGFloat) {
     let point = CGPoint(x: x, y: y)
+    // Arrive first, as a pointer does: SwiftUI controls in the non-activating popover
+    // track hover, and a click teleported onto one can be swallowed.
+    CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)!
+        .post(tap: .cghidEventTap)
+    usleep(150_000)
     let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left)!
     let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left)!
     down.post(tap: .cghidEventTap)
@@ -56,20 +65,18 @@ func fbdPanelWindows() -> [[String: Any]] {
     }
 }
 
+/// The popover sizes itself to its page and Settings is a separate window, so the
+/// panel's only states are shown or not.
 func panelState() -> String {
-    let windows = fbdPanelWindows()
-    guard !windows.isEmpty else { return "none" }
-    // The settings page grows the panel to 860; the main page is 650.
-    let bounds = windows.first?[kCGWindowBounds as String] as? [String: Any] ?? [:]
-    let height = bounds["Height"] as? Int ?? 0
-    return height >= 800 ? "settings" : "main"
+    fbdPanelWindows().isEmpty ? "none" : "open"
 }
 
 // MARK: - Accessibility
 
+/// Prefers this checkout's `build/FBD.app`: an installed copy shares the bundle id.
 func fbdPid() -> pid_t? {
-    NSWorkspace.shared.runningApplications
-        .first { $0.bundleIdentifier == "dev.fisifla.fbd" }?
+    let fbds = NSWorkspace.shared.runningApplications.filter { $0.bundleIdentifier == "dev.fisifla.fbd" }
+    return (fbds.first { $0.bundleURL?.path.hasSuffix("/build/FBD.app") == true } ?? fbds.first)?
         .processIdentifier
 }
 
@@ -130,6 +137,32 @@ func findFrame(descriptionContains needle: String) -> CGRect? {
         usleep(500_000)
     }
     return nil
+}
+
+/// Depth-first search for the first element whose identifier starts with `prefix`.
+/// Deeper than the description search: page content sits inside a scroll view.
+func findElement(_ element: AXUIElement, identifierPrefix prefix: String, depth: Int) -> AXUIElement? {
+    if depth > 25 { return nil }
+    if axString(element, kAXIdentifierAttribute as String).hasPrefix(prefix) { return element }
+    var childrenRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+          let children = childrenRef as? [AXUIElement] else { return nil }
+    for child in children {
+        if let found = findElement(child, identifierPrefix: prefix, depth: depth + 1) { return found }
+    }
+    return nil
+}
+
+func fbdWindows() -> [AXUIElement] {
+    guard let pid = fbdPid() else { return [] }
+    var windowsRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &windowsRef) == .success
+    else { return [] }
+    return windowsRef as? [AXUIElement] ?? []
+}
+
+func window(titled title: String) -> AXUIElement? {
+    fbdWindows().first { axString($0, kAXTitleAttribute as String) == title }
 }
 
 // MARK: - Accessibility dump
@@ -214,7 +247,7 @@ func statusSweep(maxX: CGFloat) -> Int {
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    print("usage: UIDriver <click|key|panel-state|ax-frame|ax-dump|status-frame|windows|status-sweep> ...")
+    print("usage: UIDriver <click|key|panel-state|trusted|ax-frame|ax-id|ax-dump|status-frame|windows|window-titled|close-window|status-sweep> ...")
     exit(2)
 }
 
@@ -245,6 +278,12 @@ case "key":
 
 case "panel-state":
     print(panelState())
+
+case "trusted":
+    // Accessibility is granted to the calling terminal; without it every AX lookup is empty.
+    let trusted = AXIsProcessTrusted()
+    print(trusted ? "trusted" : "not-trusted")
+    exit(trusted ? 0 : 1)
 
 case "windows":
     // Optional owner filter. The app owns FBD's panel, but its HUD, PiP and stream
@@ -314,6 +353,31 @@ case "ax-frame":
         print("not-found")
         exit(1)
     }
+
+case "ax-id":
+    guard args.count >= 3 else { exit(2) }
+    for _ in 0..<6 {
+        for window in fbdWindows() {
+            if let element = findElement(window, identifierPrefix: args[2], depth: 0), let frame = axFrame(element) {
+                print("\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height))")
+                exit(0)
+            }
+        }
+        usleep(500_000)
+    }
+    print("not-found")
+    exit(1)
+
+case "window-titled":
+    guard args.count >= 3 else { exit(2) }
+    exit(window(titled: args[2]) == nil ? 1 : 0)
+
+case "close-window":
+    guard args.count >= 3, let target = window(titled: args[2]) else { exit(1) }
+    var buttonRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(target, kAXCloseButtonAttribute as CFString, &buttonRef) == .success,
+          let buttonRef, CFGetTypeID(buttonRef) == AXUIElementGetTypeID() else { exit(1) }
+    exit(AXUIElementPerformAction(unsafeBitCast(buttonRef, to: AXUIElement.self), kAXPressAction as CFString) == .success ? 0 : 1)
 
 case "status-sweep":
     let maxX = args.count >= 3 ? CGFloat(Double(args[2]) ?? 1710) : 1710
