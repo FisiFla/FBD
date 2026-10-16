@@ -106,4 +106,15 @@ final class VirtualDisplayRegistryTests: XCTestCase {
     func testOrdinaryExternalDisplayIsNotVirtual() {
         XCTAssertFalse(makeDisplay(id: 0x1234_5678).isVirtual)
     }
+
+    func testPruneDropsLiveIDReusedByARealMonitor() {
+        let registry = VirtualDisplayRegistry()
+        registry.register(0x1111_1111)
+        registry.register(0x2222_2222)
+
+        registry.prune(keeping: [0x1111_1111, 0x2222_2222], isStillVirtual: { $0 == 0x1111_1111 })
+
+        XCTAssertTrue(registry.contains(0x1111_1111))
+        XCTAssertFalse(registry.contains(0x2222_2222))
+    }
 }

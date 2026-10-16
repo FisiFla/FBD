@@ -180,7 +180,22 @@ public final class CombinedBrightness {
             // Above the ceiling the curve keeps dimming off, and a boost and a dim would fight
             // each other, so any dim the dimming zone applied is released here.
             applySoftwareDim(1, on: display)
-            return xdr.setUpscaleTarget(cappedUpscaleNits(nits, ceiling: Double(hardwareMax)), for: display)
+            let target = cappedUpscaleNits(nits, ceiling: Double(hardwareMax))
+            if xdr.setUpscaleTarget(target, for: display) {
+                return true
+            }
+            // Native preset write failed (write-protected slots on macOS 27): drive the same
+            // request through the software boost so slider drags above the ceiling still work.
+            guard Settings.softwareUpscalingEnabled, hardwareMax > 0, target > hardwareMax else {
+                return false
+            }
+            log.warning("set: native XDR write failed for \(display.id); using software boost")
+            let factor = boostFactor(from: Double(target) / Double(hardwareMax), value: clamped, ceiling: Double(hardwareMax))
+            let ok = withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
+            if ok {
+                display.updateSoftwareBoost(true, targetNits: target)
+            }
+            return ok
         case .softwareBoost(let factor):
             log.warning("set: native XDR upscaling unavailable for \(display.id); using software boost")
             // A boost brightens and a dim darkens: they would fight, so the dim goes.
