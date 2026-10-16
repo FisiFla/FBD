@@ -27,6 +27,20 @@ enum FBDTheme {
     /// itself or content slides under the titlebar.
     static let titlebarHeight: CGFloat = 28
 
+    // MARK: Popover (UI revamp)
+
+    static let panelWidth: CGFloat = 340
+    static let rowHeight: CGFloat = 32
+    static let chipSize: CGFloat = 26
+    static let tileSize: CGFloat = 44
+    static let maxHeightFraction: CGFloat = 0.85
+
+    enum Font {
+        static let displayName = SwiftUI.Font.system(size: 13, weight: .semibold)
+        static let secondary = SwiftUI.Font.system(size: 11)
+        static let sectionHeader = SwiftUI.Font.system(size: 11, weight: .semibold)
+    }
+
     // MARK: Motion
 
     static let animationFast = Animation.easeOut(duration: 0.12)
