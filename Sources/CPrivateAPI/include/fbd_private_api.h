@@ -76,7 +76,9 @@ typedef struct __IOAVService *IOAVServiceRef;
 /* Out-parameter form returning the raw EDID bytes, per MonitorControl/Lunar; the old
    one-argument form let the API write through whatever pointer was in the second register. */
 IOReturn IOAVServiceCopyEDID(IOAVServiceRef service, CFDataRef *edid);
-kern_return_t IOAVServiceSetVirtualEDIDMode(IOAVServiceRef service, CFDictionaryRef edid);
+/* From disassembly (macOS 27, arm64e): a 32-bit mode plus optional raw EDID bytes, passed to
+   IOConnectCallMethod selector 23. The meaning of `mode` is unknown; see setVirtualEDID. */
+kern_return_t IOAVServiceSetVirtualEDIDMode(IOAVServiceRef service, uint32_t mode, CFDataRef edid);
 /* 5-argument form, per m1ddc (github.com/waydabber/m1ddc, sources/i2c.m):
    chipAddress = I2C device (0x37 DDC, 0x50 EDID); offset/dataAddress = the byte put on the
    wire after it (0x51 for DDC/CI). The old 4-argument declaration dropped one of them. */

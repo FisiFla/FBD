@@ -12,11 +12,10 @@ import AppKit
 /// EDID export and override support.
 ///
 /// Apple Silicon: the display's current EDID is read through the private
-/// IOAVService API (`IOAVServiceCopyEDID`) and an override is installed as a
-/// *virtual* EDID via `IOAVServiceSetVirtualEDIDMode` with
-/// `{"IODisplayEDID": data}` — the OS then sees the display's capabilities
-/// through the override. The virtual EDID is per-connection and reverts
-/// naturally on reconnect/reboot.
+/// IOAVService API (`IOAVServiceCopyEDID`). Overrides would be installed as a
+/// *virtual* EDID via `IOAVServiceSetVirtualEDIDMode`, but that path is disabled
+/// until its mode values are verified (see `IOAVServiceAPI.setVirtualEDID`), so
+/// applying an override currently fails.
 ///
 /// Intel: only export is supported (public IOKit fallback). Overrides would
 /// require chunked raw I2C EDID writes to address 0x50 over the IOAVService
@@ -119,7 +118,7 @@ public final class EDIDController {
     // MARK: - Override
 
     /// Apply a custom EDID (override). Apple Silicon: installs a virtual EDID
-    /// via `IOAVServiceSetVirtualEDIDMode` with {"IODisplayEDID": data} and
+    /// via `IOAVServiceAPI.setVirtualEDID` (currently disabled, so this returns false) and
     /// persists it per display identity. Intel: the chunked I2C EDID write
     /// implementation is a documented future extension — returns false with
     /// a log (best-effort; requires an IOAVService).
@@ -291,8 +290,7 @@ public final class EDIDController {
             return false
         }
         defer { releaseAVService(service) }
-        let dict = ["IODisplayEDID": edid as NSData] as CFDictionary
-        return IOAVServiceAPI.setVirtualEDIDMode(dict, service: service)
+        return IOAVServiceAPI.setVirtualEDID(edid, service: service)
     }
 
     /// Release an IOAVServiceRef (CF type; mirrors ExternalController's

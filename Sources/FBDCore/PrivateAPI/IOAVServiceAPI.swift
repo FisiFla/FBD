@@ -225,16 +225,12 @@ public enum IOAVServiceAPI {
         return data as Data
     }
 
-    /// Install a virtual EDID on the display (Apple Silicon; the OS then sees
-    /// the display's capabilities through this EDID). Pass the original EDID
-    /// dictionary to restore factory behavior.
-    @discardableResult
-    public static func setVirtualEDIDMode(_ edid: CFDictionary, service: IOAVServiceRef) -> Bool {
-        let status = IOAVServiceSetVirtualEDIDMode(service, edid)
-        if status != KERN_SUCCESS {
-            log.debug("IOAVServiceSetVirtualEDIDMode failed: \(status)")
-        }
-        return status == KERN_SUCCESS
+    /// Install a virtual EDID on the display. Disabled: `IOAVServiceSetVirtualEDIDMode` takes a
+    /// mode whose values are undocumented and unmeasured, and a wrong guess can blank the
+    /// display. Fails closed until a mode is verified on hardware (issue #7).
+    public static func setVirtualEDID(_ edid: Data, service: IOAVServiceRef) -> Bool {
+        log.error("Virtual EDID install is disabled: IOAVServiceSetVirtualEDIDMode mode values are unverified")
+        return false
     }
 
     public static var isAppleSilicon: Bool {
