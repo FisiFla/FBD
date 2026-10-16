@@ -288,7 +288,7 @@ public enum HTTPRouter {
                 do {
                     _ = try LUTCubeParser.parse(contentsOf: URL(fileURLWithPath: lutPath))
                 } catch {
-                    return .error(400, "LUT '\(lutPath)' is not usable: \(error)")
+                    return .error(400, "LUT is not usable")
                 }
             }
             // The sharpening/geometry fields are optional; their ranges are

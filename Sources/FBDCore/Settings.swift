@@ -274,26 +274,46 @@ public enum Settings {
     @Storage(key: "httpServerActivePort", defaultValue: 0)
     public static var httpServerActivePort: Int
 
-    /// Bearer token for the HTTP control API, generated on first access and
-    /// persisted. The CLI reads the same defaults domain, so routing works
-    /// without any user setup.
-    public static var httpAPIToken: String {
-        if let token = defaults.string(forKey: "httpAPIToken"), !token.isEmpty {
+    /// Where secrets live (Keychain); swapped for an in-memory fake in tests.
+    static var secretStore: SecretStore = KeychainSecretStore()
+
+    /// Read a secret from `store`, moving any legacy plaintext copy out of
+    /// `defaults` into it first. If the move fails the legacy value is kept
+    /// (and returned) rather than lost.
+    static func secret(account: String, store: SecretStore, defaults: UserDefaults) -> String? {
+        if let value = store.read(account: account), !value.isEmpty { return value }
+        guard let legacy = defaults.string(forKey: account), !legacy.isEmpty else { return nil }
+        if store.write(legacy, account: account) {
+            defaults.removeObject(forKey: account)
+        }
+        return legacy
+    }
+
+    /// Existing token, or a fresh 256-bit one persisted to `store`. Fails
+    /// closed: returns "" (API unusable, every request 401) if secure random
+    /// bytes or persistence are unavailable — never a guessable fallback.
+    static func apiToken(store: SecretStore, defaults: UserDefaults) -> String {
+        if let token = secret(account: "httpAPIToken", store: store, defaults: defaults) {
             return token
         }
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
-            // Extremely unlikely; fall back to a time-seeded token rather
-            // than failing closed on a localhost-only API. Persist it so the
-            // app and CLI agree on the token instead of regenerating it.
-            let seed = "\(Date().timeIntervalSince1970)-\(ProcessInfo.processInfo.processIdentifier)"
-            let token = Data(seed.utf8).base64EncodedString()
-            defaults.set(token, forKey: "httpAPIToken")
-            return token
+            return ""
         }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
-        defaults.set(token, forKey: "httpAPIToken")
+        guard store.write(token, account: "httpAPIToken") else {
+            // Lost a race with the other process (app vs CLI), or the
+            // Keychain is unavailable: adopt whatever is stored, else fail.
+            return store.read(account: "httpAPIToken") ?? ""
+        }
         return token
+    }
+
+    /// Bearer token for the HTTP control API, generated on first access and
+    /// kept in the Keychain (shared with the CLI). Empty = unavailable; the
+    /// API then rejects every request.
+    public static var httpAPIToken: String {
+        apiToken(store: secretStore, defaults: defaults)
     }
 
     /// Show the custom brightness/volume OSD overlay.
@@ -330,9 +350,19 @@ public enum Settings {
     @Storage(key: "customOSDEnabled", defaultValue: true)
     public static var customOSDEnabled: Bool
 
-    /// Persisted LG webOS client key (granted on first pairing).
-    @Storage(key: "tvLGClientKey", defaultValue: "")
-    public static var tvLGClientKey: String
+    /// Persisted LG webOS client key (granted on first pairing). Kept in the
+    /// Keychain; a legacy plaintext defaults value is migrated on first read.
+    public static var tvLGClientKey: String {
+        get { secret(account: "tvLGClientKey", store: secretStore, defaults: defaults) ?? "" }
+        set {
+            if newValue.isEmpty {
+                secretStore.delete(account: "tvLGClientKey")
+            } else {
+                secretStore.write(newValue, account: "tvLGClientKey")
+            }
+            defaults.removeObject(forKey: "tvLGClientKey")
+        }
+    }
 
     // MARK: EDID & config protection (Tier 4)
 
