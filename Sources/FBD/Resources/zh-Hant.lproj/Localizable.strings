@@ -408,3 +408,15 @@
 /* Task 4 */
 "FBD Settings" = "FBD 設定";
 "All Modes" = "所有模式";
+
+/* Task 8 */
+"Resolution" = "解析度";
+"Refresh rate" = "更新率";
+"Brightness" = "亮度";
+"XDR preset" = "XDR 預設";
+"Main display" = "主顯示器";
+"Rotation" = "旋轉";
+"Colour profile" = "色彩描述檔";
+"Arrangement" = "排列";
+"empty" = "空";
+"This display does not report %@." = "此顯示器不提供「%@」。";

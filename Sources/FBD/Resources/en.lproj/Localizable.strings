@@ -412,3 +412,15 @@
 /* Task 4 */
 "FBD Settings" = "FBD Settings";
 "All Modes" = "All Modes";
+
+/* Task 8 */
+"Resolution" = "Resolution";
+"Refresh rate" = "Refresh rate";
+"Brightness" = "Brightness";
+"XDR preset" = "XDR preset";
+"Main display" = "Main display";
+"Rotation" = "Rotation";
+"Colour profile" = "Colour profile";
+"Arrangement" = "Arrangement";
+"empty" = "empty";
+"This display does not report %@." = "This display does not report %@.";
