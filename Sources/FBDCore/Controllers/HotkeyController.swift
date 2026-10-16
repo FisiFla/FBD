@@ -215,38 +215,23 @@ public final class HotkeyController {
             guard let volumeTarget = decision.volumeTarget else { return false }
             switch volumeTarget {
             case .display:
+                // This runs inside the CGEventTap callback, which the system disables if it
+                // stalls (tapDisabledByTimeout). DDC reads block for tens of ms each plus
+                // retries, so they never happen here: use a recent snapshot, or read
+                // off-thread and apply this press when the read lands. The key is consumed
+                // either way.
                 for display in targetDisplays {
-                    let controls = displayController.readDDCControls(for: display)
-                    // The value the display was moved *to*, so an attached device can
-                    // follow it without re-reading the display.
-                    var routedVolume: Double?
-                    switch action {
-                    case .volumeUp:
-                        let value = min((controls.volume ?? 0.5) + step, 1.0)
-                        displayController.setVolume(value, on: display)
-                        routedVolume = value
-                    case .volumeDown:
-                        let value = max((controls.volume ?? 0.5) - step, 0.0)
-                        displayController.setVolume(value, on: display)
-                        routedVolume = value
-                    default:
-                        displayController.setMuted(controls.muted == false, on: display)
+                    if let snapshot = ddcSnapshots[display.id],
+                       Date().timeIntervalSince(snapshot.at) < Self.snapshotLifetime {
+                        applyDisplayVolume(action, step: step, on: display, from: snapshot)
+                    } else {
+                        displayController.readDDCState(for: display) { [weak self] state in
+                            self?.applyDisplayVolume(
+                                action, step: step, on: display,
+                                from: DDCSnapshot(volume: state.volume, muted: state.muted, at: Date())
+                            )
+                        }
                     }
-                    // A display with a TV or AVR attached drives that device too —
-                    // which is what attaching one means. Fire and forget: a media
-                    // key press must not block on a network round trip, and the
-                    // device reports its own failures through its controller.
-                    if let routedVolume,
-                       let device = NetworkDeviceAttachment.device(forDisplay: display.identityKey) {
-                        Self.deviceCommander.setVolume(
-                            percent: NetworkDeviceVolume.percent(fromDisplayVolume: routedVolume),
-                            on: device,
-                            completion: nil
-                        )
-                    }
-                    NotificationCenter.default.post(
-                        name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id]
-                    )
                 }
             case .system:
                 switch action {
@@ -257,6 +242,60 @@ public final class HotkeyController {
             }
             return true
         }
+    }
+
+    /// Last known DDC volume/mute per display, so repeated key presses do not re-read the panel.
+    private struct DDCSnapshot {
+        var volume: Double?
+        var muted: Bool?
+        var at: Date
+    }
+    private var ddcSnapshots: [CGDirectDisplayID: DDCSnapshot] = [:]
+    /// How long a snapshot is trusted before the next press re-reads (the user may have used the
+    /// monitor's own buttons in between).
+    private static let snapshotLifetime: TimeInterval = 10
+
+    /// Apply one volume/mute key press to a display from a known starting point. Writes are
+    /// queued asynchronously by the DDC layer, so this does not block.
+    @MainActor
+    private func applyDisplayVolume(_ action: MediaKeyAction, step: Double, on display: Display, from snapshot: DDCSnapshot) {
+        let displayController = DisplayController.shared
+        var snapshot = snapshot
+        // The value the display was moved *to*, so an attached device can
+        // follow it without re-reading the display.
+        var routedVolume: Double?
+        switch action {
+        case .volumeUp:
+            let value = min((snapshot.volume ?? 0.5) + step, 1.0)
+            displayController.setVolume(value, on: display)
+            snapshot.volume = value
+            routedVolume = value
+        case .volumeDown:
+            let value = max((snapshot.volume ?? 0.5) - step, 0.0)
+            displayController.setVolume(value, on: display)
+            snapshot.volume = value
+            routedVolume = value
+        default:
+            let mute = snapshot.muted == false
+            displayController.setMuted(mute, on: display)
+            snapshot.muted = mute
+        }
+        ddcSnapshots[display.id] = snapshot
+        // A display with a TV or AVR attached drives that device too —
+        // which is what attaching one means. Fire and forget: a media
+        // key press must not block on a network round trip, and the
+        // device reports its own failures through its controller.
+        if let routedVolume,
+           let device = NetworkDeviceAttachment.device(forDisplay: display.identityKey) {
+            Self.deviceCommander.setVolume(
+                percent: NetworkDeviceVolume.percent(fromDisplayVolume: routedVolume),
+                on: device,
+                completion: nil
+            )
+        }
+        NotificationCenter.default.post(
+            name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id]
+        )
     }
 
     /// The display whose screen holds the key window (`NSScreen.main`), matched

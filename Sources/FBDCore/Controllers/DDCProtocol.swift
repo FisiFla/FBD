@@ -44,65 +44,84 @@ public enum DDC {
         }
     }
 
-    /// DDC/CI checksum: makes the byte sum of the message (incl. checksum) ≡ 0 mod 256.
-    public static func checksum(_ bytes: [UInt8]) -> UInt8 {
-        let sum = bytes.reduce(0) { ($0 + Int($1)) & 0xFF }
-        return UInt8((0x100 - sum) & 0xFF)
+    /// DDC/CI checksum: XOR of the I2C destination (0x6E), optionally the source
+    /// address (0x51), and every payload byte.
+    ///
+    /// Framing here follows m1ddc (github.com/waydabber/m1ddc, sources/i2c.m), the
+    /// reference IOAVService DDC implementation. The 0x51 is NOT part of the bytes
+    /// handed to IOAVServiceWriteI2C: it is passed as the call's data address
+    /// (offset) and the transport puts it on the wire.
+    ///
+    /// NOTE: hardware verification of this framing is still pending (issue #7).
+    public static func checksum(_ payload: [UInt8], includeSource: Bool = true) -> UInt8 {
+        payload.reduce(UInt8(0x6E) ^ (includeSource ? sourceAddress : 0)) { $0 ^ $1 }
     }
 
     // MARK: VCP write
 
-    /// [0x51, 0x6C, code, hi, lo, checksum] — framed "set VCP feature" packet.
-    /// The source address + checksum framing is what strict monitors expect
-    /// (ddcutil uses the same); tolerant monitors accept it either way.
+    /// [0x84, 0x03, code, hi, lo, chk] — "set VCP feature" payload, chk = 0x6E ^ 0x51 ^ bytes
+    /// (m1ddc `prepareDDCWrite`). Sent to chip 0x37 with data address 0x51.
     public static func writeVCPPacket(code: UInt8, value: UInt16) -> [UInt8] {
-        let body: [UInt8] = [sourceAddress, 0x6C, code, UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)]
+        let body: [UInt8] = [0x84, 0x03, code, UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)]
         return body + [checksum(body)]
     }
 
     // MARK: VCP read
 
-    /// [0x51, 0x6D, code, checksum] — framed "get VCP feature" request packet.
+    /// [0x82, 0x01, code, chk] — "get VCP feature" payload (m1ddc `prepareDDCRead`).
+    /// m1ddc's read checksum is 0x6E ^ bytes, i.e. WITHOUT the 0x51 term the write
+    /// checksum has; it is reproduced as-is because that is what is known to work.
     public static func readVCPRequest(code: UInt8) -> [UInt8] {
-        let body: [UInt8] = [sourceAddress, 0x6D, code]
-        return body + [checksum(body)]
+        let body: [UInt8] = [0x82, 0x01, code]
+        return body + [checksum(body, includeSource: false)]
     }
 
-    /// Parse an 8-byte VCP reply: [0x6E, code, type, maxHi, maxLo, curHi, curLo, checksum].
-    /// Tolerances: first byte may be 0x6D (some displays echo the request opcode);
-    /// last byte may be a legacy 0x6F terminator instead of a checksum.
+    /// Bytes to read back for a VCP reply (m1ddc reads 12).
+    public static let vcpReplyLength = 12
+
+    /// Parse a VCP reply as m1ddc does (`convertI2CtoDDC`):
+    /// [0x6E, len, 0x02, result, code, type, maxHi, maxLo, curHi, curLo, …].
+    /// Max is bytes 6-7 and current bytes 8-9, big-endian. m1ddc does not check the
+    /// reply checksum, so neither do we; a non-0x02 opcode (e.g. an all-zero buffer)
+    /// or a non-zero result code (1 = unsupported VCP) yields nil.
     public static func parseVCPReply(_ data: Data) -> (code: UInt8, value: DDCValue)? {
         let bytes = [UInt8](data)
-        guard bytes.count >= 8 else { return nil }
-        guard bytes[0] == 0x6E || bytes[0] == 0x6D else { return nil }
-        guard bytes[7] == 0x6F || bytes[7] == checksum(Array(bytes.prefix(7))) else { return nil }
-        let code = bytes[1]
-        let maxValue = UInt16(bytes[3]) << 8 | UInt16(bytes[4])
-        let currentValue = UInt16(bytes[5]) << 8 | UInt16(bytes[6])
+        guard bytes.count >= 10 else { return nil }
+        guard bytes[2] == 0x02, bytes[3] == 0x00 else { return nil }
+        let code = bytes[4]
+        let maxValue = UInt16(bytes[6]) << 8 | UInt16(bytes[7])
+        let currentValue = UInt16(bytes[8]) << 8 | UInt16(bytes[9])
         return (code, DDCValue(maxValue: maxValue, currentValue: currentValue))
     }
 
     // MARK: Capabilities
 
-    /// [0x51, 0x6F, 0xF3, checksum] — capabilities request packet.
-    public static var capabilitiesRequest: [UInt8] {
-        let body: [UInt8] = [sourceAddress, 0x6F, VCPCode.capabilities.rawValue]
+    /// [0x83, 0xF3, offHi, offLo, chk] — "capabilities request" for the fragment at `offset`
+    /// (DDC/CI spec; m1ddc has no capabilities support, so the checksum is the spec's
+    /// 0x6E ^ 0x51 ^ bytes, as for writes).
+    public static func capabilitiesRequest(offset: UInt16 = 0) -> [UInt8] {
+        let body: [UInt8] = [0x83, VCPCode.capabilities.rawValue, UInt8(offset >> 8), UInt8(offset & 0xFF)]
         return body + [checksum(body)]
     }
 
-    /// Extract the ASCII capabilities text from a capabilities reply.
-    /// Reply layout: [0x6E|0x6F, 0xF3, lenHi, lenLo, 0x00, <ASCII caps…>, checksum|0x6F].
-    public static func parseCapabilitiesText(_ data: Data) -> String? {
+    /// Bytes to read back for one capabilities fragment (header + up to 32 data bytes + checksum).
+    public static let capabilitiesReplyLength = 38
+
+    /// One capabilities-reply fragment: [0x6E, 0x80|(n+3), 0xE3, offHi, offLo, n data bytes, chk].
+    /// A fragment with no data marks the end of the string.
+    public static func parseCapabilitiesFragment(_ data: Data) -> (offset: Int, payload: [UInt8])? {
         let bytes = [UInt8](data)
-        guard bytes.count > 6, bytes[0] == 0x6F || bytes[0] == 0x6E, bytes[1] == 0xF3 else { return nil }
-        // Strip the trailing terminator (checksum or legacy 0x6F) if present.
-        var end = bytes.count
-        if end > 5 {
-            let trailing = bytes[end - 1]
-            if trailing == 0x6F || trailing == checksum(Array(bytes.prefix(end - 1))) { end -= 1 }
-        }
-        guard end > 5 else { return nil }
-        let text = String(decoding: data[data.startIndex + 5 ..< data.startIndex + end], as: UTF8.self)
+        guard bytes.count >= 6, bytes[2] == 0xE3 else { return nil }
+        let length = Int(bytes[1] & 0x7F)
+        guard length >= 3, bytes.count >= 2 + length + 1 else { return nil }
+        let offset = Int(bytes[3]) << 8 | Int(bytes[4])
+        return (offset, Array(bytes[5 ..< 2 + length]))
+    }
+
+    /// The capabilities text from the assembled fragment payload bytes (trailing NULs ignored).
+    public static func parseCapabilitiesText(_ data: Data) -> String? {
+        let trimmed = data.prefix { $0 != 0 }
+        let text = String(decoding: trimmed, as: UTF8.self)
         // Capability text is printable ASCII; bail out if we picked up garbage.
         guard text.range(of: "vcp(", options: .caseInsensitive) != nil else { return nil }
         return text
@@ -153,6 +172,9 @@ public enum DDC {
         }
         return DDCCapabilities(mccsVersion: mccsVersion, vcpCodes: codes, raw: text)
     }
+
+    /// Mute state from a VCP 0x8D read-back: MCCS defines 1 = muted (on), 2 = unmuted (off).
+    public static func isMuted(_ raw: Double) -> Bool { raw <= 1.5 }
 
     /// A VCP 0x60 read-back as a source number, clamped.
     ///
