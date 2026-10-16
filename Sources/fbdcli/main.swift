@@ -14,8 +14,10 @@ fbdcli — Free Better Display command-line interface
 Usage: fbdcli <command> [args]
 
 Commands:
-  list [--json]                 List displays (one line per display, or JSON)
-  info <id> [--json]            Show full detail for a display (or JSON)
+  list [--json]                 List displays (one line per display, or JSON;
+                                --json reads the hardware directly, even when
+                                the app is running)
+  info <id> [--json]            Show full detail for a display (or JSON, direct)
   report [file]                 Detailed report of every display, for a bug
                                 report (prints, or writes to <file>)
   report --dpcd <hex>           Decode a supplied DPCD dump (repeatable; prefix
@@ -47,7 +49,8 @@ Commands:
                                 [--invert] [--sharpness n] [--radius px]
                                 [--zoom n] [--pan x y] [--lut path.cube];
                                 'off' clears it (needs Screen Recording)
-  disable <id>                  Disable a display (black screen until re-enabled)  enable <id>                   Re-enable a disabled display
+  disable <id>                  Disable a display (black screen until re-enabled)
+  enable <id>                   Re-enable a disabled display
   layout save                   Save the current display arrangement
   layout restore                Restore the saved arrangement
   layout protect [on|off]       Get or set layout protection
@@ -162,7 +165,7 @@ func run(arguments: [String]) -> Int32 {
         return 1
     case .command(let command, let args, let direct):
         // Route over the app's HTTP API when it is running (single-driver I2C).
-        if !direct, HTTPRouting.routable.contains(command), !args.contains("--json") {
+        if !direct, HTTPRouting.routable.contains(command), !CLICommandLine.wantsDirectJSON(command, raw: args) {
             if let exitCode = HTTPRouting.route(command, args: args) {
                 return exitCode
             }
