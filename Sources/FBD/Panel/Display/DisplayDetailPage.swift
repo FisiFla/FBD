@@ -16,6 +16,10 @@ struct DisplayDetailPage: View {
     @State private var ddcRefreshRequest = 0
     @State private var xdrSyncRequest = 0
     @State private var confirmingDisable = false
+    /// False while the page slides in. The sections below the mode lists are the expensive part
+    /// of the layout, and mounting them in the transition's first frame stalled it by a visible
+    /// beat; they follow once the slide has finished.
+    @State private var settled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingL) {
@@ -26,23 +30,25 @@ struct DisplayDetailPage: View {
                 if !refreshRates.isEmpty {
                     refreshRateSection
                 }
-                DisplaySectionsView(
-                    display: display,
-                    refreshTick: $refreshTick,
-                    xdrSyncRequest: xdrSyncRequest,
-                    showsResolutions: false
-                )
-                TitledSection("Filters") {
-                    FilterControlsView(display: display)
-                }
-                TitledSection("Monitor Controls") {
-                    if display.ddcAvailable {
-                        DDCPanelView(display: display, refreshRequest: ddcRefreshRequest)
-                    } else {
-                        Text("Monitor controls unavailable — no DDC/CI")
-                            .font(FBDTheme.Font.secondary)
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, FBDTheme.spacingM)
+                if settled {
+                    DisplaySectionsView(
+                        display: display,
+                        refreshTick: $refreshTick,
+                        xdrSyncRequest: xdrSyncRequest,
+                        showsResolutions: false
+                    )
+                    TitledSection("Filters") {
+                        FilterControlsView(display: display)
+                    }
+                    TitledSection("Monitor Controls") {
+                        if display.ddcAvailable {
+                            DDCPanelView(display: display, refreshRequest: ddcRefreshRequest)
+                        } else {
+                            Text("Monitor controls unavailable — no DDC/CI")
+                                .font(FBDTheme.Font.secondary)
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, FBDTheme.spacingM)
+                        }
                     }
                 }
             } else {
@@ -50,10 +56,17 @@ struct DisplayDetailPage: View {
                     .font(FBDTheme.Font.secondary)
                     .foregroundStyle(.secondary)
             }
-            displaySection
-            DisplayMoreSection(model: model, display: display)
+            if settled {
+                displaySection
+                DisplayMoreSection(model: model, display: display)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            // Past FBDTheme.animationPanel (0.22 s).
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            settled = true
+        }
         .fbdDisableDisplayConfirmation(isPresented: $confirmingDisable, display: display)
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplayUpdated)) { note in
             if let id = note.userInfo?["displayID"] as? CGDirectDisplayID, id == display.id {

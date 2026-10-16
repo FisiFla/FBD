@@ -10,8 +10,8 @@ struct GroupsSettingsPage: View {
     @State private var groupPendingDelete: DisplayGroup?
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPane("Groups") {
+            SettingsGroup {
                 Text("Display groups let one operation affect several displays: brightness synchronisation, UI scale matching and layout management.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -36,7 +36,7 @@ struct GroupsSettingsPage: View {
             }
 
             ForEach(groups) { group in
-                Section {
+                SettingsGroup {
                     Toggle("Synchronise this group", isOn: enabledBinding(group))
                     Text("When off, group operations are skipped entirely for this group.")
                         .font(.caption)
@@ -72,7 +72,6 @@ struct GroupsSettingsPage: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .onAppear(perform: reload)
         .fbdConfirmation(
             "Delete this group?",

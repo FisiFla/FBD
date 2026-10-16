@@ -4,8 +4,8 @@ import SwiftUI
 @MainActor
 struct AboutSettingsPage: View {
     var body: some View {
-        Form {
-            Section {
+        SettingsPane("About") {
+            SettingsGroup {
                 HStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
                         .fill(Color.accentColor.gradient)
@@ -30,7 +30,6 @@ struct AboutSettingsPage: View {
                 Label("About", systemImage: "info.circle")
             }
         }
-        .formStyle(.grouped)
     }
 
     private var versionString: String {

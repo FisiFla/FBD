@@ -5,6 +5,19 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-16
+
+### Changed
+- Settings is redesigned in the popover's design language: glass cards, round icon chips,
+  a large page title, and a sidebar with a tinted icon per page. Every page (Displays, Groups,
+  Application, Menu, Keyboard, About) uses the new `SettingsPane` / `SettingsGroup` containers
+  in place of the stock grouped form.
+
+### Fixed
+- Opening a display's page in the popover paused for a beat before the slide started: the whole
+  page was laid out in the transition's first frame. The mode lists now appear first and the
+  heavier sections (filters, monitor controls, display actions, more) follow once the slide ends.
+
 ## [1.8.1] - 2026-10-16
 
 ### Fixed

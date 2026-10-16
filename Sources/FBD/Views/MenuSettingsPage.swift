@@ -7,8 +7,8 @@ struct MenuSettingsPage: View {
     /// Re-renders this page when a setting changes (`Settings` is not observable).
     @ObservedObject private var settingsObserver = SettingsObserver.shared
     var body: some View {
-        Form {
-            Section {
+        SettingsPane("Menu") {
+            SettingsGroup {
                 Toggle("Show offline displays in Settings", isOn: Binding(
                     get: { Settings.showOfflineDisplays },
                     set: { Settings.showOfflineDisplays = $0 }
@@ -20,7 +20,7 @@ struct MenuSettingsPage: View {
                 Label("Display list", systemImage: "list.bullet")
             }
 
-            Section {
+            SettingsGroup {
                 Picker("Icon", selection: Binding(
                     get: { Settings.menuBarIcon },
                     set: { Settings.menuBarIcon = $0 }
@@ -40,7 +40,7 @@ struct MenuSettingsPage: View {
                 Label("Status item", systemImage: "menubar.rectangle")
             }
 
-            Section {
+            SettingsGroup {
                 Text("The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -51,7 +51,7 @@ struct MenuSettingsPage: View {
                 Label("Panel contents", systemImage: "menubar.rectangle")
             }
 
-            Section {
+            SettingsGroup {
                 Toggle("Keep the Mac awake", isOn: Binding(
                     get: { Settings.keepAwakeEnabled },
                     set: { _ = KeepAwakeController.shared.setEnabled($0) }
@@ -63,6 +63,5 @@ struct MenuSettingsPage: View {
                 Label("System", systemImage: "clock")
             }
         }
-        .formStyle(.grouped)
     }
 }
