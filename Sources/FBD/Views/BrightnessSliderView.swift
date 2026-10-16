@@ -32,7 +32,7 @@ struct BrightnessSliderView: View {
                     ),
                     in: 0...1,
                     zoneFraction: xdrZoneFraction,
-                    accessibilityLabel: "Brightness for \(display.name)",
+                    accessibilityLabel: String(localized: "Brightness for \(display.name)"),
                     valueText: { _ in "\(Self.percentText(display.brightness ?? 0)) percent" }
                 )
                 .accessibilityValue("\(Self.percentText(display.brightness ?? 0)) percent")
