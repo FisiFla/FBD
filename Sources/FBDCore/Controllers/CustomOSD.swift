@@ -108,8 +108,9 @@ public final class CustomOSD {
         // content — and this window holds only the SwiftUI content, so in practice it renders as a
         // flat fill rather than sampling the desktop behind it. `.behindWindow` is not a substitute:
         // it was measured on macOS 27 and the HUD did not appear at all. `NSGlassEffectView`
-        // (macOS 26+) is the way to sample the backdrop, which is why it is offered as a style
-        // rather than applied to everyone. See the Crisp review's rule 9.
+        // (macOS 26+) is the way to sample the backdrop, which is why glass is the default style
+        // there (a saved choice still wins); this material path is the fallback. See the Crisp
+        // review's rule 9.
         let background: NSView
         if style.background == .glass, let glass = OSDGlass.makeView(cornerRadius: CGFloat(style.cornerRadius)) {
             background = glass

@@ -95,7 +95,6 @@ struct BrightnessSliderView: View {
     }
 }
 
-
 private struct OptionalIdentifier: ViewModifier {
     let identifier: String?
 
