@@ -32,6 +32,11 @@ public final class HTTPServer {
     /// while running stops the previous listener first.
     public private(set) var isRunning = false
 
+    /// Open connections (thread-confined to `queue`); extras are refused so a
+    /// local client cannot exhaust file descriptors.
+    private var openConnections = 0
+    public var maxConnections = 32
+
     /// Per-connection bookkeeping (thread-confined to `queue`).
     private final class ConnectionState {
         var sentContinue = false
@@ -95,10 +100,22 @@ public final class HTTPServer {
     // MARK: - Connection handling
 
     private func accept(_ connection: NWConnection) {
+        guard openConnections < maxConnections else {
+            log.warning("too many connections — refusing")
+            connection.cancel()
+            return
+        }
+        openConnections += 1
         let state = ConnectionState()
-        connection.stateUpdateHandler = { [weak state] newState in
-            if case .cancelled = newState {
+        connection.stateUpdateHandler = { [weak self, weak state] newState in
+            switch newState {
+            case .cancelled:
                 state?.idleWorkItem?.cancel()
+                self?.openConnections -= 1
+            case .failed:
+                connection.cancel()
+            default:
+                break
             }
         }
         connection.start(queue: queue)
@@ -241,12 +258,16 @@ public final class HTTPServer {
             path = String(path[..<q])
         }
 
-        // CORS preflight for web-based clients (local API; the token header
-        // is still required on all real requests).
-        if method == "OPTIONS" {
-            connection.send(content: Data(Self.corsResponse().utf8), completion: .contentProcessed { _ in
-                connection.cancel()
-            })
+        // DNS-rebinding / browser defence: only accept requests addressed to
+        // this server's loopback authority, and refuse anything a browser
+        // tagged with an Origin (fbdcli and curl never send one). No CORS
+        // headers are emitted, so pages cannot read responses either.
+        guard hostIsLoopbackAuthority(headers["host"]) else {
+            sendResponse(connection, status: 403, body: #"{"error":"forbidden host"}"#)
+            return
+        }
+        if let origin = headers["origin"], !origin.isEmpty {
+            sendResponse(connection, status: 403, body: #"{"error":"cross-origin requests are not allowed"}"#)
             return
         }
 
@@ -265,6 +286,8 @@ public final class HTTPServer {
         case 201: statusText = "Created"
         case 204: statusText = "No Content"
         case 400: statusText = "Bad Request"
+        case 401: statusText = "Unauthorized"
+        case 403: statusText = "Forbidden"
         case 404: statusText = "Not Found"
         case 405: statusText = "Method Not Allowed"
         case 413: statusText = "Payload Too Large"
@@ -274,9 +297,6 @@ public final class HTTPServer {
         let response = """
         HTTP/1.1 \(status) \(statusText)\r
         Content-Type: application/json\r
-        Access-Control-Allow-Origin: *\r
-        Access-Control-Allow-Headers: X-FBD-Token, Content-Type\r
-        Access-Control-Allow-Methods: GET, POST, OPTIONS\r
         Content-Length: \(body.utf8.count)\r
         Connection: close\r
         \r
@@ -287,16 +307,11 @@ public final class HTTPServer {
         })
     }
 
-    /// 204 response for CORS preflight (no handler invocation).
-    private static func corsResponse() -> String {
-        """
-        HTTP/1.1 204 No Content\r
-        Access-Control-Allow-Origin: *\r
-        Access-Control-Allow-Headers: X-FBD-Token, Content-Type\r
-        Access-Control-Allow-Methods: GET, POST, OPTIONS\r
-        Content-Length: 0\r
-        Connection: close\r
-        \r
-        """
+    /// True when `host` is exactly 127.0.0.1, localhost or [::1] on this
+    /// server's port.
+    private func hostIsLoopbackAuthority(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        let p = port
+        return ["127.0.0.1:\(p)", "localhost:\(p)", "[::1]:\(p)"].contains(host)
     }
 }
