@@ -5,7 +5,7 @@ import SwiftUI
 /// structure a BetterDisplay user expects (`Displays` · `Groups` ·
 /// `Application` · `Menu` · `Keyboard` · `About`), rendered in FBD's own idiom.
 ///
-/// The pages themselves live in `SettingsPages.swift`. This file owns the
+/// The pages themselves live in `Settings*Page.swift` files. This file owns the
 /// shell, the page vocabulary, and the navigation contract other views use.
 @MainActor
 struct SettingsView: View {
