@@ -422,3 +422,5 @@
 "No preset is named '%@' on this display." = "這台顯示器上沒有名為「%@」的預設。";
 "no part of '%@' applies to this display." = "「%@」中沒有任何內容適用於這台顯示器。";
 "Applied preset '%@'." = "已套用預設「%@」。";
+"On" = "開啟";
+"Unavailable" = "無法使用";
