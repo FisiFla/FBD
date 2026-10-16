@@ -155,7 +155,7 @@ struct FilterControlsView: View {
     private var filterControls: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
             Toggle("Apply to Display", isOn: filterActiveBinding)
-                .toggleStyle(.switch)
+                .toggleStyle(.fbdTrailingSwitch)
                 .controlSize(.small)
                 .padding(.horizontal, FBDTheme.spacingM)
             Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
@@ -195,7 +195,7 @@ struct FilterControlsView: View {
             .font(FBDTheme.Font.secondary)
             .padding(.horizontal, FBDTheme.spacingM)
             Toggle("Invert Colors", isOn: filterInvert)
-                .toggleStyle(.switch)
+                .toggleStyle(.fbdTrailingSwitch)
                 .controlSize(.small)
                 .padding(.horizontal, FBDTheme.spacingM)
 
@@ -219,7 +219,6 @@ struct FilterControlsView: View {
                 }
                 .font(FBDTheme.Font.secondary)
                 .padding(.horizontal, FBDTheme.spacingM)
-            .padding(.horizontal, FBDTheme.spacingM)
             }
 
             Divider()
@@ -238,13 +237,11 @@ struct FilterControlsView: View {
                 }
                 .font(FBDTheme.Font.secondary)
                 .padding(.horizontal, FBDTheme.spacingM)
-            .padding(.horizontal, FBDTheme.spacingM)
                 Slider(value: filterOffsetY, in: -panLimit...panLimit, step: 0.005) {
                     Text("Pan Vertical")
                 }
                 .font(FBDTheme.Font.secondary)
                 .padding(.horizontal, FBDTheme.spacingM)
-            .padding(.horizontal, FBDTheme.spacingM)
             }
 
             Divider()

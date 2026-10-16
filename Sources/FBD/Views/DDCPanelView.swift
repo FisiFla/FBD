@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 struct DDCPanelView: View {
     @ObservedObject var display: Display
-    /// Bumped by DisplayRowView's `.fbdDisplayUpdated` handler; any change
+    /// Bumped by the host's `.fbdDisplayUpdated` handler; any change
     /// here triggers a DDC read-back.
     let refreshRequest: Int
 
@@ -82,7 +82,7 @@ struct DDCPanelView: View {
                 get: { muted },
                 set: { muted = $0; DisplayController.shared.setMuted($0, on: display) }
             ))
-            .toggleStyle(.switch)
+            .toggleStyle(.fbdTrailingSwitch)
             .controlSize(.small)
             .font(FBDTheme.Font.secondary)
             .accessibilityLabel("Mute \(display.name)")

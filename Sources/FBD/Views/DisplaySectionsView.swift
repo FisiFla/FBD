@@ -16,7 +16,7 @@ struct DisplaySectionsView: View {
     /// changes) so the whole row re-renders, e.g. the options menu's
     /// "Color Mode" checkmarks.
     @Binding var refreshTick: Int
-    /// Bumped by DisplayRowView's `.fbdDisplayUpdated` handler; any change
+    /// Bumped by the host's `.fbdDisplayUpdated` handler; any change
     /// here re-syncs the XDR upscale slider with the display's effective
     /// target.
     let xdrSyncRequest: Int
@@ -335,7 +335,7 @@ struct DisplaySectionsView: View {
                                 refreshTick += 1
                             }
                         }
-                        .disabled(current == nil)
+                        .disabled(colorProfileController.defaultProfile(for: display) == nil)
                     }
                 }
             }
@@ -376,7 +376,7 @@ struct DisplaySectionsView: View {
                     get: { display.isHDRModeEnabled },
                     set: { DisplayController.shared.setHDRMode($0, on: display) }
                 ))
-                .toggleStyle(.switch)
+                .toggleStyle(.fbdTrailingSwitch)
                 .controlSize(.small)
                 .padding(.horizontal, FBDTheme.spacingM)
             }
@@ -395,7 +395,7 @@ struct DisplaySectionsView: View {
                 }
             }
         ))
-        .toggleStyle(.switch)
+        .toggleStyle(.fbdTrailingSwitch)
         .controlSize(.small)
         // Non-row controls sit on the rows' inset so they line up with the icon chips.
         .padding(.horizontal, FBDTheme.spacingM)
