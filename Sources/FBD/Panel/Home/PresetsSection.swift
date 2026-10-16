@@ -18,7 +18,7 @@ struct PresetsSection: View {
                 ForEach(model.presets(for: display)) { preset in
                     FBDListRow(
                         symbol: preset.symbol.rawValue,
-                        title: LocalizedStringKey(preset.name),
+                        verbatim: preset.name,
                         value: model.displays.count > 1 ? display.name : nil
                     ) { model.apply(preset, to: display) }
                 }

@@ -124,7 +124,7 @@ struct DisplaySectionsView: View {
     private func modeRow(_ mode: DisplayMode) -> some View {
         FBDListRow(
             symbol: "rectangle",
-            title: LocalizedStringKey(mode.label),
+            verbatim: mode.label,
             value: modeDetail(mode),
             isChecked: mode == display.currentMode
         ) {
@@ -334,7 +334,7 @@ struct DisplaySectionsView: View {
                         ForEach(colorProfiles) { profile in
                             FBDListRow(
                                 symbol: "paintpalette",
-                                title: LocalizedStringKey(profile.name),
+                                verbatim: profile.name,
                                 isChecked: profile.url == current
                             ) {
                                 colorProfileBinding.wrappedValue = profile.url
@@ -424,7 +424,7 @@ struct DisplaySectionsView: View {
                 ForEach(validPresets) { preset in
                     FBDListRow(
                         symbol: "sun.max",
-                        title: LocalizedStringKey(preset.name),
+                        verbatim: preset.name,
                         isChecked: preset.index == active
                     ) {
                         presetBinding.wrappedValue = preset.index

@@ -100,7 +100,7 @@ struct DDCPanelView: View {
                     ForEach(inputOptions, id: \.self) { value in
                         FBDListRow(
                             symbol: "rectangle.connected.to.line.below",
-                            title: LocalizedStringKey(inputLabel(value)),
+                            verbatim: inputLabel(value),
                             isChecked: value == effectiveInput
                         ) {
                             setInput(value)
