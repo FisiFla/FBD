@@ -18,7 +18,8 @@ struct FDBSlider: View {
     let endSymbols: (String, String)?
 
     static let trackHeight: CGFloat = 6
-    static let thumbSize: CGFloat = 20
+    static let thumbWidth: CGFloat = 28
+    static let thumbHeight: CGFloat = 20
 
     /// The live value bubble is only shown while the thumb is being dragged.
     static func showsValueOverlay(isDragging: Bool) -> Bool { isDragging }
@@ -97,15 +98,17 @@ struct FDBSlider: View {
             .fbdGlass(in: Capsule())
             .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
             .shadow(color: .black.opacity(0.18), radius: isDragging ? 3 : 2, y: isDragging ? 1.5 : 1)
-            .frame(width: Self.thumbSize, height: Self.thumbSize)
+            .frame(width: Self.thumbWidth, height: Self.thumbHeight)
             .scaleEffect(thumbScale)
     }
 
     private var track: some View {
         GeometryReader { geo in
             let width = geo.size.width
-            let x = fraction * width
-            let zoneX = (zoneFraction.map { min(max($0, 0), 1) } ?? 1) * width
+            let half = Self.thumbWidth / 2
+            let usable = max(width - Self.thumbWidth, 1)
+            let x = half + fraction * usable
+            let zoneX = half + (zoneFraction.map { min(max($0, 0), 1) } ?? 1) * usable
 
             ZStack(alignment: .leading) {
                 // Track
@@ -135,9 +138,9 @@ struct FDBSlider: View {
                 }
                 // Thumb.
                 thumb
-                    .offset(x: x - Self.thumbSize / 2)
+                    .offset(x: x - half)
             }
-            .frame(height: Self.thumbSize)
+            .frame(height: Self.thumbHeight)
             .contentShape(Rectangle().inset(by: -6))
             .gesture(dragGesture(width: width))
             .overlay(alignment: .top) {
@@ -163,7 +166,7 @@ struct FDBSlider: View {
         DragGesture(minimumDistance: 0)
             .onChanged { gesture in
                 isDragging = true
-                applyFraction(gesture.location.x / width)
+                applyFraction((gesture.location.x - Self.thumbWidth / 2) / max(width - Self.thumbWidth, 1))
             }
             .onEnded { _ in
                 isDragging = false
