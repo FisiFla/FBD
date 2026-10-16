@@ -85,10 +85,19 @@ final class DisplayModeMappingTests: XCTestCase {
 
     func testNonHiDPIModeIsNotHiDPI() {
         // Act
-        let mode = makeMode(flags: 0x1)
+        let mode = makeMode(flags: 0x1, pixelsWide: 1920, pixelsHigh: 1080)
 
         // Assert
         XCTAssertFalse(mode.isHiDPI)
+    }
+
+    func testScaledModeWithoutHiDPIFlagIsHiDPI() {
+        // Measured on an LG TV (macOS 27): "looks like 1920x1080" on a 3840x2160 backing
+        // reports flags 0x02000007, without the 0x200000 HiDPI bit.
+        let mode = DisplayMode(modeNumber: 88, flags: 0x02000007, width: 1920, height: 1080,
+                               pixelsWide: 3840, pixelsHigh: 2160, refreshRate: 60, encoding: "")
+
+        XCTAssertTrue(mode.isHiDPI)
     }
 
     func testSafeFlagMapsToIsSafe() {

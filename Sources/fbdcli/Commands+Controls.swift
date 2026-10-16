@@ -375,7 +375,7 @@ func cmdModes(_ display: Display) -> Int32 {
     }
     let currentNumber = display.currentMode?.modeNumber
     for mode in offered {
-        let hidpi = mode.isHiDPI ? "hidpi" : "sdr"
+        let hidpi = mode.isHiDPI ? "hidpi" : "lodpi"
         let safe = mode.isSafe ? "safe" : "unsafe"
         let current = mode.modeNumber == currentNumber ? "  current" : ""
         print("\(mode.key)  \(hidpi)  \(safe)\(current)")
@@ -428,7 +428,7 @@ func cmdSetMode(_ controller: DisplayController, display: Display, args: [String
         print("fbdcli: set-mode: failed to apply \(best.key) to display \(display.id)")
         return 2
     }
-    print("applied \(best.key) (\(best.isHiDPI ? "hidpi" : "sdr"), \(best.isSafe ? "safe" : "unsafe"))")
+    print("applied \(best.key) (\(best.isHiDPI ? "hidpi" : "lodpi"), \(best.isSafe ? "safe" : "unsafe"))")
     return 0
 }
 

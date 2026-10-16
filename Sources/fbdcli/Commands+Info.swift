@@ -20,7 +20,7 @@ func cmdList(_ controller: DisplayController, args: [String]) -> Int32 {
         let hidpi: String
         if let current = display.currentMode {
             mode = current.key
-            hidpi = current.isHiDPI ? "hidpi" : "sdr"
+            hidpi = current.isHiDPI ? "hidpi" : "lodpi"
         } else {
             mode = "-"
             hidpi = "-"
@@ -204,7 +204,7 @@ func cmdInfo(_ display: Display, args: [String]) -> Int32 {
     let modeLine: String
     if let current = display.currentMode {
         var parts = [current.key]
-        parts.append(current.isHiDPI ? "hidpi" : "sdr")
+        parts.append(current.isHiDPI ? "hidpi" : "lodpi")
         parts.append(current.isSafe ? "safe" : "unsafe")
         modeLine = parts.joined(separator: " ")
     } else {

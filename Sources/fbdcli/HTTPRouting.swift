@@ -259,7 +259,7 @@ enum HTTPRouting {
             let width = mode["width"] as? Int ?? 0
             let height = mode["height"] as? Int ?? 0
             let hz = mode["hz"] as? Double ?? 0
-            let hidpi = (mode["hidpi"] as? Bool ?? false) ? "hidpi" : "sdr"
+            let hidpi = (mode["hidpi"] as? Bool ?? false) ? "hidpi" : "lodpi"
             let safe = (mode["safe"] as? Bool ?? false) ? "safe" : ""
             let key = mode["key"] as? String ?? ""
             var line = String(format: "%dx%d@%.2f  %@  %@", width, height, hz, hidpi, safe)

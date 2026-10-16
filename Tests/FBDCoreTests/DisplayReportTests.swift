@@ -125,6 +125,8 @@ final class DisplayReportTests: XCTestCase {
             identityKey: "1-1-1",
             currentMode: mode(
                 number: 7,
+                width: 3456,
+                height: 2234,
                 refreshRate: 60,
                 flags: DisplayMode.safeFlag | DisplayMode.defaultFlag,
                 encoding: ""

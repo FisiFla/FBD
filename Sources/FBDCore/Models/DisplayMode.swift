@@ -40,7 +40,9 @@ public struct DisplayMode: Hashable, Sendable {
     public static let safeFlag: Int32 = 0x1
     public static let defaultFlag: Int32 = 0x2
 
-    public var isHiDPI: Bool { flags & Self.hiDPIFlag != 0 }
+    /// The flag alone is not reliable: some scaled modes (measured on an LG TV) omit it, so a
+    /// backing larger than the point size also counts.
+    public var isHiDPI: Bool { flags & Self.hiDPIFlag != 0 || pixelsWide > width }
     public var isSafe: Bool { flags & Self.safeFlag != 0 }
     public var isDefault: Bool { flags & Self.defaultFlag != 0 }
     public var isRetina: Bool { isHiDPI }
