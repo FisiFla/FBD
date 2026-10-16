@@ -57,14 +57,14 @@ struct DisplaySectionsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingL) {
             if showsResolutions && !display.modes.isEmpty {
-                section("Resolutions") { resolutionsList }
+                TitledSection("Resolutions") { resolutionsList }
             }
             if display.isXDRCapable || display.isHDRModeCapable {
-                section("XDR / HDR") { xdrControls }
+                TitledSection("XDR / HDR") { xdrControls }
             }
             colorProfileControls
             if !display.isBuiltin {
-                section("EDID") { edidControls }
+                TitledSection("EDID") { edidControls }
             }
         }
         .onAppear {
@@ -76,16 +76,6 @@ struct DisplaySectionsView: View {
         }
         .onChange(of: xdrSyncRequest) { _ in
             syncUpscaleTarget()
-        }
-    }
-
-    private func section<Content: View>(
-        _ title: LocalizedStringKey,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingXS) {
-            DetailSectionHeader(title: title)
-            content()
         }
     }
 
@@ -327,7 +317,7 @@ struct DisplaySectionsView: View {
     private var colorProfileControls: some View {
         Group {
             if !colorProfiles.isEmpty {
-                section("Color Profile") {
+                TitledSection("Color Profile") {
                     // Read once per render: each read is a ColorSync query.
                     let current = colorProfileBinding.wrappedValue
                     VStack(alignment: .leading, spacing: 0) {
@@ -504,14 +494,5 @@ struct DisplaySectionsView: View {
         }
         upscaleDebounceWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(150), execute: workItem)
-    }
-}
-
-/// Section title. File-private stand-in for Task 5's `SectionHeader` (same body), which is not
-/// on this branch.
-private struct DetailSectionHeader: View {
-    let title: LocalizedStringKey
-    var body: some View {
-        Text(title).font(FBDTheme.Font.sectionHeader).foregroundStyle(.secondary)
     }
 }
