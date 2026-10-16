@@ -3,9 +3,9 @@ import FBDCore
 import SwiftUI
 
 /// Full-screen software filter controls (contrast / saturation / gamma /
-/// color temperature / invert / sharpening / geometry / 3D LUT). Shown in a
-/// "Filters" disclosure row — sliders inside menus are fragile; a disclosure
-/// row matches the card's other sections.
+/// color temperature / invert / sharpening / geometry / 3D LUT). Shown under a
+/// "Filters" section — sliders inside menus are fragile. Plain content: the
+/// host supplies the section title.
 ///
 /// Owns the filter parameter state and the apply/reset round-trip through
 /// DisplayController.
@@ -154,6 +154,8 @@ struct FilterControlsView: View {
     private var filterControls: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
             Toggle("Apply to Display", isOn: filterActiveBinding)
+                .toggleStyle(.switch)
+                .controlSize(.small)
             Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
                 Text("Contrast")
             } minimumValueLabel: {
@@ -161,7 +163,7 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("2")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
             Slider(value: filterSaturation, in: 0...2, step: 0.05) {
                 Text("Saturation")
             } minimumValueLabel: {
@@ -169,7 +171,7 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("2")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
             Slider(value: filterGamma, in: 0.4...2.5, step: 0.05) {
                 Text("Gamma")
             } minimumValueLabel: {
@@ -177,7 +179,7 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("2.5")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
             Slider(value: filterTemperature, in: 0.5...1.5, step: 0.05) {
                 Text("Color Temperature")
             } minimumValueLabel: {
@@ -185,8 +187,10 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("Cool")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
             Toggle("Invert Colors", isOn: filterInvert)
+                .toggleStyle(.switch)
+                .controlSize(.small)
 
             Divider()
             Slider(value: filterSharpness, in: 0...ScreenFilterParams.maxSharpness, step: 0.1) {
@@ -196,7 +200,7 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("\(Int(ScreenFilterParams.maxSharpness))")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
             if filterParams.sharpness > 0 {
                 Slider(value: filterUnsharpRadius, in: 0...ScreenFilterParams.maxUnsharpRadius, step: 0.5) {
                     Text("Radius (px)")
@@ -205,7 +209,7 @@ struct FilterControlsView: View {
                 } maximumValueLabel: {
                     Text("\(Int(ScreenFilterParams.maxUnsharpRadius))")
                 }
-                .font(.caption)
+                .font(FBDTheme.Font.secondary)
             }
 
             Divider()
@@ -216,30 +220,32 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("4x")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
             if filterParams.zoom > 1 {
                 Slider(value: filterOffsetX, in: -panLimit...panLimit, step: 0.005) {
                     Text("Pan Horizontal")
                 }
-                .font(.caption)
+                .font(FBDTheme.Font.secondary)
                 Slider(value: filterOffsetY, in: -panLimit...panLimit, step: 0.005) {
                     Text("Pan Vertical")
                 }
-                .font(.caption)
+                .font(FBDTheme.Font.secondary)
             }
 
             Divider()
-            HStack(spacing: FBDTheme.spacingM) {
-                Button(filterParams.lutPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Choose LUT…") {
+            VStack(alignment: .leading, spacing: 0) {
+                FBDListRow(
+                    symbol: "cube",
+                    title: "Choose LUT…",
+                    value: filterParams.lutPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+                ) {
                     chooseLUT()
                 }
-                .controlSize(.small)
                 if filterParams.lutPath != nil {
-                    Button("Clear LUT") {
+                    FBDListRow(symbol: "xmark.circle", title: "Clear LUT") {
                         filterParams.lutPath = nil
                         applyScreenFilter()
                     }
-                    .controlSize(.small)
                 }
             }
 
@@ -251,12 +257,12 @@ struct FilterControlsView: View {
             } maximumValueLabel: {
                 Text("\(Int(cornerRadius))px")
             }
-            .font(.caption)
+            .font(FBDTheme.Font.secondary)
 
-            Button("Reset") {
+            FBDListRow(symbol: "arrow.counterclockwise", title: "Reset") {
                 resetScreenFilter()
             }
-            .controlSize(.small)
         }
+        .controlSize(.small)
     }
 }
