@@ -408,3 +408,21 @@
 /* Task 4 */
 "FBD Settings" = "FBD 設定";
 "All Modes" = "所有模式";
+
+/* Task 7 */
+"Saved '%@'." = "已儲存「%@」。";
+"Virtual screens aren't available on this Mac" = "此 Mac 不支援虛擬螢幕";
+"New Virtual Screen" = "新增虛擬螢幕";
+"Reconnect" = "重新連接";
+"Disconnect All" = "全部中斷連線";
+"Destroy" = "銷毀";
+"New Group" = "新增群組";
+"Disconnect all virtual screens?" = "中斷所有虛擬螢幕？";
+"Destroy this virtual screen?" = "銷毀此虛擬螢幕？";
+"The virtual screen is removed until you create it again." = "此虛擬螢幕將被移除，直到你再次建立。";
+"Could not create virtual display." = "無法建立虛擬顯示器。";
+"Refresh rate" = "更新率";
+"Group name" = "群組名稱";
+"No groups yet. Create one to sync brightness or mirror displays." = "尚無群組。建立一個以同步亮度或鏡像顯示器。";
+"1 display" = "1 台顯示器";
+"%lld displays" = "%lld 台顯示器";

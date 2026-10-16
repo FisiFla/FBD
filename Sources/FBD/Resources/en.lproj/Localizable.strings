@@ -412,3 +412,21 @@
 /* Task 4 */
 "FBD Settings" = "FBD Settings";
 "All Modes" = "All Modes";
+
+/* Task 7 */
+"Saved '%@'." = "Saved '%@'.";
+"Virtual screens aren't available on this Mac" = "Virtual screens aren't available on this Mac";
+"New Virtual Screen" = "New Virtual Screen";
+"Reconnect" = "Reconnect";
+"Disconnect All" = "Disconnect All";
+"Destroy" = "Destroy";
+"New Group" = "New Group";
+"Disconnect all virtual screens?" = "Disconnect all virtual screens?";
+"Destroy this virtual screen?" = "Destroy this virtual screen?";
+"The virtual screen is removed until you create it again." = "The virtual screen is removed until you create it again.";
+"Could not create virtual display." = "Could not create virtual display.";
+"Refresh rate" = "Refresh rate";
+"Group name" = "Group name";
+"No groups yet. Create one to sync brightness or mirror displays." = "No groups yet. Create one to sync brightness or mirror displays.";
+"1 display" = "1 display";
+"%lld displays" = "%lld displays";
