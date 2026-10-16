@@ -41,7 +41,7 @@ struct MenuSettingsPage: View {
             }
 
             Section {
-                Text("The panel shows one row per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit.")
+                Text("The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text("Right-click the status item for Show FBD, Settings…, Check for Updates… and Quit.")

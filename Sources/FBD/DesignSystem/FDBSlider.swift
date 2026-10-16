@@ -14,6 +14,15 @@ struct FDBSlider: View {
     let zoneFraction: Double?
     let accessibilityLabel: String
     let valueText: (Double) -> String
+    /// SF Symbols shown either side of the track; `nil` hides them.
+    let endSymbols: (String, String)?
+
+    static let trackHeight: CGFloat = 6
+    static let thumbWidth: CGFloat = 28
+    static let thumbHeight: CGFloat = 20
+
+    /// The live value bubble is only shown while the thumb is being dragged.
+    static func showsValueOverlay(isDragging: Bool) -> Bool { isDragging }
 
     /// `in` matches SwiftUI's `Slider(value:in:)` argument shape.
     init(
@@ -21,13 +30,15 @@ struct FDBSlider: View {
         in range: ClosedRange<Double> = 0...1,
         zoneFraction: Double? = nil,
         accessibilityLabel: String,
-        valueText: @escaping (Double) -> String
+        valueText: @escaping (Double) -> String,
+        endSymbols: (String, String)? = ("sun.min", "sun.max")
     ) {
         self._value = value
         self.range = range
         self.zoneFraction = zoneFraction
         self.accessibilityLabel = accessibilityLabel
         self.valueText = valueText
+        self.endSymbols = endSymbols
     }
 
     @State private var isHovering = false
@@ -47,48 +58,10 @@ struct FDBSlider: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            let x = fraction * width
-            let zoneX = (zoneFraction.map { min(max($0, 0), 1) } ?? 1) * width
-
-            ZStack(alignment: .leading) {
-                // Track
-                Capsule()
-                    .fill(Color.secondary.opacity(0.22))
-                // Fill: accent up to the boost zone, boost tint beyond.
-                HStack(spacing: 0) {
-                    Capsule()
-                        .fill(Color.accentColor.gradient)
-                        .frame(width: max(x, 0))
-                }
-                .frame(width: max(x, 0), alignment: .leading)
-                if let zoneFraction, zoneFraction > 0, zoneFraction < 1 {
-                    // Boost-zone tint (the XDR region past the divider).
-                    Capsule()
-                        .fill(Color.orange.opacity(0.85))
-                        .frame(width: max(x - zoneX, 0))
-                        .offset(x: zoneX)
-                }
-                // Zone divider tick.
-                if let zoneFraction, zoneFraction > 0, zoneFraction < 1 {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.5))
-                        .frame(width: 1, height: 10)
-                        .offset(x: zoneX - 0.5)
-                }
-                // Thumb.
-                Circle()
-                    .fill(.white)
-                    .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.18), radius: isDragging ? 3 : 2, y: isDragging ? 1.5 : 1)
-                    .frame(width: 15, height: 15)
-                    .scaleEffect(thumbScale)
-                    .offset(x: x - 7.5)
-            }
-            .frame(height: 15)
-            .contentShape(Rectangle().inset(by: -6))
-            .gesture(dragGesture(width: width))
+        HStack(spacing: FBDTheme.spacingM) {
+            if let endSymbols { endImage(endSymbols.0) }
+            track
+            if let endSymbols { endImage(endSymbols.1) }
         }
         .frame(height: 22)
         .onHover { hovering in
@@ -115,6 +88,86 @@ struct FDBSlider: View {
         }
     }
 
+    private func endImage(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: 11)).foregroundStyle(.secondary)
+    }
+
+    private var thumb: some View {
+        thumbBody
+            .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: isDragging ? 3 : 2, y: isDragging ? 1.5 : 1)
+            .frame(width: Self.thumbWidth, height: Self.thumbHeight)
+            .scaleEffect(thumbScale)
+    }
+
+    /// A glass pill on macOS 26+, tinted light so it stays clearly visible on the track (an
+    /// opaque fill under the glass would hide it); the plain white pill otherwise.
+    @ViewBuilder
+    private var thumbBody: some View {
+        if FBDGlass.isAvailable {
+            Capsule()
+                .fill(Color.clear)
+                .fbdGlass(in: Capsule(), tint: .white.opacity(0.55))
+        } else {
+            Capsule().fill(.white)
+        }
+    }
+
+    private var track: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let half = Self.thumbWidth / 2
+            let usable = max(width - Self.thumbWidth, 1)
+            let x = half + fraction * usable
+            let zoneX = half + (zoneFraction.map { min(max($0, 0), 1) } ?? 1) * usable
+
+            ZStack(alignment: .leading) {
+                // Track
+                Capsule()
+                    .fill(Color.secondary.opacity(0.22))
+                    .frame(height: Self.trackHeight)
+                // Fill: accent up to the boost zone, boost tint beyond.
+                HStack(spacing: 0) {
+                    Capsule()
+                        .fill(Color.accentColor.gradient)
+                        .frame(width: max(x, 0))
+                }
+                .frame(width: max(x, 0), height: Self.trackHeight, alignment: .leading)
+                if let zoneFraction, zoneFraction > 0, zoneFraction < 1 {
+                    // Boost-zone tint (the XDR region past the divider).
+                    Capsule()
+                        .fill(Color.orange.opacity(0.85))
+                        .frame(width: max(x - zoneX, 0), height: Self.trackHeight)
+                        .offset(x: zoneX)
+                }
+                // Zone divider tick.
+                if let zoneFraction, zoneFraction > 0, zoneFraction < 1 {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.5))
+                        .frame(width: 1, height: 10)
+                        .offset(x: zoneX - 0.5)
+                }
+                // Thumb.
+                thumb
+                    .offset(x: x - half)
+            }
+            .frame(height: Self.thumbHeight)
+            .contentShape(Rectangle().inset(by: -6))
+            .gesture(dragGesture(width: width))
+            .overlay(alignment: .top) {
+                if Self.showsValueOverlay(isDragging: isDragging) {
+                    Text(valueText(value))
+                        .font(FBDTheme.Font.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .fbdGlass(in: Capsule())
+                        .offset(y: -22)
+                }
+            }
+        }
+        .frame(height: 22)
+    }
+
     private var thumbScale: CGFloat {
         if reduceMotion { return 1 }
         return isDragging || isFocused ? 1.2 : (isHovering ? 1.1 : 1)
@@ -124,7 +177,7 @@ struct FDBSlider: View {
         DragGesture(minimumDistance: 0)
             .onChanged { gesture in
                 isDragging = true
-                applyFraction(gesture.location.x / width)
+                applyFraction((gesture.location.x - Self.thumbWidth / 2) / max(width - Self.thumbWidth, 1))
             }
             .onEnded { _ in
                 isDragging = false

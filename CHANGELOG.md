@@ -5,6 +5,23 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Changed
+- **Redesigned the menu-bar panel (Control Center style, Liquid Glass on macOS 26+); Settings now
+  opens in its own window.** The panel is a borderless popover sized to its content (340 pt wide,
+  at most 85% of the screen tall, then it scrolls). The front page has each display's brightness
+  (and DDC volume) slider, quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake,
+  presets, and rows for virtual screens and display groups. Every other per-display control the old
+  panel had is on that display's page, one click away — resolution, refresh rate, XDR / HDR, colour
+  profile, EDID, filters, monitor controls and display actions, plus what the old ⋯ menu held: HiDPI,
+  Auto Brightness, resolution favourites, presets (apply and save), mirroring, Picture in Picture,
+  streaming and Show in Settings — with `All Modes` as the only second level. The Virtual Screens
+  page keeps `Reconnect All`. Selections are
+  flat checkmark lists, and every label is plain language, localised in English, Simplified and
+  Traditional Chinese. On macOS 26+ the backdrop, toggles, page header, small buttons and slider
+  thumb use Liquid Glass, and the HUD defaults to glass (a saved choice wins). Earlier macOS
+  versions, or `FBD_DISABLE_GLASS=1`, get the same UI with materials. CI and release builds now
+  require Xcode 26+.
+
 ### Added
 - **Named display presets: a display's whole configuration saved under a name, with an icon.**
   FBD could recall a resolution (`config favourite`) and restore a set of protected properties on
@@ -52,6 +69,13 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   a deliberate gap is respected, and the geometry refuses to move a pointer macOS would have crossed by
   itself. It is inert with one display, and if the monitor never fires it simply does nothing: it can
   never fight the user for the pointer. Off by default, like everything else in FBD that moves it.
+
+### Fixed
+- **Creating a virtual screen no longer crashes FBD.** The SkyLight calls that build a virtual
+  display were handed pointers to a bridged `NSString` (the name) and `NSArray` (the optional modes)
+  that were temporaries: Swift released them as soon as the pointer was taken, while SkyLight kept
+  using it, so creating a screen from the app crashed. Both objects are now kept alive for the whole
+  call.
 
 ## [1.7.0] - 2026-10-14
 

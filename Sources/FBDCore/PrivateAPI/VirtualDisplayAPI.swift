@@ -87,11 +87,16 @@ public enum VirtualDisplayAPI {
         var err: UnsafeMutableRawPointer?
         let mm = fbd_point(x: sizeMillimeters.width, y: sizeMillimeters.height)
         let maxP = fbd_size_i(w: maxPixels.width, h: maxPixels.height)
-        guard let config = FBDVDConfigCreate(
-            Unmanaged.passUnretained(configClass as AnyObject).toOpaque(),
-            Unmanaged.passUnretained(name as NSString).toOpaque(),
-            vendorID, productID, serialNumber, mm, maxP, chromaticities, &err
-        ) else {
+        // Bind the bridged NSString so it stays alive for the whole C call; a temporary
+        // would be released while SkyLight still retains the dangling pointer.
+        let nsName = name as NSString
+        guard let config = withExtendedLifetime(nsName, {
+            FBDVDConfigCreate(
+                Unmanaged.passUnretained(configClass as AnyObject).toOpaque(),
+                Unmanaged.passUnretained(nsName).toOpaque(),
+                vendorID, productID, serialNumber, mm, maxP, chromaticities, &err
+            )
+        }) else {
             log.warning("config create failed: \(takeError(err)?.localizedDescription ?? "unknown")")
             return nil
         }
@@ -138,14 +143,18 @@ public enum VirtualDisplayAPI {
     ) -> AnyObject? {
         guard let settingsClass = NSClassFromString("SLVirtualDisplaySettings") else { return nil }
         var err: UnsafeMutableRawPointer?
-        guard let settings = FBDVDSettingsCreate(
-            Unmanaged.passUnretained(settingsClass as AnyObject).toOpaque(),
-            Unmanaged.passUnretained(native).toOpaque(),
-            Unmanaged.passUnretained(preferred ?? native).toOpaque(),
-            Unmanaged.passUnretained(optional as NSArray).toOpaque(),
-            rotations,
-            &err
-        ) else { return nil }
+        // Bridged NSArray must outlive the C call (see create(name:...)).
+        let nsOptional = optional as NSArray
+        guard let settings = withExtendedLifetime(nsOptional, {
+            FBDVDSettingsCreate(
+                Unmanaged.passUnretained(settingsClass as AnyObject).toOpaque(),
+                Unmanaged.passUnretained(native).toOpaque(),
+                Unmanaged.passUnretained(preferred ?? native).toOpaque(),
+                Unmanaged.passUnretained(nsOptional).toOpaque(),
+                rotations,
+                &err
+            )
+        }) else { return nil }
         return Unmanaged<AnyObject>.fromOpaque(settings).takeRetainedValue()
     }
 }
