@@ -212,6 +212,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     /// Show the panel under the status item.
     func showPanel() {
+        // The hosting view lives as long as the app, so `onAppear` does not fire again on each
+        // open: re-read the state that can change while the popover is closed (Dark Mode, Night
+        // Shift, True Tone, Keep Awake; virtual-screen and group counts) before sizing it.
+        model.refreshToggles()
+        model.refreshCounts()
         if let frame = anchoredFrame() {
             panel.setFrame(frame, display: false)
         } else {

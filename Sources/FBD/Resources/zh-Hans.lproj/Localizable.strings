@@ -53,7 +53,6 @@
 "Resolutions" = "分辨率";
 "EDID" = "EDID";
 "Filters" = "滤镜";
-"More controls" = "更多控制";
 
 /* 设置 — 分区标题 */
 "About" = "关于";
@@ -210,7 +209,7 @@
 "The group is active while both a sync source and a sync target are connected." = "同步源和同步目标都已连接时该组即生效。";
 "The group is always active." = "该组始终生效。";
 "The lowest hardware brightness value before software dimming takes over." = "软件调暗接管前的最低硬件亮度值。";
-"The panel shows one row per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit." = "面板为每台显示器显示一行，包含亮度、滤镜、分辨率和 XDR/HDR 控制，底部还有虚拟屏幕、显示器组、画中画、更新和退出的入口。";
+"The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display." = "面板显示每台显示器的亮度，以及显示器支持时的音量；深色模式、夜览、原彩显示和保持唤醒的快捷开关；预设；以及虚拟屏幕和显示器组的入口。点按某台显示器的行可打开其页面，该显示器的其他所有控制项都在那里。";
 "The system appearance — the switch Control Center flips, so another app can change it too." = "系统外观——与控制中心所切换的是同一个开关，因此其他应用也能更改它。";
 "The top of the XDR/HDR upscaling range on the combined scale." = "组合刻度上 XDR/HDR 升频范围的上限。";
 "This Mac (base M3) may not reconnect its built-in display without a reboot." = "此 Mac（基础款 M3）可能无法在不重新启动的情况下重新连接其内建显示器。";
@@ -316,7 +315,6 @@
 "Disconnect virtual screens while locked" = "锁定时断开虚拟屏幕";
 "Dismiss message" = "关闭消息";
 "Display is offline — connect it to control it." = "显示器已离线——连接后即可控制。";
-"Display will go dark until re-enabled" = "显示器将变黑，直到重新启用";
 "Every other display turns off until it is re-enabled." = "其他所有显示器都会关闭，直到重新启用。";
 "Export EDID…" = "导出 EDID…";
 "FBD" = "FBD";
@@ -453,3 +451,9 @@
 "Show All %lld Modes" = "显示全部 %lld 种模式";
 "Show Fewer" = "显示较少";
 "%lld°" = "%lld°";
+"More" = "更多";
+"Record" = "记录";
+"Record the current resolution into this slot" = "将当前分辨率记录到此位置";
+"Reconnect All" = "全部重新连接";
+"Target Nits" = "目标尼特";
+"Group" = "显示器组";

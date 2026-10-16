@@ -54,7 +54,6 @@
 "Resolutions" = "Resolutions";
 "EDID" = "EDID";
 "Filters" = "Filters";
-"More controls" = "More controls";
 
 /* Settings — section headers */
 "About" = "About";
@@ -211,7 +210,7 @@
 "The group is active while both a sync source and a sync target are connected." = "The group is active while both a sync source and a sync target are connected.";
 "The group is always active." = "The group is always active.";
 "The lowest hardware brightness value before software dimming takes over." = "The lowest hardware brightness value before software dimming takes over.";
-"The panel shows one row per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit." = "The panel shows one row per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit.";
+"The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display." = "The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display.";
 "The system appearance — the switch Control Center flips, so another app can change it too." = "The system appearance — the switch Control Center flips, so another app can change it too.";
 "The top of the XDR/HDR upscaling range on the combined scale." = "The top of the XDR/HDR upscaling range on the combined scale.";
 "This Mac (base M3) may not reconnect its built-in display without a reboot." = "This Mac (base M3) may not reconnect its built-in display without a reboot.";
@@ -321,7 +320,6 @@
 "Disconnect virtual screens while locked" = "Disconnect virtual screens while locked";
 "Dismiss message" = "Dismiss message";
 "Display is offline — connect it to control it." = "Display is offline — connect it to control it.";
-"Display will go dark until re-enabled" = "Display will go dark until re-enabled";
 "Every other display turns off until it is re-enabled." = "Every other display turns off until it is re-enabled.";
 "Export EDID…" = "Export EDID…";
 "FBD" = "FBD";
@@ -458,3 +456,9 @@
 "Show All %lld Modes" = "Show All %lld Modes";
 "Show Fewer" = "Show Fewer";
 "%lld°" = "%lld°";
+"More" = "More";
+"Record" = "Record";
+"Record the current resolution into this slot" = "Record the current resolution into this slot";
+"Reconnect All" = "Reconnect All";
+"Target Nits" = "Target Nits";
+"Group" = "Group";

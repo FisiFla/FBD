@@ -3,7 +3,7 @@ import FBDCore
 import SwiftUI
 
 /// One display's page: resolution, refresh rate, XDR / HDR, color profile, EDID, filters,
-/// monitor controls and display actions, each a section header over flat checkmark rows.
+/// monitor controls, display actions, presets and the "More" options, each a section header over flat checkmark rows.
 /// The per-display views (`DisplaySectionsView`, `FilterControlsView`, `DDCPanelView`) are the
 /// same ones Settings → Displays embeds; this page only orders them and adds the mode lists.
 struct DisplayDetailPage: View {
@@ -51,6 +51,7 @@ struct DisplayDetailPage: View {
                     .foregroundStyle(.secondary)
             }
             displaySection
+            DisplayMoreSection(model: model, display: display)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fbdDisableDisplayConfirmation(isPresented: $confirmingDisable, display: display)
@@ -78,14 +79,17 @@ struct DisplayDetailPage: View {
                         DisplayController.shared.applyMode(mode, to: display)
                     }
                 }
-                FBDListRow(
-                    symbol: "list.bullet",
-                    title: "Show All \(display.offeredModes.count) Modes",
-                    showsChevron: true
-                ) {
-                    model.open(.allModes(display.id))
+                // Only when the curated list leaves something out, as Settings decides it.
+                if ModeListLogic.curatedHidesAnything(modes: display.offeredModes, current: display.currentMode) {
+                    FBDListRow(
+                        symbol: "list.bullet",
+                        title: "Show All \(display.offeredModes.count) Modes",
+                        showsChevron: true
+                    ) {
+                        model.open(.allModes(display.id))
+                    }
+                    .accessibilityIdentifier("display.allModes")
                 }
-                .accessibilityIdentifier("display.allModes")
             }
         }
     }
