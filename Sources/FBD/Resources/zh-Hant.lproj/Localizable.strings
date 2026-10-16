@@ -6,7 +6,6 @@
 
 /* 顯示器列表 */
 "No displays" = "沒有顯示器";
-"Connect a display to control it here." = "連接顯示器後即可在此控制。";
 
 /* 單一顯示器的選單 */
 "Manage Display" = "管理顯示器";
@@ -25,7 +24,6 @@
 
 /* 區段 */
 "Display Groups" = "顯示器群組";
-"No groups yet. Create one to sync brightness or mirror displays." = "尚無顯示器群組。建立一個即可同步亮度或鏡像顯示器。";
 "Virtual Screens" = "虛擬螢幕";
 "Stream to" = "串流至";
 "Apple Display Preset" = "Apple 顯示器預設組";
@@ -49,10 +47,7 @@
 "This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable." = "此顯示器不支援 DDC/CI，因此無法使用其螢幕控制（輸入來源、揚聲器、對比度）。";
 
 /* 視窗 */
-"Free Better Display" = "自由、更好的顯示器";
 "Settings" = "設定";
-"Back to FBD" = "返回 FBD";
-"Close FBD panel" = "關閉 FBD 面板";
 
 /* 面板區段標題（經由 disclosureSection，其標題現為 LocalizedStringKey） */
 "Resolutions" = "解析度";
@@ -309,23 +304,16 @@
 "Brightness unavailable" = "亮度無法使用";
 "Cancel" = "取消";
 "Capabilities read" = "已讀取功能";
-"Check for Updates" = "檢查更新";
 "Check for Updates…" = "檢查更新…";
 "Choose file…" = "選擇檔案…";
-"Close" = "關閉";
 "Color Profile" = "色彩描述檔";
-"Could not create virtual display." = "無法建立虛擬顯示器。";
 "Could not read EDID for this display" = "無法讀取這台顯示器的 EDID";
 "DDC control is unavailable under Rosetta — run FBD natively (arm64) for full functionality." = "DDC 控制在 Rosetta 下無法使用——請以原生（arm64）方式執行 FBD 以取得完整功能。";
 "DDC input source (VCP 0x60), 1–15" = "DDC 輸入來源（VCP 0x60），1–15";
 "Delete this group?" = "要刪除此群組嗎？";
-"Destroy" = "銷毀";
-"Destroy this virtual screen?" = "要銷毀此虛擬螢幕嗎？";
 "Disable" = "停用";
 "Disconnect" = "中斷連接";
-"Disconnect all" = "全部中斷連接";
 "Disconnect all but the main display?" = "要中斷除主顯示器以外的所有顯示器嗎？";
-"Disconnect all virtual screens?" = "要中斷所有虛擬螢幕嗎？";
 "Disconnect virtual screens while locked" = "鎖定時中斷虛擬螢幕";
 "Dismiss message" = "關閉訊息";
 "Display is offline — connect it to control it." = "顯示器已離線——連接後即可控制。";
@@ -337,26 +325,19 @@
 "Failed to apply override" = "套用覆寫失敗";
 "Failed to restore factory EDID" = "還原出廠 EDID 失敗";
 "Failed — EDID override requires Apple Silicon" = "失敗——EDID 覆寫需要 Apple 晶片";
-"Group name" = "群組名稱";
 "Manual override: a raw DDC input source (VCP 0x60) between 1 and 15" = "手動覆寫：1 到 15 之間的原始 DDC 輸入來源（VCP 0x60）";
 "More options" = "更多選項";
 "Name" = "名稱";
-"New group" = "新增群組";
 "No current resolution to record." = "沒有可記錄的目前解析度。";
 "No displays connected" = "未連接顯示器";
 "No reply from the display" = "顯示器沒有回應";
-"Open a floating picture-in-picture window for the primary display" = "為主顯示器開啟浮動的子母畫面視窗";
-"PiP" = "子母畫面";
 "Picture in Picture" = "子母畫面";
 "Preset" = "預設";
 "Query the display's supported VCP features (VCP 0xF3)" = "查詢顯示器支援的 VCP 功能（VCP 0xF3）";
 "Quit FBD" = "結束 FBD";
 "Reading capabilities…" = "正在讀取功能…";
-"Reconnect all" = "全部重新連接";
 "Record current resolution" = "記錄目前解析度";
-"Refresh rate" = "更新率";
 "Remove this rule" = "移除此規則";
-"Resolution" = "解析度";
 "Restore default" = "還原預設";
 "Restore factory" = "還原出廠";
 "Restore the factory EDID?" = "要還原出廠 EDID 嗎？";
@@ -372,7 +353,6 @@
 "System events only fire for rules scoped to \"Any display\"." = "系統事件只會觸發範圍為「任何顯示器」的規則。";
 "The display did not accept that write" = "顯示器未接受該寫入";
 "The displays themselves are not affected." = "顯示器本身不受影響。";
-"The virtual screen is removed until you create it again." = "該虛擬螢幕將被移除，直到您重新建立。";
 "Volume" = "音量";
 "Version %@" = "版本 %@";
 "Brightness for %@" = "%@的亮度";
@@ -424,3 +404,7 @@
 "Applied preset '%@'." = "已套用預設「%@」。";
 "On" = "開啟";
 "Unavailable" = "無法使用";
+
+/* Task 4 */
+"FBD Settings" = "FBD 設定";
+"All Modes" = "所有模式";
