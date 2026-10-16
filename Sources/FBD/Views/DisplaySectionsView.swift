@@ -35,6 +35,8 @@ struct DisplaySectionsView: View {
     /// body evaluations (same pattern as DisplayListView's controllers).
     @State private var edidController = EDIDController()
     @State private var colorProfileController = ColorProfileController()
+    @State private var confirmingEDIDOverride = false
+    @State private var confirmingEDIDRestore = false
     /// Whether the resolution list is showing every mode rather than the curated few.
     /// Per-instance view state, so it resets when the panel is rebuilt — which is fine, the
     /// curated list is the default anyone wants on opening.
@@ -155,18 +157,33 @@ struct DisplaySectionsView: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
                     Button("Export EDID…") { exportEDID() }
-                    Button("Apply override…") { applyOverrideFromFile() }
-                    Button("Restore factory") { restoreFactoryEDID() }
+                    Button("Apply override…") { confirmingEDIDOverride = true }
+                    Button("Restore factory") { confirmingEDIDRestore = true }
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Button("Export EDID…") { exportEDID() }
-                        Button("Apply override…") { applyOverrideFromFile() }
+                        Button("Apply override…") { confirmingEDIDOverride = true }
                     }
-                    Button("Restore factory") { restoreFactoryEDID() }
+                    Button("Restore factory") { confirmingEDIDRestore = true }
                 }
             }
             .controlSize(.small)
+            .fbdConfirmation(
+                "Apply an EDID override?",
+                isPresented: $confirmingEDIDOverride,
+                confirm: "Choose file…",
+                message: "A wrong EDID can leave the display unusable until it is restored or FBD is launched in safe mode."
+            ) {
+                applyOverrideFromFile()
+            }
+            .fbdConfirmation(
+                "Restore the factory EDID?",
+                isPresented: $confirmingEDIDRestore,
+                confirm: "Restore factory"
+            ) {
+                restoreFactoryEDID()
+            }
 
             if let edidSummary {
                 summaryRow("Manufacturer", edidSummary.manufacturer)
