@@ -65,13 +65,17 @@ public enum IOAVServiceAPI {
         let candidates = ["AppleCLCD2", "IODisplayConnect", "IOMobileFramebufferShim"]
         for className in candidates {
             let services = IOKitSupport.matchingServices(IOServiceMatching(className))
+            var match: io_service_t?
             for service in services {
-                let props = IOKitSupport.properties(of: service)
-                if propsMatchDisplay(props, vendor: vendor, model: model, serial: serial) {
-                    return service // +1 ref transfers to the caller
+                // Release every non-matching node, and the rest of the iterator after a hit.
+                if match == nil,
+                   propsMatchDisplay(IOKitSupport.properties(of: service), vendor: vendor, model: model, serial: serial) {
+                    match = service // +1 ref transfers to the caller
+                } else {
+                    IOKitSupport.release(service)
                 }
-                IOKitSupport.release(service)
             }
+            if let match { return match }
         }
         return nil
     }
@@ -111,12 +115,13 @@ public enum IOAVServiceAPI {
         return vendorOK && modelOK && serialOK
     }
 
-    /// Read raw bytes from an I2C address (e.g. 0x37 DDC, 0x50 EDID).
-    public static func readI2C(_ service: IOAVServiceRef, address: UInt8, length: Int) -> Data? {
+    /// Read raw bytes from an I2C chip address (e.g. 0x37 DDC, 0x50 EDID); `offset` is the
+    /// data address sent first (0x51 for DDC/CI, per m1ddc).
+    public static func readI2C(_ service: IOAVServiceRef, address: UInt8, offset: UInt8 = 0, length: Int) -> Data? {
         guard length > 0, length <= 256 else { return nil }
         var buffer = [UInt8](repeating: 0, count: length)
         let status = buffer.withUnsafeMutableBytes { raw -> kern_return_t in
-            IOAVServiceReadI2C(service, UInt32(address), raw.bindMemory(to: UInt8.self).baseAddress, UInt32(length))
+            IOAVServiceReadI2C(service, UInt32(address), UInt32(offset), raw.baseAddress, UInt32(length))
         }
         guard status == KERN_SUCCESS else {
             log.debug("IOAVServiceReadI2C failed: \(status)")
@@ -125,13 +130,14 @@ public enum IOAVServiceAPI {
         return Data(buffer)
     }
 
-    /// Write raw bytes to an I2C address (e.g. 0x37 DDC).
+    /// Write raw bytes to an I2C chip address (e.g. 0x37 DDC); `dataAddress` is sent first
+    /// (0x51 for DDC/CI, per m1ddc).
     @discardableResult
-    public static func writeI2C(_ service: IOAVServiceRef, address: UInt8, data: Data) -> Bool {
+    public static func writeI2C(_ service: IOAVServiceRef, address: UInt8, dataAddress: UInt8 = 0, data: Data) -> Bool {
         let count = data.count
         var bytes = [UInt8](data)
         let status = bytes.withUnsafeMutableBytes { raw -> kern_return_t in
-            IOAVServiceWriteI2C(service, UInt32(address), raw.bindMemory(to: UInt8.self).baseAddress, UInt32(count))
+            IOAVServiceWriteI2C(service, UInt32(address), UInt32(dataAddress), raw.baseAddress, UInt32(count))
         }
         if status != KERN_SUCCESS {
             log.debug("IOAVServiceWriteI2C failed: \(status)")

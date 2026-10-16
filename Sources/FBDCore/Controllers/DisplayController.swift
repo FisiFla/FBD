@@ -127,7 +127,7 @@ public final class DisplayController {
         DDCControls(
             contrast: ddc.getFeature(.contrast, for: display),
             volume: ddc.getFeature(.volume, for: display),
-            muted: ddc.getFeature(.mute, for: display).map { $0 > 0 },
+            muted: ddc.getFeature(.mute, for: display).map(DDC.isMuted),
             inputSource: ddc.getFeature(.inputSource, for: display)
         )
     }
@@ -178,6 +178,9 @@ public final class DisplayController {
     /// Display instances by id, and refresh per-display mode/DDC/XDR status,
     /// plus hardware brightness-change observation.
     public func refresh() {
+        // Replug / wake / dock changes can re-create the IOAVService nodes; drop cached refs
+        // (positive and negative) so the next DDC call resolves against the live registry.
+        external.invalidateCache()
         var count: UInt32 = 0
         guard CGGetActiveDisplayList(0, nil, &count) == .success else {
             log.error("CGGetActiveDisplayList failed")
@@ -245,12 +248,14 @@ public final class DisplayController {
         }
         let combined = self.combined
         brightnessDebounceWorkItems[display.id]?.cancel()
-        let workItem = DispatchWorkItem {
-            // Record FBD's chosen value — the "stored control value" the startup policy
-            // reads or re-writes — *before* the write, so a display that refuses it still
-            // remembers what was asked for.
+        let workItem = DispatchWorkItem { [log] in
+            // Only a write that engaged a control path counts: persisting (and updating the
+            // model with) a value the display never received would show/restore a lie.
+            guard combined.set(clamped, on: display) else {
+                log.warning("setBrightness: write failed for \(display.id) — not persisting")
+                return
+            }
             Settings.setStoredBrightness(clamped, for: display.identityKey)
-            combined.set(clamped, on: display)
             display.updateBrightness(clamped)
             // Let the OSD and any observers follow UI/CLI brightness writes.
             NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id])
@@ -430,7 +435,7 @@ public final class DisplayController {
     /// or nil when the monitor doesn't answer.
     public func readMuted(for display: Display) -> Bool? {
         guard let raw = ddc.getFeature(.mute, for: display) else { return nil }
-        return raw <= 1.5
+        return DDC.isMuted(raw)
     }
 
     /// Read the DDC panel's read-back values in one pass, off the main actor.

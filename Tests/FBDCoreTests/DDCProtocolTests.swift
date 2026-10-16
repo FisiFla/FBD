@@ -2,175 +2,132 @@ import XCTest
 @testable import FBDCore
 
 final class DDCProtocolTests: XCTestCase {
+    // Expected bytes below are derived from m1ddc (github.com/waydabber/m1ddc,
+    // sources/i2c.m `prepareDDCWrite` / `prepareDDCRead` / `convertI2CtoDDC`), the
+    // reference IOAVService DDC implementation -- not from FBD's earlier assumptions.
+    // Hardware verification is still pending (issue #7).
+
+    /// Reply as an IOAVService read returns it: [0x6E, 0x88, 0x02, result, code, type,
+    /// maxHi, maxLo, curHi, curLo, chk, pad] (m1ddc reads 12 bytes; max @6-7, current @8-9).
+    private func vcpReply(code: UInt8 = 0x10, max: UInt16 = 100, current: UInt16 = 50, result: UInt8 = 0) -> Data {
+        Data([0x6E, 0x88, 0x02, result, code, 0x00,
+              UInt8(max >> 8), UInt8(max & 0xFF), UInt8(current >> 8), UInt8(current & 0xFF), 0x00, 0x00])
+    }
+
     // MARK: - VCP write packet
 
-    func testWriteVCPPacketBuildsSetFeaturePacket() {
-        // Arrange
-        let code: UInt8 = 0x10
-
-        // Act
-        let packet = DDC.writeVCPPacket(code: code, value: 100)
-
-        // Assert: [source, 0x6C, code, hi, lo, checksum]
-        XCTAssertEqual(packet, [0x51, 0x6C, 0x10, 0x00, 0x64, 0xCF])
+    func testWriteVCPPacketMatchesM1DDCSetFeature() {
+        // m1ddc: [0x84, 0x03, code, hi, lo, 0x6E ^ 0x51 ^ 0x84 ^ 0x03 ^ code ^ hi ^ lo]
+        // 0x6E^0x51^0x84^0x03^0x10^0x00^0x64 = 0xCC
+        XCTAssertEqual(DDC.writeVCPPacket(code: 0x10, value: 100), [0x84, 0x03, 0x10, 0x00, 0x64, 0xCC])
     }
 
     func testWriteVCPPacketEncodesValueBigEndianAcrossTwoBytes() {
-        // Arrange
-        let code: UInt8 = 0x10
-
-        // Act
-        let packet = DDC.writeVCPPacket(code: code, value: 0x1234)
-
-        // Assert
-        XCTAssertEqual(packet, [0x51, 0x6C, 0x10, 0x12, 0x34, 0xED])
+        // 0x6E^0x51^0x84^0x03^0x10 = 0xA8; 0xA8^0x12^0x34 = 0x8E
+        XCTAssertEqual(DDC.writeVCPPacket(code: 0x10, value: 0x1234), [0x84, 0x03, 0x10, 0x12, 0x34, 0x8E])
     }
 
     // MARK: - VCP read request
 
-    func testReadVCPRequestBuildsGetFeaturePacket() {
-        // Act
-        let request = DDC.readVCPRequest(code: 0x10)
-
-        // Assert: [source, 0x6D, code, checksum] — 0x51 + 0x6D + 0x10 = 0xCE → checksum 0x32
-        XCTAssertEqual(request, [0x51, 0x6D, 0x10, 0x32])
+    func testReadVCPRequestIsSpecFramedGetFeature() {
+        // Payload as m1ddc, checksum per DDC/CI: 0x6E ^ 0x51 ^ 0x82 ^ 0x01 ^ code.
+        // 0x6E^0x51^0x82^0x01^0x10 = 0xAC
+        XCTAssertEqual(DDC.readVCPRequest(code: 0x10), [0x82, 0x01, 0x10, 0xAC])
     }
 
     // MARK: - VCP reply parsing
 
-    func testParseVCPReplyExtractsCodeAndValues() {
-        // Arrange
-        let reply = Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])
+    func testParseVCPReplyReadsMaxAt6And7AndCurrentAt8And9() {
+        let parsed = DDC.parseVCPReply(vcpReply(code: 0x10, max: 100, current: 50))
 
-        // Act
-        let parsed = DDC.parseVCPReply(reply)
-
-        // Assert
-        XCTAssertNotNil(parsed)
         XCTAssertEqual(parsed?.code, 0x10)
         XCTAssertEqual(parsed?.value, DDC.DDCValue(maxValue: 100, currentValue: 50))
     }
 
-    func testParseVCPReplyAcceptsValidChecksumTerminator() {
-        // Arrange: last byte = checksum so byte sum ≡ 0 (mod 256)
-        // 0x6E+0x10+0x03+0x00+0x64+0x00+0x32 = 0x117 → checksum = 0xE9
-        let reply = Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0xE9])
+    func testParseVCPReplyDecodesBigEndian16BitValues() {
+        let parsed = DDC.parseVCPReply(vcpReply(max: 0x0190, current: 0x0102))
 
-        // Act
-        let parsed = DDC.parseVCPReply(reply)
-
-        // Assert
-        XCTAssertNotNil(parsed)
-        XCTAssertEqual(parsed?.code, 0x10)
-        XCTAssertEqual(parsed?.value, DDC.DDCValue(maxValue: 100, currentValue: 50))
+        XCTAssertEqual(parsed?.value, DDC.DDCValue(maxValue: 400, currentValue: 258))
     }
 
-    func testParseVCPReplyTolerates0x6DFirstByteEcho() {
-        // Arrange
-        let reply = Data([0x6D, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])
+    func testParseVCPReplyRejectsUnsupportedFeatureResult() {
+        XCTAssertNil(DDC.parseVCPReply(vcpReply(result: 0x01)))
+    }
 
-        // Act
-        let parsed = DDC.parseVCPReply(reply)
-
-        // Assert
-        XCTAssertNotNil(parsed)
-        XCTAssertEqual(parsed?.code, 0x10)
-        XCTAssertEqual(parsed?.value, DDC.DDCValue(maxValue: 100, currentValue: 50))
+    func testParseVCPReplyRejectsAllZeroBuffer() {
+        // An unanswered read leaves m1ddc's zeroed buffer; it must not parse as 0/0.
+        XCTAssertNil(DDC.parseVCPReply(Data(count: DDC.vcpReplyLength)))
     }
 
     func testParseVCPReplyRejectsShortData() {
-        // Arrange
-        let reply = Data([0x6E, 0x10, 0x03, 0x00])
-
-        // Act
-        let parsed = DDC.parseVCPReply(reply)
-
-        // Assert
-        XCTAssertNil(parsed)
-    }
-
-    func testParseVCPReplyRejectsWrongTerminator() {
-        // Arrange
-        let reply = Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x00])
-
-        // Act
-        let parsed = DDC.parseVCPReply(reply)
-
-        // Assert
-        XCTAssertNil(parsed)
+        XCTAssertNil(DDC.parseVCPReply(Data([0x6E, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64])))
     }
 
     func testParseVCPReplyRejectsEmptyData() {
-        // Act
-        let parsed = DDC.parseVCPReply(Data())
+        XCTAssertNil(DDC.parseVCPReply(Data()))
+    }
 
-        // Assert
-        XCTAssertNil(parsed)
+    // MARK: - Mute polarity
+
+    func testIsMutedFollowsMCCSPolarity() {
+        // VCP 0x8D: 1 = muted (on), 2 = unmuted (off).
+        XCTAssertTrue(DDC.isMuted(1))
+        XCTAssertFalse(DDC.isMuted(2))
     }
 
     // MARK: - Capabilities request
 
     func testCapabilitiesRequestPacket() {
-        // Assert: [source, 0x6F, 0xF3, checksum] — 0x51+0x6F+0xF3 = 0x1B3 → checksum 0x4D
-        XCTAssertEqual(DDC.capabilitiesRequest, [0x51, 0x6F, 0xF3, 0x4D])
+        // [0x83, 0xF3, offHi, offLo, 0x6E^0x51^...]: 0x6E^0x51^0x83^0xF3 = 0x4F
+        XCTAssertEqual(DDC.capabilitiesRequest(), [0x83, 0xF3, 0x00, 0x00, 0x4F])
+        XCTAssertEqual(DDC.capabilitiesRequest(offset: 0x0020), [0x83, 0xF3, 0x00, 0x20, 0x6F])
     }
 
-    func testChecksumMakesByteSumZeroMod256() {
-        // 0x51 + 0x6C + 0x10 + 0x00 + 0x64 = 0x131 → checksum 0xCF
-        XCTAssertEqual(DDC.checksum([0x51, 0x6C, 0x10, 0x00, 0x64]), 0xCF)
-        // A packet with its checksum appended sums to 0 mod 256.
-        let packet = DDC.writeVCPPacket(code: 0x10, value: 100)
-        XCTAssertEqual(packet.reduce(0) { ($0 + Int($1)) & 0xFF }, 0)
+    func testChecksumIsXorOfDestinationSourceAndPayload() {
+        XCTAssertEqual(DDC.checksum([0x84, 0x03, 0x10, 0x00, 0x64]), 0xCC)
+        XCTAssertEqual(DDC.checksum([0x82, 0x01, 0x10], includeSource: false), 0xFD)
     }
 
-    // MARK: - Capabilities text extraction
+    // MARK: - Capabilities fragments
+
+    func testParseCapabilitiesFragmentExtractsOffsetAndPayload() {
+        let payload = Array("(vcp(10".utf8)
+        let reply = Data([0x6E, UInt8(0x80 | (payload.count + 3)), 0xE3, 0x00, 0x20] + payload + [0x00])
+
+        let fragment = DDC.parseCapabilitiesFragment(reply)
+
+        XCTAssertEqual(fragment?.offset, 0x20)
+        XCTAssertEqual(fragment?.payload, payload)
+    }
+
+    func testParseCapabilitiesFragmentEmptyPayloadMarksEnd() {
+        let fragment = DDC.parseCapabilitiesFragment(Data([0x6E, 0x83, 0xE3, 0x00, 0x40, 0x00]))
+
+        XCTAssertEqual(fragment?.payload, [])
+    }
+
+    func testParseCapabilitiesFragmentRejectsWrongOpcodeAndTruncation() {
+        XCTAssertNil(DDC.parseCapabilitiesFragment(Data([0x6E, 0x88, 0x02, 0x00, 0x10, 0x00])))
+        XCTAssertNil(DDC.parseCapabilitiesFragment(Data([0x6E, 0x90, 0xE3, 0x00, 0x00, 0x41])))
+        XCTAssertNil(DDC.parseCapabilitiesFragment(Data([0x6E, 0x83])))
+    }
+
+    // MARK: - Capabilities text
 
     func testParseCapabilitiesTextExtractsAsciiPayload() {
-        // Arrange
-        let payload = Array("vcp(10 12 60 62 8D)F(1)mccs_ver(2.2)".utf8)
-        let reply = Data([0x6F, 0xF3, 0x00, 0x2E, 0x00] + payload + [0x6F])
-
-        // Act
-        let text = DDC.parseCapabilitiesText(reply)
-
-        // Assert
+        let text = DDC.parseCapabilitiesText(Data(Array("(vcp(10 12 60 62 8D)F(1)mccs_ver(2.2)".utf8) + [0, 0]))
         XCTAssertNotNil(text)
         XCTAssertTrue(text!.contains("vcp("))
         XCTAssertTrue(text!.contains("mccs_ver(2.2)"))
+        XCTAssertFalse(text!.contains("\0"))
     }
 
     func testParseCapabilitiesTextRejectsGarbageData() {
-        // Arrange
-        let reply = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
-
-        // Act
-        let text = DDC.parseCapabilitiesText(reply)
-
-        // Assert
-        XCTAssertNil(text)
+        XCTAssertNil(DDC.parseCapabilitiesText(Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])))
     }
 
     func testParseCapabilitiesTextRejectsPayloadWithoutVCPMarker() {
-        // Arrange
-        let payload = Array("hello world".utf8)
-        let reply = Data([0x6F, 0xF3, 0x00, 0x00, 0x00] + payload + [0x6F])
-
-        // Act
-        let text = DDC.parseCapabilitiesText(reply)
-
-        // Assert
-        XCTAssertNil(text)
-    }
-
-    func testParseCapabilitiesTextRejectsTooShortData() {
-        // Arrange
-        let reply = Data([0x6F, 0xF3])
-
-        // Act
-        let text = DDC.parseCapabilitiesText(reply)
-
-        // Assert
-        XCTAssertNil(text)
+        XCTAssertNil(DDC.parseCapabilitiesText(Data("hello world".utf8)))
     }
 
     // MARK: - Capabilities structure parsing

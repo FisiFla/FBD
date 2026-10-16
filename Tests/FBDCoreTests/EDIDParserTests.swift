@@ -17,10 +17,11 @@ final class EDIDParserTests: XCTestCase {
     ///   → b0 = (1<<2)|(16>>3) = 6, b1 = ((16&7)<<5)|16 = 16
     /// - product code 0x9C40 is stored little-endian as (0x40, 0x9C)
     /// - chromaticity bytes 25–34 pack 2 bits per coordinate, LSB first
-    /// - the preferred-timing DTD (offset 54) uses EDIDParser's decode
-    ///   layout: marker bytes 0/0, tag 0, parser pixel clock at 4–5,
-    ///   hActive = byte 8 << 8 | (byte 7 & 0xF0) >> 4 and
-    ///   vActive = byte 11 << 8 | (byte 10 & 0xF0) >> 4 (see the timing test)
+    /// - serial 0x01020304 is stored little-endian as (04, 03, 02, 01)
+    /// - the preferred-timing DTD (offset 54) is a real EDID detailed timing
+    ///   descriptor: little-endian pixel clock (10 kHz units) at bytes 0–1,
+    ///   hActive/hBlank in bytes 2–4 and vActive/vBlank in bytes 5–7, each pair
+    ///   sharing one byte of high nibbles
     /// - the 0xFC descriptor carries the ≤13-byte monitor name
     /// - byte 127 is the checksum making the block sum to 0 mod 256
     private func makeEDID(
@@ -38,7 +39,7 @@ final class EDIDParserTests: XCTestCase {
         b[9] = manufacturer.1
         b[10] = 0x40
         b[11] = 0x9C                 // product code 0x9C40, little-endian
-        b[12] = 0x01; b[13] = 0x02; b[14] = 0x03; b[15] = 0x04  // serial 0x01020304
+        b[12] = 0x04; b[13] = 0x03; b[14] = 0x02; b[15] = 0x01  // serial 0x01020304, little-endian
         b[16] = 5                    // week of manufacture
         b[17] = 33                   // year 2023 (1990 + 33)
         b[18] = 1; b[19] = 4         // EDID version 1.4
@@ -55,13 +56,16 @@ final class EDIDParserTests: XCTestCase {
         b[32] = UInt8(white.0 >> 2)
         b[33] = lo(blue.0) | lo(blue.1) << 2 | lo(white.0) << 4 | lo(white.1) << 6
         b[34] = UInt8(white.1 >> 2)
-        // Preferred timing DTD at offset 54 (EDIDParser's decode layout).
-        b[54] = 0; b[55] = 0; b[56] = 0; b[57] = 0
-        b[58] = 0x00; b[59] = 0x64   // parser pixel clock: 0x0064 = 100 (> 0)
-        b[61] = UInt8(timing.0 & 0xF0)  // hActive low nibble (bits 4–7)
-        b[62] = UInt8(timing.0 >> 8)    // hActive high byte
-        b[64] = UInt8(timing.1 & 0xF0)  // vActive low nibble (bits 4–7)
-        b[65] = UInt8(timing.1 >> 8)    // vActive high byte
+        // Preferred timing DTD at offset 54: 148.5 MHz pixel clock = 14850 (0x3A02) LE,
+        // blanking 280 (h) / 45 (v), the rest of the geometry from `timing`.
+        let hBlank: UInt16 = 280, vBlank: UInt16 = 45
+        b[54] = 0x02; b[55] = 0x3A
+        b[56] = UInt8(timing.0 & 0xFF)
+        b[57] = UInt8(hBlank & 0xFF)
+        b[58] = UInt8(timing.0 >> 8) << 4 | UInt8(hBlank >> 8)
+        b[59] = UInt8(timing.1 & 0xFF)
+        b[60] = UInt8(vBlank & 0xFF)
+        b[61] = UInt8(timing.1 >> 8) << 4 | UInt8(vBlank >> 8)
         // Monitor name descriptor at offset 72 (tag 0xFC, 13-byte field).
         b[72] = 0; b[73] = 0; b[74] = 0; b[75] = 0xFC; b[76] = 0
         for (i, byte) in Array(monitorName.utf8.prefix(13)).enumerated() {
@@ -81,10 +85,8 @@ final class EDIDParserTests: XCTestCase {
 
         XCTAssertEqual(parsed.raw.count, 128)
         XCTAssertEqual(parsed.manufacturer, "APP")
-        // The parser reads bytes 10–11 big-endian; the fixture stores 0x9C40
-        // little-endian as (0x40, 0x9C) per the EDID spec, so the round-trip
-        // value is 0x409C (EDIDParser is immutable).
-        XCTAssertEqual(parsed.productCode, 0x409C)
+        // Product code and serial are little-endian in the EDID.
+        XCTAssertEqual(parsed.productCode, 0x9C40)
         XCTAssertEqual(parsed.serialNumber, 0x01020304)
         XCTAssertEqual(parsed.weekOfManufacture, 5)
         XCTAssertEqual(parsed.yearOfManufacture, 2023)
@@ -95,12 +97,8 @@ final class EDIDParserTests: XCTestCase {
         XCTAssertEqual(parsed.maxHorizontalSizeCM, 60)
         XCTAssertEqual(parsed.maxVerticalSizeCM, 34)
         XCTAssertEqual(parsed.monitorName, "FBD Test Disp")
-        // Preferred timing: the fixture encodes 1920×1080 in EDIDParser's
-        // DTD layout (high byte + 4-bit nibble), which cannot represent the
-        // low nibbles 0x80/0x38 — the parser decodes (0x0700|8, 0x0400|3) =
-        // (1800, 1027). Asserting the parser's actual output.
-        XCTAssertEqual(parsed.preferredTiming?.width, 1800)
-        XCTAssertEqual(parsed.preferredTiming?.height, 1027)
+        XCTAssertEqual(parsed.preferredTiming?.width, 1920)
+        XCTAssertEqual(parsed.preferredTiming?.height, 1080)
         XCTAssertTrue(parsed.isChecksumValid)
         // Chromaticity round-trips the 10-bit fixture values within ±0.01.
         XCTAssertEqual(parsed.redPrimary.x, 0.64, accuracy: 0.01)
@@ -111,6 +109,16 @@ final class EDIDParserTests: XCTestCase {
         XCTAssertEqual(parsed.bluePrimary.y, 0.06, accuracy: 0.01)
         XCTAssertEqual(parsed.whitePoint.x, 0.3127, accuracy: 0.01)
         XCTAssertEqual(parsed.whitePoint.y, 0.3290, accuracy: 0.01)
+    }
+
+    func testDisplayDescriptorWithZeroPixelClockIsNotATiming() throws {
+        // Blank the timing slot (00 00 header = display descriptor, not a DTD).
+        var bytes = [UInt8](makeEDID(fixChecksum: false))
+        for i in 54..<72 { bytes[i] = 0 }
+        let parsed = try XCTUnwrap(EDIDParser.parse(Data(bytes)))
+
+        XCTAssertNil(parsed.preferredTiming)
+        XCTAssertEqual(parsed.monitorName, "FBD Test Disp")
     }
 
     // MARK: - Invalid input

@@ -37,9 +37,10 @@ public enum EDIDParser {
         }
 
         let manufacturer = decodeManufacturer(bytes[8], bytes[9])
-        let productCode = UInt16(bytes[10]) << 8 | UInt16(bytes[11])
-        let serialNumber = UInt32(bytes[12]) << 24 | UInt32(bytes[13]) << 16
-            | UInt32(bytes[14]) << 8 | UInt32(bytes[15])
+        // Product code and serial are little-endian (LSB first) in the EDID base block.
+        let productCode = UInt16(bytes[11]) << 8 | UInt16(bytes[10])
+        let serialNumber = UInt32(bytes[15]) << 24 | UInt32(bytes[14]) << 16
+            | UInt32(bytes[13]) << 8 | UInt32(bytes[12])
         let week = bytes[16]
         let year = 1990 + Int(bytes[17])
         let version = (major: bytes[18], minor: bytes[19])
@@ -53,11 +54,23 @@ public enum EDIDParser {
 
         var monitorName: String?
         var preferredTiming: (UInt16, UInt16)?
-        // Detailed timing descriptors start at byte 54; the preferred timing is
-        // the first non-zero descriptor; the monitor name is the ASCII descriptor.
+        // Descriptors start at byte 54. A non-zero 16-bit pixel clock (bytes 0-1) marks a
+        // detailed timing descriptor (the first one is the preferred timing); a 00 00
+        // header marks a display descriptor whose tag is byte 3 (0xFC = monitor name).
         for offset in stride(from: 54, to: 126, by: 18) {
-            let tag = bytes[offset + 3]
-            if tag == 0xFC {
+            let isTiming = bytes[offset] != 0 || bytes[offset + 1] != 0
+            if isTiming {
+                guard preferredTiming == nil else { continue }
+                // DTD layout: byte 2 hActive low, 3 hBlank low, 4 high nibbles (hActive/hBlank),
+                // byte 5 vActive low, 6 vBlank low, 7 high nibbles (vActive/vBlank).
+                let hActive = UInt16(bytes[offset + 4] & 0xF0) << 4 | UInt16(bytes[offset + 2])
+                let hBlank = UInt16(bytes[offset + 4] & 0x0F) << 8 | UInt16(bytes[offset + 3])
+                let vActive = UInt16(bytes[offset + 7] & 0xF0) << 4 | UInt16(bytes[offset + 5])
+                let vBlank = UInt16(bytes[offset + 7] & 0x0F) << 8 | UInt16(bytes[offset + 6])
+                if hActive + hBlank > 0, vActive + vBlank > 0 {
+                    preferredTiming = (hActive, vActive)
+                }
+            } else if bytes[offset + 3] == 0xFC {
                 // Monitor name descriptor
                 var nameBytes = Array(bytes[(offset + 5)..<(offset + 18)])
                 while nameBytes.last == 0x0A || nameBytes.last == 0x20 {
@@ -66,20 +79,6 @@ public enum EDIDParser {
                 let name = String(decoding: nameBytes, as: UTF8.self)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !name.isEmpty { monitorName = name }
-            } else if preferredTiming == nil, tag == 0x00, bytes[offset] == 0x00, bytes[offset + 1] == 0x00 {
-                // DTD header 00 00 00 tag — preferred timing (tag 0x00 + pixel clock > 0)
-                let pixelClock = UInt16(bytes[offset + 4]) << 8 | UInt16(bytes[offset + 5])
-                if pixelClock > 0 {
-                    let hActive = UInt16(bytes[offset + 8]) << 8 | UInt16(bytes[offset + 7] & 0xF0) >> 4
-                    let hBlank = UInt16(bytes[offset + 9]) << 8 | UInt16(bytes[offset + 7] & 0x0F) << 4
-                    let vActive = UInt16(bytes[offset + 11]) << 8 | UInt16(bytes[offset + 10] & 0xF0) >> 4
-                    let vBlank = UInt16(bytes[offset + 12]) << 8 | UInt16(bytes[offset + 10] & 0x0F) << 4
-                    let hTotal = hActive + hBlank
-                    let vTotal = vActive + vBlank
-                    if hTotal > 0, vTotal > 0 {
-                        preferredTiming = (hActive, vActive)
-                    }
-                }
             }
         }
 

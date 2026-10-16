@@ -75,8 +75,11 @@ typedef struct __IOAVService *IOAVServiceRef;
 IOAVServiceRef IOAVServiceCreateWithService(io_service_t service);
 CFDictionaryRef IOAVServiceCopyEDID(IOAVServiceRef service);
 kern_return_t IOAVServiceSetVirtualEDIDMode(IOAVServiceRef service, CFDictionaryRef edid);
-kern_return_t IOAVServiceReadI2C(IOAVServiceRef service, uint32_t address, uint8_t *data, uint32_t length);
-kern_return_t IOAVServiceWriteI2C(IOAVServiceRef service, uint32_t address, uint8_t *data, uint32_t length);
+/* 5-argument form, per m1ddc (github.com/waydabber/m1ddc, sources/i2c.m):
+   chipAddress = I2C device (0x37 DDC, 0x50 EDID); offset/dataAddress = the byte put on the
+   wire after it (0x51 for DDC/CI). The old 4-argument declaration dropped one of them. */
+kern_return_t IOAVServiceReadI2C(IOAVServiceRef service, uint32_t chipAddress, uint32_t offset, void *outputBuffer, uint32_t outputBufferSize);
+kern_return_t IOAVServiceWriteI2C(IOAVServiceRef service, uint32_t chipAddress, uint32_t dataAddress, void *inputBuffer, uint32_t inputBufferSize);
 
 #pragma mark - SkyLight — minimal Tier 1 surface
 
