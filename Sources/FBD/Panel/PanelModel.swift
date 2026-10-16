@@ -58,6 +58,8 @@ final class PanelModel: ObservableObject {
 
     func reloadDisplays(_ displays: [Display]) {
         self.displays = displays
+        let present = Set(displays.map(\.id))
+        volumeAvailability = volumeAvailability.filter { present.contains($0.key) }
         if let id = route.displayID, display(id: id) == nil { route = .home }
         refreshCounts()
     }
@@ -88,15 +90,14 @@ final class PanelModel: ObservableObject {
     func showsVolume(forID id: CGDirectDisplayID) -> Bool { volumeAvailability[id] == true }
     func showsVolume(for display: Display) -> Bool { showsVolume(forID: display.id) }
 
-    /// Probes DDC volume once per display. `DisplayController` is `@MainActor`, so the
-    /// read itself runs on the main actor (deferred a turn so callers are not blocked
-    /// mid-render); it cannot be moved off-main without changing FBDCore.
+    /// Probes DDC volume once per display. The read happens off the main actor
+    /// (`readDDCState`) and the result arrives back on it.
     func probeVolume(for display: Display) {
         guard volumeAvailability[display.id] == nil else { return }
         guard display.ddcAvailable else { volumeAvailability[display.id] = false; return }
-        Task { @MainActor [weak self] in
-            let answered = DisplayController.shared.readVolume(for: display) != nil
-            self?.volumeAvailability[display.id] = answered
+        let id = display.id
+        DisplayController.shared.readDDCState(for: display) { [weak self] state in
+            self?.volumeAvailability[id] = (state.volume != nil)
         }
     }
 
