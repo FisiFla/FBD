@@ -5,6 +5,16 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Fixed
+- External displays on Apple Silicon were never matched to their AV service, so DDC/CI and
+  EDID reads could not work on any monitor. The service is now paired by EDID UUID and
+  registry order (verified on hardware: the EDID reads back over I2C).
+- `IOAVServiceCreateWithService` and `IOAVServiceCopyEDID` were declared with the wrong
+  signatures (missing allocator; missing out-parameter).
+- A display that has an AV service but never answers DDC/CI (most TVs) is no longer offered
+  DDC controls after its first refresh.
+- `fbdcli ddc-test` now reports the AV service and the DDC/CI reply separately.
+
 ## [1.8.0] - 2026-10-16
 
 ### Changed

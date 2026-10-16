@@ -453,7 +453,7 @@ func cmdDdcTest(_ controller: DisplayController, display: Display) -> Int32 {
         print("  \(message)")
     }
 
-    let avService = display.ddcAvailable
+    let avService = hasAVService(display)
     print("  avService: \(avService ? "found" : "not found")")
 
     var ok = true

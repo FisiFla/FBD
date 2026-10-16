@@ -558,9 +558,14 @@ public final class DisplayController {
             return
         }
         let features = Settings.ddcFeatures(for: display.identityKey)
-        if features.isEmpty, Settings.ddcAutoConfigure, !autoConfigureAttempted.contains(display.id) {
-            autoConfigureAttempted.insert(display.id)
-            ddc.autoConfigure(for: display)
+        if features.isEmpty, Settings.ddcAutoConfigure {
+            if autoConfigureAttempted.insert(display.id).inserted {
+                ddc.autoConfigure(for: display)
+                return
+            }
+            // Auto-configure already ran and persisted nothing: the display has an AVService
+            // but never answered DDC/CI (typical of TVs), so don't offer DDC controls.
+            display.updateDDCStatus(available: false, capabilities: nil)
             return
         }
         display.updateDDCStatus(available: true, capabilities: display.ddcCapabilities)
