@@ -11,9 +11,11 @@ struct FBDPageHeader: View {
         HStack(spacing: FBDTheme.spacingS) {
             Button(action: onBack) {
                 Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
-                    .frame(width: 24, height: 24)
             }
-            .buttonStyle(.plain)
+            // A glass button, not a plain one: inside the glass capsule a plain button
+            // intermittently dropped the first click after the header appeared (macOS 27).
+            .fbdGlassButton()
+            .controlSize(.small)
             .keyboardShortcut("[", modifiers: .command)
             .accessibilityLabel(Text("Back"))
             .accessibilityIdentifier("panel.back")
