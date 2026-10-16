@@ -25,39 +25,35 @@ struct DisplaySettingsPage: View {
         let shown = Settings.showOfflineDisplays ? displays : displays.filter(\.isOnline)
 
         return ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: FBDTheme.spacingM) {
-                    if shown.isEmpty {
+            Form {
+                if shown.isEmpty {
+                    Section {
                         Text("No displays")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .padding(.vertical, 24)
-                    }
-
-                    ArrangementGridView()
-                        .padding(.horizontal, 12)
-
-                    edgeCrossingSection
-                        .padding(.horizontal, 12)
-
-                    connectionManagementSection(displays)
-                        .padding(.horizontal, 12)
-
-                    ForEach(shown) { display in
-                        VStack(spacing: FBDTheme.spacingM) {
-                            PerDisplayCardView(display: display)
-                            DisplayProtectionSection(display: display)
-                            DisplayFavouritesSection(display: display)
-                            DisplayPresetsSection(display: display)
-                        }
-                        .padding(.horizontal, 12)
-                        // Scroll target for a caller that asked Settings to
-                        // reveal this display.
-                        .id(display.id)
                     }
                 }
-                .padding(.vertical, 8)
+
+                Section {
+                    ArrangementGridView()
+                } header: {
+                    Text("Arrangement")
+                }
+
+                edgeCrossingSection
+
+                connectionManagementSection(displays)
+
+                ForEach(shown) { display in
+                    PerDisplayCardView(display: display)
+                        // Scroll target for a caller that asked Settings to reveal this display.
+                        .id(display.id)
+                    DisplayProtectionSection(display: display)
+                    DisplayFavouritesSection(display: display)
+                    DisplayPresetsSection(display: display)
+                }
             }
+            .formStyle(.grouped)
             .onAppear {
                 hasSavedArrangement = layoutProtection.hasSavedArrangement
                 guard let targetDisplayID,
@@ -76,13 +72,7 @@ struct DisplaySettingsPage: View {
     /// Bulk connect/disconnect, planned by the pure `ConnectionPlanner` and
     /// executed through the guarded `DisconnectController` chokepoint.
     private func connectionManagementSection(_ displays: [Display]) -> some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
-            Text("Connection management")
-                .font(.callout.weight(.medium))
-            Text("Disconnecting a display turns it off until it is re-enabled. The built-in display is never disconnected on Macs where it may not come back without a reboot.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+        Section {
             HStack(spacing: FBDTheme.spacingM) {
                 Button("Connect all") { run(.connectAll, displays) }
                     .controlSize(.small)
@@ -103,6 +93,10 @@ struct DisplaySettingsPage: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        } header: {
+            Text("Connection management")
+        } footer: {
+            Text("Disconnecting a display turns it off until it is re-enabled. The built-in display is never disconnected on Macs where it may not come back without a reboot.")
         }
         .fbdConfirmation(
             "Disconnect all but the main display?",
@@ -119,14 +113,13 @@ struct DisplaySettingsPage: View {
     /// A plain toggle over a stored preference: the controller's own timer picks
     /// the change up, so there is nothing to start or stop here.
     private var edgeCrossingSection: some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+        Section {
             Toggle(
                 "Cross misaligned display edges",
                 isOn: bool(Settings.edgeCrossingEnabled) { Settings.edgeCrossingEnabled = $0 }
             )
+        } footer: {
             Text("Lets the pointer move between displays whose edges do not line up, instead of stopping at the gap.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -189,26 +182,18 @@ private struct DisplayProtectionSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
-            Text("Configuration protection")
-                .font(.callout.weight(.medium))
-            Text("Re-applies the selected properties when this display reconnects. Properties this display cannot report are unavailable.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            ForEach(ProtectedProperties.ordered, id: \.name) { entry in
-                let isAvailable = available.contains(entry.property)
-                Toggle(entry.name, isOn: binding(for: entry.property))
+        Section {
+            ForEach(ProtectedPropertyLabels.ordered, id: \.rawValue) { property in
+                let isAvailable = available.contains(property)
+                Toggle(ProtectedPropertyLabels.label(for: property), isOn: binding(for: property))
                     .disabled(!isAvailable)
-                    .help(isAvailable ? "" : "This display does not report \(entry.name).")
+                    .help(isAvailable ? "" : String(localized: "This display does not report \(ProtectedPropertyLabels.list(property))."))
             }
+        } header: {
+            Text("Configuration protection")
+        } footer: {
+            Text("Re-applies the selected properties when this display reconnects. Properties this display cannot report are unavailable.")
         }
-        .padding(FBDTheme.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
     }
 
     private func binding(for property: ProtectedProperties) -> Binding<Bool> {
@@ -232,20 +217,14 @@ private struct DisplayFavouritesSection: View {
     @State private var message: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
-            Text("Resolution favourites")
-                .font(.callout.weight(.medium))
-            Text("Record the current display mode into a slot and recall it later.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+        Section {
             ForEach(1...ModeFavourites.slotCount, id: \.self) { slot in
                 let favourite = ModeFavourites.favourite(slot: slot, for: display.identityKey)
                 HStack(spacing: FBDTheme.spacingM) {
                     Text("\(slot).")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
-                    Text(favourite.map(summary) ?? "empty")
+                    Text(favourite.map(summary) ?? String(localized: "empty"))
                         .font(.caption)
                         .foregroundStyle(favourite == nil ? .tertiary : .primary)
                     Spacer(minLength: 8)
@@ -262,13 +241,11 @@ private struct DisplayFavouritesSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        } header: {
+            Text("Resolution favourites")
+        } footer: {
+            Text("Record the current display mode into a slot and recall it later.")
         }
-        .padding(FBDTheme.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
         .id(refresh)
     }
 
@@ -318,13 +295,7 @@ private struct DisplayPresetsSection: View {
     @State private var message: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
-            Text("Display presets")
-                .font(.callout.weight(.medium))
-            Text("Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+        Section {
             if presets.isEmpty {
                 Text("No presets saved.")
                     .font(.caption)
@@ -339,7 +310,7 @@ private struct DisplayPresetsSection: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(preset.name)
                             .font(.caption)
-                        Text(preset.properties.names.joined(separator: ", "))
+                        Text(ProtectedPropertyLabels.list(preset.properties))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -373,13 +344,11 @@ private struct DisplayPresetsSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        } header: {
+            Text("Display presets")
+        } footer: {
+            Text("Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one.")
         }
-        .padding(FBDTheme.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusCard, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
         .onAppear { reload() }
     }
 
@@ -424,7 +393,7 @@ private struct DisplayPresetsSection: View {
         } else if outcome.unavailable.isEmpty {
             message = String(localized: "Applied '\(preset.name)'.")
         } else {
-            message = String(localized: "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", ")).")
+            message = String(localized: "Applied '\(preset.name)' — skipped \(ProtectedPropertyLabels.list(outcome.unavailable)).")
         }
     }
 

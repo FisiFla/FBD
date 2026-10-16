@@ -32,6 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
+      - name: Select Xcode 26+
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -n1)
+          if [ -z "$XCODE" ]; then echo "::error::Xcode 26+ not found on runner"; ls /Applications | grep Xcode; exit 1; fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
       - name: Run tests
         run: swift test --disable-sandbox
 

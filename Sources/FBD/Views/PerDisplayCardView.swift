@@ -24,9 +24,7 @@ struct PerDisplayCardView: View {
     @State private var xdrSyncRequest = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-
+        Section {
             if display.isOnline {
                 BrightnessSliderView(display: display)
                 disclosureSection(icon: "slider.horizontal.3", title: "Filters") {
@@ -52,10 +50,9 @@ struct PerDisplayCardView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             }
+        } header: {
+            header
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fbdCard()
         .fbdDisableDisplayConfirmation(isPresented: $confirmingDisable, display: display)
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplayUpdated)) { note in
             if let id = note.userInfo?["displayID"] as? CGDirectDisplayID, id == display.id {
