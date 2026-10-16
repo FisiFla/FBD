@@ -32,10 +32,10 @@ struct DisplayDetailPage: View {
                     xdrSyncRequest: xdrSyncRequest,
                     showsResolutions: false
                 )
-                section("Filters") {
+                TitledSection("Filters") {
                     FilterControlsView(display: display)
                 }
-                section("Monitor Controls") {
+                TitledSection("Monitor Controls") {
                     if display.ddcAvailable {
                         DDCPanelView(display: display, refreshRequest: ddcRefreshRequest)
                     } else {
@@ -62,20 +62,10 @@ struct DisplayDetailPage: View {
         }
     }
 
-    private func section<Content: View>(
-        _ title: LocalizedStringKey,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: FBDTheme.spacingXS) {
-            DetailSectionHeader(title: title)
-            content()
-        }
-    }
-
     // MARK: - Resolution
 
     private var resolutionSection: some View {
-        section("Resolution") {
+        TitledSection("Resolution") {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(ModeListLogic.curated(modes: display.offeredModes, current: display.currentMode), id: \.self) { mode in
                     FBDListRow(
@@ -106,7 +96,7 @@ struct DisplayDetailPage: View {
     }
 
     private var refreshRateSection: some View {
-        section("Refresh Rate") {
+        TitledSection("Refresh Rate") {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(refreshRates, id: \.self) { hz in
                     FBDListRow(
@@ -138,7 +128,7 @@ struct DisplayDetailPage: View {
         let showsRotation = display.isOnline && !display.isBuiltin
         let showsPower = !display.isOnline || Settings.enableDisconnectOption
         if showsMain || showsRotation || showsPower {
-            section("Display") {
+            TitledSection("Display") {
                 VStack(alignment: .leading, spacing: 0) {
                     if showsMain {
                         FBDListRow(symbol: "menubar.rectangle", title: "Make Main Display") {
@@ -174,14 +164,5 @@ struct DisplayDetailPage: View {
                 }
             }
         }
-    }
-}
-
-/// Section title. File-private stand-in for Task 5's `SectionHeader` (same body), which is not
-/// on this branch.
-private struct DetailSectionHeader: View {
-    let title: LocalizedStringKey
-    var body: some View {
-        Text(title).font(FBDTheme.Font.sectionHeader).foregroundStyle(.secondary)
     }
 }
