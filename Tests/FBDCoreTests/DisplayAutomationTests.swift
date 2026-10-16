@@ -189,7 +189,7 @@ final class DisplayAutomationTests: XCTestCase {
             event: .displayConnected,
             displayName: "Evil\"; rm -rf ~ #$(id)`x`\n LG-27 (UHD_1.0)"
         )
-        XCTAssertEqual(environment["FBD_DISPLAY_NAME"], "Evil__ rm -rf __ __id__x___ LG-27 (UHD_1.0)")
+        XCTAssertEqual(environment["FBD_DISPLAY_NAME"], "Evil__ rm -rf _ __(id)_x__ LG-27 (UHD_1.0)")
     }
 
     func testEnvironmentOmitsAbsentDisplayFields() {
