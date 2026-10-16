@@ -72,8 +72,10 @@ int DisplayServicesUnregisterForBrightnessChangeNotifications(CGDirectDisplayID 
 
 typedef struct __IOAVService *IOAVServiceRef;
 
-IOAVServiceRef IOAVServiceCreateWithService(io_service_t service);
-CFDictionaryRef IOAVServiceCopyEDID(IOAVServiceRef service);
+/* Allocator first, per m1ddc; the old one-argument form passed the service as the allocator. */ IOAVServiceRef IOAVServiceCreateWithService(CFAllocatorRef allocator, io_service_t service);
+/* Out-parameter form returning the raw EDID bytes, per MonitorControl/Lunar; the old
+   one-argument form let the API write through whatever pointer was in the second register. */
+IOReturn IOAVServiceCopyEDID(IOAVServiceRef service, CFDataRef *edid);
 kern_return_t IOAVServiceSetVirtualEDIDMode(IOAVServiceRef service, CFDictionaryRef edid);
 /* 5-argument form, per m1ddc (github.com/waydabber/m1ddc, sources/i2c.m):
    chipAddress = I2C device (0x37 DDC, 0x50 EDID); offset/dataAddress = the byte put on the

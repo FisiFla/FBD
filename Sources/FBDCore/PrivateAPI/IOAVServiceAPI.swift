@@ -23,7 +23,7 @@ public enum IOAVServiceAPI {
             return nil
         }
         defer { IOKitSupport.release(service) }
-        guard let avService = IOAVServiceCreateWithService(service) else {
+        guard let avService = IOAVServiceCreateWithService(kCFAllocatorDefault, service) else {
             log.debug("IOAVServiceCreateWithService failed for \(displayID)")
             return nil
         }
@@ -44,18 +44,74 @@ public enum IOAVServiceAPI {
     ) -> io_service_t? {
         guard isAppleSilicon else { return nil }
 
+        // On Apple Silicon an external display's DCPAVServiceProxy is not a child of its
+        // AppleCLCD2: the framebuffer sits under `dispextN` and the proxy under the following
+        // `dcpextN` sibling. Walk the service plane in order and pair the two (as MonitorControl
+        // and m1ddc do). Older layouts put the AVService under the display node, so fall back.
+        if let proxy = pairedExternalProxy(vendor: vendor, model: model, serial: serial) {
+            return proxy // +1 ref transfers to the caller
+        }
         guard let displayService = displayService(vendor: vendor, model: model, serial: serial) else {
             log.debug("No display service found for \(displayID)")
             return nil
         }
         defer { IOKitSupport.release(displayService) }
-        // On Apple Silicon the AVService lives under DCPAVServiceProxy (or directly as IOAVService).
         guard let proxy = IOKitSupport.firstChild(named: "DCPAVServiceProxy", of: displayService)
             ?? IOKitSupport.firstChild(named: "IOAVService", of: displayService) else {
-            log.debug("No DCPAVServiceProxy/IOAVService under display service for \(displayID)")
+            log.debug("No DCPAVServiceProxy/IOAVService for \(displayID)")
             return nil
         }
         return proxy // +1 ref transfers to the caller
+    }
+
+    /// One node of an in-order IOService-plane walk, reduced to what pairing needs.
+    struct RegistryNode {
+        let className: String
+        let props: [String: Any]
+    }
+
+    static let framebufferClasses: Set<String> = ["AppleCLCD2", "IOMobileFramebufferShim"]
+
+    /// Index of the `DCPAVServiceProxy` belonging to the display: the first External proxy
+    /// after a matching framebuffer and before the next framebuffer.
+    static func proxyIndex(in nodes: [RegistryNode], vendor: UInt32, model: UInt32, serial: UInt32) -> Int? {
+        var framebufferMatched = false
+        for (index, node) in nodes.enumerated() {
+            if framebufferClasses.contains(node.className) {
+                framebufferMatched = framebufferMatches(node.props, vendor: vendor, model: model, serial: serial)
+            } else if node.className == "DCPAVServiceProxy", framebufferMatched,
+                      (node.props["Location"] as? String) == "External" {
+                return index
+            }
+        }
+        return nil
+    }
+
+    /// The paired external proxy, as a +1 ref the caller owns.
+    private static func pairedExternalProxy(vendor: UInt32, model: UInt32, serial: UInt32) -> io_service_t? {
+        var iterator: io_iterator_t = 0
+        guard IORegistryCreateIterator(kIOMainPortDefault, kIOServicePlane,
+                                       IOOptionBits(kIORegistryIterateRecursively), &iterator) == KERN_SUCCESS else {
+            return nil
+        }
+        defer { IOObjectRelease(iterator) }
+        var nodes: [RegistryNode] = []
+        var services: [io_service_t] = []
+        defer { services.forEach(IOKitSupport.release) }
+        while case let entry = IOIteratorNext(iterator), entry != 0 {
+            var buffer = [CChar](repeating: 0, count: 128)
+            IOObjectGetClass(entry, &buffer)
+            let className = String(cString: buffer)
+            guard framebufferClasses.contains(className) || className == "DCPAVServiceProxy" else {
+                IOKitSupport.release(entry)
+                continue
+            }
+            nodes.append(RegistryNode(className: className, props: IOKitSupport.properties(of: entry)))
+            services.append(entry)
+        }
+        guard let index = proxyIndex(in: nodes, vendor: vendor, model: model, serial: serial) else { return nil }
+        IOObjectRetain(services[index])
+        return services[index]
     }
 
     /// The IORegistry node for a display, matched by vendor/model/serial of its
@@ -69,7 +125,7 @@ public enum IOAVServiceAPI {
             for service in services {
                 // Release every non-matching node, and the rest of the iterator after a hit.
                 if match == nil,
-                   propsMatchDisplay(IOKitSupport.properties(of: service), vendor: vendor, model: model, serial: serial) {
+                   framebufferMatches(IOKitSupport.properties(of: service), vendor: vendor, model: model, serial: serial) {
                     match = service // +1 ref transfers to the caller
                 } else {
                     IOKitSupport.release(service)
@@ -100,7 +156,11 @@ public enum IOAVServiceAPI {
         return service // +1 ref transfers to the caller
     }
 
-    private static func propsMatchDisplay(_ props: [String: Any], vendor: UInt32, model: UInt32, serial: UInt32) -> Bool {
+    static func framebufferMatches(_ props: [String: Any], vendor: UInt32, model: UInt32, serial: UInt32) -> Bool {
+        // Apple Silicon framebuffers expose identity only through their EDID UUID.
+        if let uuid = props["EDID UUID"] as? String, edidUUID(uuid, matchesVendor: vendor, model: model) {
+            return true
+        }
         let vendorOK = (props["vendorID"] as? UInt32) == vendor
             || (props["DisplayVendorID"] as? UInt32) == vendor
             || (props["IODisplayVendorID"] as? UInt32) == vendor
@@ -113,6 +173,15 @@ public enum IOAVServiceAPI {
             || (props["DisplaySerialNumber"] as? UInt32) == serial
             || (props["IODisplaySerialNumber"] as? UInt32) == serial
         return vendorOK && modelOK && serialOK
+    }
+
+    /// An `EDID UUID` begins with the EDID manufacturer ID (big-endian, as CG reports it)
+    /// followed by the product code (little-endian, as stored in the EDID).
+    static func edidUUID(_ uuid: String, matchesVendor vendor: UInt32, model: UInt32) -> Bool {
+        let hex = uuid.replacingOccurrences(of: "-", with: "").uppercased()
+        guard hex.count >= 8 else { return false }
+        let expected = String(format: "%04X%02X%02X", vendor & 0xFFFF, model & 0xFF, (model >> 8) & 0xFF)
+        return hex.hasPrefix(expected)
     }
 
     /// Read raw bytes from an I2C chip address (e.g. 0x37 DDC, 0x50 EDID); `offset` is the
@@ -145,14 +214,15 @@ public enum IOAVServiceAPI {
         return status == KERN_SUCCESS
     }
 
-    /// Current EDID of the display as a raw data blob (flattened DisplayIODictionary).
+    /// Current EDID of the display as raw bytes.
     public static func copyEDID(_ service: IOAVServiceRef) -> Data? {
-        guard let dict = IOAVServiceCopyEDID(service)?.takeRetainedValue() else { return nil }
-        // EDID bytes live under the "IODisplayEDID" key (CFData) in the returned dictionary.
-        if let edidData = (dict as? [String: Any])?["IODisplayEDID"] as? Data {
-            return edidData
+        var edid: Unmanaged<CFData>?
+        let status = IOAVServiceCopyEDID(service, &edid)
+        guard status == KERN_SUCCESS, let data = edid?.takeRetainedValue() else {
+            log.debug("IOAVServiceCopyEDID failed: \(status)")
+            return nil
         }
-        return nil
+        return data as Data
     }
 
     /// Install a virtual EDID on the display (Apple Silicon; the OS then sees

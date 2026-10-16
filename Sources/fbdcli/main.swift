@@ -373,8 +373,18 @@ func ddcUnavailableMessage() -> String? {
 /// Reason DDC should not be attempted for this display, or nil if it looks usable.
 func ddcFailureReason(for display: Display) -> String? {
     if let message = ddcUnavailableMessage() { return message }
-    if !display.ddcAvailable { return "no AVService found for display \(display.id)" }
+    if !display.ddcAvailable {
+        return hasAVService(display)
+            ? "display \(display.id) does not answer DDC/CI (many TVs and some monitors don't support it)"
+            : "no AVService found for display \(display.id)"
+    }
     return nil
+}
+
+/// Whether the display has an IOAVService (the I2C transport), independent of DDC/CI replies.
+func hasAVService(_ display: Display) -> Bool {
+    IOAVServiceAPI.findAVService(displayID: display.id, vendor: display.vendorNumber,
+                                 model: display.modelNumber, serial: display.serialNumber) != nil
 }
 
 /// Print a DDC-unavailable message when DDC cannot be used for `display`.
