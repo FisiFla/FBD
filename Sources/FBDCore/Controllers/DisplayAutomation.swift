@@ -160,9 +160,20 @@ public enum AutomationCommand {
             "FBD_EVENT_LABEL": event.label,
         ]
         if let displayIdentifier { environment["FBD_DISPLAY_ID"] = displayIdentifier }
-        if let displayName { environment["FBD_DISPLAY_NAME"] = displayName }
+        // The name comes from the monitor's EDID, i.e. attacker-influenced
+        // hardware data: restrict it to a shell-inert character set.
+        if let displayName { environment["FBD_DISPLAY_NAME"] = sanitizedDisplayName(displayName) }
         if let displayIdentityKey { environment["FBD_DISPLAY_IDENTITY"] = displayIdentityKey }
         return environment
+    }
+
+    /// Keeps letters, digits, space and `- _ . ( )`; everything else becomes `_`.
+    static func sanitizedDisplayName(_ name: String) -> String {
+        String(name.unicodeScalars.map { scalar -> Character in
+            let ok = (scalar.isASCII && (CharacterSet.alphanumerics.contains(scalar)))
+                || " -_.()".unicodeScalars.contains(scalar)
+            return ok ? Character(scalar) : "_"
+        })
     }
 
     public static func invocation(

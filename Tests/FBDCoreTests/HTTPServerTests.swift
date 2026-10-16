@@ -148,36 +148,90 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(lastHeaders["x-fbd-token"], "s3cret")
     }
 
-    func testOPTIONSGetsCORSHeadersWithoutHandlerInvocation() throws {
-        let port = startServer()
-        // Raw socket: URLSession handles OPTIONS specially on some OS
-        // versions, so speak HTTP directly to verify the preflight path.
-        let connection = NWConnection(
-            host: "127.0.0.1",
-            port: NWEndpoint.Port(rawValue: port)!,
-            using: .tcp
-        )
-        let expectation = expectation(description: "OPTIONS response")
-        var responseText = ""
+    /// Send raw bytes over a fresh TCP connection and return the response text.
+    private func raw(_ port: UInt16, _ request: String) -> String {
+        let connection = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
+        let done = expectation(description: "raw response")
+        var text = ""
         connection.stateUpdateHandler = { state in
             if state == .ready {
-                let request = "OPTIONS /api/displays HTTP/1.1\r\nHost: localhost\r\n\r\n"
                 connection.send(content: Data(request.utf8), completion: .contentProcessed { _ in })
             }
         }
         connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, _ in
-            if let data {
-                responseText = String(data: data, encoding: .utf8) ?? ""
-            }
+            if let data { text = String(data: data, encoding: .utf8) ?? "" }
             connection.cancel()
-            expectation.fulfill()
+            done.fulfill()
         }
         connection.start(queue: .global())
+        wait(for: [done], timeout: 5)
+        return text
+    }
 
-        wait(for: [expectation], timeout: 5)
-        XCTAssertTrue(responseText.hasPrefix("HTTP/1.1 204 No Content"), "got: \(responseText)")
-        XCTAssertTrue(responseText.lowercased().contains("access-control-allow-origin: *"))
-        XCTAssertTrue(received.isEmpty, "preflight must not reach the handler")
+    func testResponsesCarryNoCORSHeadersAndPreflightIsNotSpecial() throws {
+        let port = startServer()
+        let ok = raw(port, "GET /api/displays HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\n\r\n")
+        XCTAssertTrue(ok.hasPrefix("HTTP/1.1 200"), "got: \(ok)")
+        XCTAssertFalse(ok.lowercased().contains("access-control-"))
+        // OPTIONS now reaches the handler like any other request (no 204 preflight).
+        let options = raw(port, "OPTIONS /api/displays HTTP/1.1\r\nHost: localhost:\(port)\r\n\r\n")
+        XCTAssertFalse(options.hasPrefix("HTTP/1.1 204"), "got: \(options)")
+        XCTAssertFalse(options.lowercased().contains("access-control-"))
+    }
+
+    func testLoopbackHostVariantsAreAccepted() throws {
+        let port = startServer()
+        for host in ["127.0.0.1:\(port)", "localhost:\(port)", "[::1]:\(port)", "LOCALHOST:\(port)"] {
+            let r = raw(port, "GET /api/health HTTP/1.1\r\nHost: \(host)\r\n\r\n")
+            XCTAssertTrue(r.hasPrefix("HTTP/1.1 200"), "\(host) got: \(r)")
+        }
+    }
+
+    func testForeignOrMissingHostIsRejectedBeforeHandler() throws {
+        let port = startServer()
+        for request in [
+            "GET /api/health HTTP/1.1\r\nHost: evil.example:\(port)\r\n\r\n",
+            "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+            "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:1\r\n\r\n",
+            "GET /api/health HTTP/1.0\r\n\r\n",
+        ] {
+            let r = raw(port, request)
+            XCTAssertTrue(r.hasPrefix("HTTP/1.1 403"), "got: \(r)")
+        }
+        XCTAssertTrue(received.isEmpty, "rejected requests must not reach the handler")
+    }
+
+    func testRequestsWithOriginHeaderAreRejected() throws {
+        let port = startServer()
+        let r = raw(port, "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\nOrigin: https://evil.example\r\n\r\n")
+        XCTAssertTrue(r.hasPrefix("HTTP/1.1 403"), "got: \(r)")
+        XCTAssertTrue(received.isEmpty)
+    }
+
+    func testConnectionsBeyondTheCapAreRefused() throws {
+        let server = HTTPServer()
+        server.maxConnections = 2
+        let ready = expectation(description: "ready")
+        var port: UInt16 = 0
+        XCTAssertTrue(server.start(handler: { _, _, _, _ in (200, "{}") }, onReady: { port = $0; ready.fulfill() }))
+        self.server = server
+        wait(for: [ready], timeout: 5)
+
+        // Two idle connections fill the cap...
+        var held: [NWConnection] = []
+        for _ in 0..<2 {
+            let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
+            let up = expectation(description: "held up")
+            c.stateUpdateHandler = { if $0 == .ready { up.fulfill() } }
+            c.start(queue: .global())
+            wait(for: [up], timeout: 5)
+            held.append(c)
+        }
+        Thread.sleep(forTimeInterval: 0.3)
+        // ...so a third gets closed without a response.
+        let third = raw(port, "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\n\r\n")
+        XCTAssertEqual(third, "")
+        held.forEach { $0.cancel() }
     }
 
     func testOversizedDeclaredContentLengthGets413() throws {
@@ -219,7 +273,7 @@ final class HTTPServerTests: XCTestCase {
         var finalText = ""
         connection.stateUpdateHandler = { state in
             if state == .ready {
-                let request = "POST /api/displays HTTP/1.1\r\nHost: localhost\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n"
+                let request = "POST /api/displays HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n"
                 connection.send(content: Data(request.utf8), completion: .contentProcessed { _ in })
             }
         }

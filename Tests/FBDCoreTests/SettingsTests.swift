@@ -166,7 +166,7 @@ final class SettingsTests: XCTestCase {
     // MARK: - Debug summary
 
     func testDebugSummaryMasksSecrets() {
-        let token = Settings.httpAPIToken
+        let token = Settings.apiToken(store: InMemorySecretStore(), defaults: scratchDefaults())
         let summary = Settings.debugSummary
 
         XCTAssertTrue(summary.contains("ddcCooldownMilliseconds ="), "expected settings keys in the dump")
@@ -174,9 +174,6 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(summary.contains(token), "full token must never appear")
         // The LG pairing key must be masked; guard the empty case (an empty
         // value is a prefix of the masked entry, so only check non-empty).
-        if !Settings.tvLGClientKey.isEmpty {
-            XCTAssertFalse(summary.contains("tvLGClientKey = \(Settings.tvLGClientKey)"), "LG key must be masked")
-        }
         XCTAssertTrue(summary.contains("tvLGClientKey = "), "LG key entry must be present")
         XCTAssertTrue(summary.contains("ddcReadRetries = \(Settings.ddcReadRetries)"))
     }
@@ -185,7 +182,6 @@ final class SettingsTests: XCTestCase {
         let lines = Settings.debugSummary.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines, lines.sorted())
     }
-}
 
     func testLayoutAnchorCodableFormatStability() {
         // Locks the on-disk JSON format for saved arrangements (upgrade-safe
@@ -200,3 +196,58 @@ final class SettingsTests: XCTestCase {
         let legacy = #"{"displayID":42,"x":1920,"y":-100}"#
         XCTAssertEqual(try? JSONDecoder().decode(LayoutAnchor.self, from: Data(legacy.utf8)), anchor)
     }
+
+    // MARK: - Secrets (Keychain-backed, fake store here)
+
+    private final class InMemorySecretStore: SecretStore {
+        var items: [String: String] = [:]
+        var failWrites = false
+        func read(account: String) -> String? { items[account] }
+        func write(_ value: String, account: String) -> Bool {
+            if failWrites { return false }
+            items[account] = value
+            return true
+        }
+        func delete(account: String) { items[account] = nil }
+    }
+
+    private func scratchDefaults() -> UserDefaults {
+        let d = UserDefaults(suiteName: suiteName)!
+        d.removePersistentDomain(forName: suiteName)
+        return d
+    }
+
+    func testAPITokenIsGeneratedOnceAndStoredOnlyInTheStore() {
+        let store = InMemorySecretStore()
+        let defaults = scratchDefaults()
+        let token = Settings.apiToken(store: store, defaults: defaults)
+        XCTAssertEqual(token.count, 64)
+        XCTAssertEqual(Settings.apiToken(store: store, defaults: defaults), token)
+        XCTAssertEqual(store.items["httpAPIToken"], token)
+        XCTAssertNil(defaults.string(forKey: "httpAPIToken"))
+    }
+
+    func testLegacyPlaintextTokenMigratesToStoreAndIsRemovedFromDefaults() {
+        let store = InMemorySecretStore()
+        let defaults = scratchDefaults()
+        defaults.set("legacy-token", forKey: "httpAPIToken")
+        XCTAssertEqual(Settings.apiToken(store: store, defaults: defaults), "legacy-token")
+        XCTAssertEqual(store.items["httpAPIToken"], "legacy-token")
+        XCTAssertNil(defaults.string(forKey: "httpAPIToken"))
+    }
+
+    func testLegacyValueIsKeptWhenStoreWriteFails() {
+        let store = InMemorySecretStore()
+        store.failWrites = true
+        let defaults = scratchDefaults()
+        defaults.set("legacy-key", forKey: "tvLGClientKey")
+        XCTAssertEqual(Settings.secret(account: "tvLGClientKey", store: store, defaults: defaults), "legacy-key")
+        XCTAssertEqual(defaults.string(forKey: "tvLGClientKey"), "legacy-key", "must not lose the secret")
+    }
+
+    func testTokenFailsClosedWhenPersistenceIsUnavailable() {
+        let store = InMemorySecretStore()
+        store.failWrites = true
+        XCTAssertEqual(Settings.apiToken(store: store, defaults: scratchDefaults()), "")
+    }
+}

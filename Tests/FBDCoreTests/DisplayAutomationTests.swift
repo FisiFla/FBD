@@ -184,6 +184,14 @@ final class DisplayAutomationTests: XCTestCase {
         XCTAssertEqual(environment["FBD_DISPLAY_IDENTITY"], "1552-4131-1234")
     }
 
+    func testEnvironmentSanitisesUntrustedDisplayName() {
+        let environment = AutomationCommand.environment(
+            event: .displayConnected,
+            displayName: "Evil\"; rm -rf ~ #$(id)`x`\n LG-27 (UHD_1.0)"
+        )
+        XCTAssertEqual(environment["FBD_DISPLAY_NAME"], "Evil__ rm -rf _ __(id)_x__ LG-27 (UHD_1.0)")
+    }
+
     func testEnvironmentOmitsAbsentDisplayFields() {
         let environment = AutomationCommand.environment(event: .systemWake)
         XCTAssertEqual(environment["FBD_EVENT"], "systemWake")
