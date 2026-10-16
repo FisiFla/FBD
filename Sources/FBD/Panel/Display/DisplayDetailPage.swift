@@ -42,6 +42,7 @@ struct DisplayDetailPage: View {
                         Text("Monitor controls unavailable — no DDC/CI")
                             .font(FBDTheme.Font.secondary)
                             .foregroundStyle(.tertiary)
+                            .padding(.horizontal, FBDTheme.spacingM)
                     }
                 }
             } else {

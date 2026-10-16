@@ -29,7 +29,9 @@ struct DisplayBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingM) {
             header
-            BrightnessSliderView(display: display, accessibilityIdentifier: "home.brightness.\(display.id)")
+            BrightnessSliderView(
+                display: display, accessibilityIdentifier: "home.brightness.\(display.id)", showsReadout: false
+            )
             if model.showsVolume(for: display), let current = volume {
                 FDBSlider(
                     value: Binding(

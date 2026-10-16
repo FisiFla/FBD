@@ -86,6 +86,7 @@ struct DDCPanelView: View {
             .controlSize(.small)
             .font(FBDTheme.Font.secondary)
             .accessibilityLabel("Mute \(display.name)")
+            .padding(.horizontal, FBDTheme.spacingM)
 
             // Named inputs, when the display has told us which ones it has. A checkmark list
             // with the input in effect marked: the read rides in the same batched DDC refresh
@@ -97,6 +98,7 @@ struct DDCPanelView: View {
                         .font(FBDTheme.Font.secondary)
                         .foregroundStyle(.secondary)
                         .padding(.bottom, FBDTheme.spacingXS)
+                        .padding(.horizontal, FBDTheme.spacingM)
                     ForEach(inputOptions, id: \.self) { value in
                         FBDListRow(
                             symbol: "rectangle.connected.to.line.below",
@@ -112,6 +114,7 @@ struct DDCPanelView: View {
                 Text("Read capabilities to list this display's inputs by name.")
                     .font(FBDTheme.Font.secondary)
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, FBDTheme.spacingM)
             }
 
             HStack(spacing: FBDTheme.spacingM) {
@@ -131,6 +134,7 @@ struct DDCPanelView: View {
                 .help("Manual override: a raw DDC input source (VCP 0x60) between 1 and 15")
                 Spacer(minLength: 0)
             }
+            .padding(.horizontal, FBDTheme.spacingM)
 
             FBDListRow(symbol: "doc.text.magnifyingglass", title: "Read capabilities") {
                 readCapabilities()
@@ -141,6 +145,7 @@ struct DDCPanelView: View {
 
             if let status {
                 FBDStatusLine(status: status)
+                    .padding(.horizontal, FBDTheme.spacingM)
             }
         }
     }
@@ -173,6 +178,8 @@ struct DDCPanelView: View {
                 .frame(width: 36, alignment: .trailing)
                 .foregroundStyle(.secondary)
         }
+        // Non-row controls take the list rows' inset so they line up with the row chips.
+        .padding(.horizontal, FBDTheme.spacingM)
     }
 
     /// Trailing-debounced DDC write: the slider drags at ~60 Hz and every DDC write is a slow I2C

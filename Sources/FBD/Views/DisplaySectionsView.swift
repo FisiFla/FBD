@@ -378,6 +378,7 @@ struct DisplaySectionsView: View {
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .padding(.horizontal, FBDTheme.spacingM)
             }
         }
     }
@@ -396,12 +397,16 @@ struct DisplaySectionsView: View {
         ))
         .toggleStyle(.switch)
         .controlSize(.small)
+        // Non-row controls sit on the rows' inset so they line up with the icon chips.
+        .padding(.horizontal, FBDTheme.spacingM)
 
         if display.isXDRUpscaled {
             upscaleSlider
+                .padding(.horizontal, FBDTheme.spacingM)
             Text("Upscaled to \(display.xdrUpscaleTargetNits ?? Settings.xdrUpscaleTargetNits) nits")
                 .font(FBDTheme.Font.secondary)
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, FBDTheme.spacingM)
         }
 
         if !validPresets.isEmpty {
@@ -409,6 +414,7 @@ struct DisplaySectionsView: View {
                 .font(FBDTheme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .padding(.top, FBDTheme.spacingXS)
+                .padding(.horizontal, FBDTheme.spacingM)
             let active = presetBinding.wrappedValue
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(validPresets) { preset in
