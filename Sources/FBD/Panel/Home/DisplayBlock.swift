@@ -35,7 +35,7 @@ struct DisplayBlock: View {
             if model.showsVolume(for: display), let current = volume {
                 FDBSlider(
                     value: Binding(
-                        get: { volume ?? current },
+                        get: { current },
                         set: { volume = $0; scheduleVolumeWrite($0) }
                     ),
                     in: 0...1,

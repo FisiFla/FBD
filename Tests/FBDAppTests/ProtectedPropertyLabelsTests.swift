@@ -6,6 +6,7 @@ final class ProtectedPropertyLabelsTests: XCTestCase {
     func testNoRawIdentifiers() {
         for entry in ProtectedPropertyLabels.ordered {
             let key = ProtectedPropertyLabels.englishLabel(for: entry)
+            XCTAssertFalse(key.isEmpty, "empty label for \(entry)")
             XCTAssertFalse(key.contains(where: \.isUppercase) && key.first!.isLowercase,
                            "camelCase identifier leaked: \(key)")
         }
