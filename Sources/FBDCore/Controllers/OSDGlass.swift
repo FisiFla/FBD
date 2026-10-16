@@ -11,18 +11,18 @@ import Foundation
 /// So the class is looked up at runtime and configured through KVC — the same way this codebase
 /// reaches private AppKit and CoreBrightness classes — and nothing here mentions the type. On a macOS
 /// without it, `isAvailable` is false and the caller falls back to the vibrancy material.
-enum OSDGlass {
+public enum OSDGlass {
     /// The class object, when this macOS has one.
     private static var classObject: NSObject.Type? {
         NSClassFromString("NSGlassEffectView") as? NSObject.Type
     }
 
     /// True when a glass background can be made here.
-    static var isAvailable: Bool { classObject != nil }
+    public static var isAvailable: Bool { classObject != nil }
 
     /// A glass background view, or nil when this macOS has none. `cornerRadius` is applied now
     /// because the caller's later restyle path cannot name the property either.
-    static func makeView(cornerRadius: CGFloat) -> NSView? {
+    public static func makeView(cornerRadius: CGFloat) -> NSView? {
         guard let glass = classObject?.init() as? NSView else { return nil }
         glass.wantsLayer = true
         glass.layer?.masksToBounds = true
@@ -41,7 +41,7 @@ enum OSDGlass {
 
     /// Put the content inside the glass. The SDK header is explicit that only `contentView` is
     /// guaranteed to sit inside the effect, so it goes there rather than in as a plain subview.
-    static func setContent(_ content: NSView, in view: NSView) {
+    public static func setContent(_ content: NSView, in view: NSView) {
         view.setValue(content, forKey: "contentView")
     }
 }
