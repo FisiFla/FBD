@@ -92,15 +92,15 @@ sources linked. Paraphrased, the rules that bear on FBD:
 
 | rule | FBD today |
 |---|---|
-| 1 · no glass-on-glass | ✅ fixed — `fbdChromeBand()`; was violated at `DisplayListView.swift:232`, `:277`, `:361` |
-| 2 · checkmark lists | partial — the panel's mode/refresh/colour live in a `.menu` picker (two clicks) |
+| 1 · no glass-on-glass | ✅ — since the UI revamp, glass (macOS 26+) is only on the popover backdrop and the controls layer (quick toggles, page header, small buttons, slider thumb), all through `DesignSystem/FBDGlass.swift`; rows, lists and display blocks are plain content |
+| 2 · checkmark lists | ✅ — resolution, refresh rate, XDR preset, colour profile and DDC input are flat checkmark lists on the display page, and `All Modes` lists every mode the same way |
 | 3 · sliders, not typing | mostly ✅; the nits ranges are typed |
 | 4 · icons all-or-none | ✅ uniform — every section row carries an icon at the same font and tint; checked against the rendered panel, not just the source |
-| 5 · expand in place | ✅ `More controls` disclosure; but folded content also pushes to Settings |
+| 5 · expand in place | deliberately different — depth is one page away (row `›` → display page, with `All Modes` the only second level) inside the popover, not a disclosure; Settings is its own window and never inside the popover |
 | 6 · one editor at a time | ✅ not applicable — the panel has no inline *forms*, so there is nothing for the rule to sequence. Verified by looking at the rendered panel and by grepping for editor state |
-| 7 · centred empty states | ✅ already centred (`DisplayListView.swift:283`) |
-| 8 · shaded band, not a card | ✅ fixed — `fbdPanelBand()`; rows and sections were floating rounded cards *inside* the panel until now, and the expanded detail is part of the row's band |
-| 9 · the HUD's material | ✅ offered, with a measured caveat — FBD's HUD is a vibrancy view in `.withinWindow` mode, which samples the window's *own* content (the SwiftUI content and nothing else), so it draws a flat panel rather than sampling the desktop. The OS's glass (`NSGlassEffectView`, macOS 26+) is now offered as `OSDStyle.Background.glass`, default unchanged. Captured on macOS 27: it renders correctly and the difference is subtle — which matches this rule's own finding that no glass material holds a HUD's backdrop on macOS 26. `.behindWindow` was measured too and is not a substitute |
+| 7 · centred empty states | partial — the Display Groups page's empty state is a left-aligned line above the create field (`GroupsPage.swift`) |
+| 8 · shaded band, not a card | ✅ — groups are separated by hairlines and spacing, not cards; a home-page display block takes `fbdPanelBand` shading on hover only |
+| 9 · the HUD's material | ✅ offered, with a measured caveat — FBD's HUD is a vibrancy view in `.withinWindow` mode, which samples the window's *own* content (the SwiftUI content and nothing else), so it draws a flat panel rather than sampling the desktop. The OS's glass (`NSGlassEffectView`, macOS 26+) is offered as `OSDStyle.Background.glass`, and since the UI revamp it is the default on macOS 26+ (a saved choice wins). Captured on macOS 27: it renders correctly and the difference is subtle — which matches this rule's own finding that no glass material holds a HUD's backdrop on macOS 26. `.behindWindow` was measured too and is not a substitute |
 
 ## Plan, in value order
 
