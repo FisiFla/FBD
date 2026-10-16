@@ -420,3 +420,12 @@
 "Arrangement" = "排列";
 "empty" = "空";
 "This display does not report %@." = "此顯示器不提供「%@」。";
+
+/* Task 5 */
+"Presets" = "預設";
+"New Preset…" = "新增預設…";
+"None" = "無";
+"Check for Updates" = "檢查更新";
+"Night Shift" = "夜覽";
+"Keep Awake" = "保持喚醒";
+"Not supported on this Mac" = "此 Mac 不支援";

@@ -424,3 +424,12 @@
 "Arrangement" = "Arrangement";
 "empty" = "empty";
 "This display does not report %@." = "This display does not report %@.";
+
+/* Task 5 */
+"Presets" = "Presets";
+"New Preset…" = "New Preset…";
+"None" = "None";
+"Check for Updates" = "Check for Updates";
+"Night Shift" = "Night Shift";
+"Keep Awake" = "Keep Awake";
+"Not supported on this Mac" = "Not supported on this Mac";

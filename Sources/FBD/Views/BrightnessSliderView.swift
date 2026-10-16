@@ -10,6 +10,8 @@ import SwiftUI
 @MainActor
 struct BrightnessSliderView: View {
     @ObservedObject var display: Display
+    /// Applied to the slider only (not the icon/readouts) so UI automation finds one element.
+    var accessibilityIdentifier: String? = nil
 
     /// "42" for 0.42 — broken out so the accessibility value stays
     /// type-checkable.
@@ -36,6 +38,7 @@ struct BrightnessSliderView: View {
                     valueText: { _ in "\(Self.percentText(display.brightness ?? 0)) percent" }
                 )
                 .accessibilityValue("\(Self.percentText(display.brightness ?? 0)) percent")
+                .modifier(OptionalIdentifier(identifier: accessibilityIdentifier))
 
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("\(Self.percentText(brightness))%")
@@ -81,5 +84,14 @@ struct BrightnessSliderView: View {
 
     private var validPreset: XDRPreset? {
         display.presets.first { $0.isValid }
+    }
+}
+
+
+private struct OptionalIdentifier: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier { content.accessibilityIdentifier(identifier) } else { content }
     }
 }
