@@ -16,6 +16,7 @@ external secrets needed.
      up off-machine. If you ever need to regenerate: Sparkle's
      `generate_keys` (Keychain-based) or `openssl genpkey -algorithm ED25519`
      → base64 of the raw 32-byte seed (see `.sparkle/` for the format).
+   - For CI, store the same private key as the `SPARKLE_ED_PRIVATE_KEY` secret.
    - The Sparkle tools live in `.sparkle/` (generate_appcast, generate_keys,
      sign_update — from the official Sparkle 2.9.5 release).
 3. **Appcast host** — the appcast is committed to the repo root and the feed
@@ -36,26 +37,43 @@ make bump-version VERSION=1.1.0        # Info.plist: version + build+1
 git tag v1.1.0 && git push origin v1.1.0   # triggers .github/workflows/release.yml
 ```
 
-### 2. Build + sign + notarize (local or CI)
+### 2. Build + sign + notarize (CI or local)
 
-The release workflow does this automatically **if the five secrets are set**
-(APPLE_CERT_BASE64, APPLE_CERT_PASSWORD, APPLE_ID,
-APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID). Without them it uploads an
-unsigned artifact instead — Gatekeeper will block that download, so add the
-secrets before tagging a real release. Manual equivalent:
+Pushing the tag runs `.github/workflows/release.yml`, which:
+
+1. runs `swift test`;
+2. builds the universal app (`make app STRICT_UNIVERSAL=1` — a failed
+   arm64+x86_64 build fails the release);
+3. **if the five Apple secrets are set** (APPLE_CERT_BASE64, APPLE_CERT_PASSWORD,
+   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID): signs inside-out
+   (Sparkle XPC services, Autoupdate, Updater.app, the framework, then the app,
+   all with `--options runtime --timestamp`, no `--deep`), verifies with
+   `codesign --verify --strict`, notarizes, staples, then checks
+   `stapler validate` and `spctl -a -vv`;
+4. **if `SPARKLE_ED_PRIVATE_KEY` is also set**: regenerates `appcast.xml` from the
+   signed zip with Sparkle's `generate_appcast`, attaches it to the release and
+   commits it to `main` (a rejected push is only a warning; use the release
+   asset). Without the key this step is skipped with a notice — do step 4 below
+   by hand;
+5. publishes the GitHub Release from the CHANGELOG section.
+
+Without the Apple secrets the release is still created, but as a **prerelease**
+whose only asset is `FBD-unsigned.zip`. Gatekeeper blocks it; do not ship it as
+a real release.
+
+Manual equivalent (same order, from the repo root):
 
 ```sh
-make app                                  # universal build/FBD.app (ad-hoc)
-# Sign with the Developer ID cert:
-codesign --force --options runtime \
-  --sign "Developer ID Application: <Your Name> (<TEAMID>)" \
-  build/FBD.app/Contents/Frameworks/Sparkle.framework
-codesign --force --options runtime \
-  --sign "Developer ID Application: <Your Name> (<TEAMID)>" \
-  --deep build/FBD.app
-# Verify:
-codesign --verify --deep --strict build/FBD.app
-spctl --assess --type execute build/FBD.app   # "accepted" after notarization
+make app STRICT_UNIVERSAL=1               # universal build/FBD.app (ad-hoc)
+ID="Developer ID Application: <Your Name> (<TEAMID>)"
+SP=build/FBD.app/Contents/Frameworks/Sparkle.framework
+for x in "$SP"/Versions/*/XPCServices/*.xpc; do
+  codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "$ID" "$x"
+done
+codesign --force --options runtime --timestamp --sign "$ID" "$SP"/Versions/*/Autoupdate "$SP"/Versions/*/Updater.app
+codesign --force --options runtime --timestamp --sign "$ID" "$SP"
+codesign --force --options runtime --timestamp --sign "$ID" build/FBD.app
+codesign --verify --strict build/FBD.app
 ```
 
 Notarization (Apple ID with app-specific password in `~/.netrc` or env):
@@ -65,6 +83,9 @@ ditto -c -k --keepParent build/FBD.app build/FBD.zip   # name MUST be FBD.zip (r
 xcrun notarytool submit build/FBD.zip \
   --keychain-profile "notarytool" --wait
 xcrun stapler staple build/FBD.app
+xcrun stapler validate build/FBD.app
+spctl -a -vv build/FBD.app                              # "accepted, source=Notarized Developer ID"
+ditto -c -k --keepParent build/FBD.app build/FBD.zip   # re-zip the stapled app
 ```
 
 ### 3. Create the GitHub Release
@@ -75,6 +96,8 @@ make one.
 
 ### 4. Publish the Sparkle appcast
 
+CI does this when `SPARKLE_ED_PRIVATE_KEY` is configured (see above). By hand:
+
 ```sh
 # After the release exists (asset URL must be live), regenerate the feed:
 ./.sparkle/generate_appcast \
@@ -84,21 +107,20 @@ make one.
 cp <dir>/appcast.xml .   # feed URL points at the repo-root appcast.xml
 git add appcast.xml && git commit -m "appcast: add <VERSION>" && git push
 ```
-The initial 1.0.0 appcast is already generated and committed (from an
-unsigned archive — generate_appcast refuses ad-hoc-signed apps by design).
-**It must be regenerated from the final signed FBD.zip after the release
-publishes** — the `sparkle:edSignature` is computed over the exact archive,
-so a feed signed from a different zip will fail Sparkle's verification.
+The `sparkle:edSignature` is computed over the exact archive, so the feed must
+be generated from the final signed, stapled `FBD.zip`; a feed signed from a
+different zip fails Sparkle's verification. (`generate_appcast` refuses
+ad-hoc-signed apps by design.)
 
 ## CI note
 
-`.github/workflows/ci.yml` builds/tests/packages on every push (Intel
-`macos-15` runner). `.github/workflows/release.yml` runs on `v*` tags:
-without the signing secrets it uploads an unsigned artifact and warns; with
-them (APPLE_CERT_BASE64, APPLE_CERT_PASSWORD, APPLE_ID,
-APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID — see the workflow header) it
-codesigns, notarizes, staples and publishes a GitHub Release from the
-CHANGELOG section.
+`.github/workflows/ci.yml` builds (debug + release), tests and packages a
+universal app bundle on every push and PR (`macos-15`, an Apple Silicon
+runner). The universal build is strict in CI (`STRICT_UNIVERSAL=1`): there is
+no silent fallback to a native-only binary, and the build log is uploaded when
+it fails. `.github/workflows/release.yml` runs on `v*` tags as described in
+step 2. **The release workflow can only be exercised by pushing a tag**, so
+expect the first signed run to need small fixes.
 
 ## First-release sanity list
 
