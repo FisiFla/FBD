@@ -1,12 +1,12 @@
 import FBDCore
 import SwiftUI
 
-@MainActor
 /// The HUD's look and placement, plus the Dock visibility rules.
 ///
 /// Its own view because the whole style is **one stored value**: the controls bind
 /// to a local copy and save it on change, rather than each writing its own key —
 /// which would split one setting across several and allow a partial write.
+@MainActor
 struct OSDStyleSection: View {
     @State private var style = OSDStyle.load()
 
