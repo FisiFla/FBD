@@ -72,12 +72,12 @@ struct DDCPanelView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.teal)
 
-            sliderRow(label: "Contrast", value: Binding(
+            sliderRow(label: "Contrast", accessibilityLabel: String(localized: "Contrast for \(display.name)"), value: Binding(
                 get: { contrast },
                 set: { contrast = $0 }
             )) { DisplayController.shared.setContrast($0, on: display) }
 
-            sliderRow(label: "Volume", value: Binding(
+            sliderRow(label: "Volume", accessibilityLabel: String(localized: "Volume for \(display.name)"), value: Binding(
                 get: { volume },
                 set: { volume = $0 }
             )) { DisplayController.shared.setVolume($0, on: display) }
@@ -166,7 +166,8 @@ struct DDCPanelView: View {
     }
 
     private func sliderRow(
-        label: String,
+        label: LocalizedStringResource,
+        accessibilityLabel: String,
         value: Binding<Double?>,
         send: @escaping (Double) -> Void
     ) -> some View {
@@ -178,10 +179,10 @@ struct DDCPanelView: View {
             FDBSlider(
                 value: Binding(
                     get: { value.wrappedValue ?? 0.5 },
-                    set: { value.wrappedValue = $0; scheduleWrite(label, $0, send) }
+                    set: { value.wrappedValue = $0; scheduleWrite(String(localized: label), $0, send) }
                 ),
                 in: 0...1,
-                accessibilityLabel: "\(label) for \(display.name)",
+                accessibilityLabel: accessibilityLabel,
                 valueText: { "\(Int(($0 * 100).rounded()))%" }
             )
             Text(value.wrappedValue.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
@@ -242,9 +243,9 @@ struct DDCPanelView: View {
         let accepted = DisplayController.shared.setInputSource(value, on: display)
         if accepted {
             selectedInput = value
-            status = .succeeded("Input set to \(inputLabel(value))")
+            status = .succeeded(String(localized: "Input set to \(inputLabel(value))"))
         } else {
-            status = .failed("The display did not accept that write")
+            status = .failed(String(localized: "The display did not accept that write"))
         }
     }
 
@@ -260,11 +261,11 @@ struct DDCPanelView: View {
     /// sleeps for the DDC settle interval and does up to three I2C reads, and it
     /// used to do all of that on the main actor.
     private func readCapabilities() {
-        status = .working("Reading capabilities…")
+        status = .working(String(localized: "Reading capabilities…"))
         DisplayController.shared.readCapabilities(for: display) { answered in
             status = answered
-                ? .succeeded("Capabilities read")
-                : .failed("No reply from the display")
+                ? .succeeded(String(localized: "Capabilities read"))
+                : .failed(String(localized: "No reply from the display"))
         }
     }
 }

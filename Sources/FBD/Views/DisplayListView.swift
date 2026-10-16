@@ -535,7 +535,7 @@ struct DisplayListView: View {
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             if !virtualScreens.create(config) {
-                createError = "Could not create virtual display."
+                createError = String(localized: "Could not create virtual display.")
             }
             isCreating = false
             virtualScreensTick += 1

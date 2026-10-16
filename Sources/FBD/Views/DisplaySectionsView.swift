@@ -249,13 +249,13 @@ struct DisplaySectionsView: View {
 
     private func exportEDID() {
         guard let data = edidController.exportEDID(for: display) else {
-            edidStatus = "Could not read EDID for this display"
+            edidStatus = String(localized: "Could not read EDID for this display")
             edidStatusIsError = true
             return
         }
         edidData = data
         edidSummary = EDIDParser.parse(data)
-        edidStatus = "Exported \(data.count)-byte EDID"
+        edidStatus = String(localized: "Exported \(data.count)-byte EDID")
         edidStatusIsError = false
     }
 
@@ -271,10 +271,10 @@ struct DisplaySectionsView: View {
             guard response == .OK, let url = panel.url else { return }
             do {
                 try edidData.write(to: url)
-                edidStatus = "Saved to \(url.lastPathComponent)"
+                edidStatus = String(localized: "Saved to \(url.lastPathComponent)")
                 edidStatusIsError = false
             } catch {
-                edidStatus = "Save failed: \(error.localizedDescription)"
+                edidStatus = String(localized: "Save failed: \(error.localizedDescription)")
                 edidStatusIsError = true
             }
         }
@@ -290,19 +290,19 @@ struct DisplaySectionsView: View {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             guard let data = try? Data(contentsOf: url) else {
-                edidStatus = "Could not read \(url.lastPathComponent)"
+                edidStatus = String(localized: "Could not read \(url.lastPathComponent)")
                 edidStatusIsError = true
                 return
             }
             if edidController.applyOverride(data, for: display) {
                 edidData = data
                 edidSummary = EDIDParser.parse(data)
-                edidStatus = "Override applied (\(data.count) bytes)"
+                edidStatus = String(localized: "Override applied (\(data.count) bytes)")
                 edidStatusIsError = false
             } else {
                 edidStatus = edidController.isAvailable
-                    ? "Failed to apply override"
-                    : "Failed — EDID override requires Apple Silicon"
+                    ? String(localized: "Failed to apply override")
+                    : String(localized: "Failed — EDID override requires Apple Silicon")
                 edidStatusIsError = true
             }
             refreshTick += 1
@@ -314,12 +314,12 @@ struct DisplaySectionsView: View {
         // original; the controller prefers its own factory capture.
         let original = edidData ?? edidController.exportEDID(for: display)
         if edidController.restoreFactory(originalEDID: original, for: display) {
-            edidStatus = "Factory EDID restored"
+            edidStatus = String(localized: "Factory EDID restored")
             edidStatusIsError = false
         } else {
             edidStatus = edidController.isAvailable
-                ? "Failed to restore factory EDID"
-                : "Failed — EDID override requires Apple Silicon"
+                ? String(localized: "Failed to restore factory EDID")
+                : String(localized: "Failed — EDID override requires Apple Silicon")
             edidStatusIsError = true
         }
         refreshTick += 1
@@ -454,7 +454,7 @@ struct DisplaySectionsView: View {
                             }
                         ),
                         in: range,
-                        accessibilityLabel: "XDR upscale target for \(display.name)",
+                        accessibilityLabel: String(localized: "XDR upscale target for \(display.name)"),
                         // A closure returning a String is verbatim, so this one has to look its own
                         // text up — `String(localized:)` uses the same `%lld nits` key SwiftUI
                         // generates for the interpolated `Text` sites.

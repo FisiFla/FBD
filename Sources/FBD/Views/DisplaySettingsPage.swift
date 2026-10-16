@@ -158,11 +158,11 @@ struct DisplaySettingsPage: View {
             allowsAffectedBuiltInDisconnect: Settings.allowBuiltInDisconnectOnAffectedMacs
         )
         if steps.isEmpty && action == .disconnectAllButMain {
-            lastConnectionResult = "No main display — nothing to do."
+            lastConnectionResult = String(localized: "No main display — nothing to do.")
             return
         }
         let applied = disconnect.apply(steps)
-        lastConnectionResult = "\(applied) of \(steps.count) display(s) changed."
+        lastConnectionResult = String(localized: "\(applied) of \(steps.count) display(s) changed.")
         log.info("connection management: \(action.rawValue) applied \(applied)/\(steps.count)")
     }
 }
@@ -281,11 +281,11 @@ private struct DisplayFavouritesSection: View {
 
     private func save(_ slot: Int) {
         guard let mode = resolution.currentMode(for: display) else {
-            message = "No current mode to record."
+            message = String(localized: "No current mode to record.")
             return
         }
         _ = ModeFavourites.save(mode, into: slot, for: display.identityKey)
-        message = "Recorded slot \(slot)."
+        message = String(localized: "Recorded slot \(slot).")
         refresh += 1
     }
 
@@ -404,10 +404,10 @@ private struct DisplayPresetsSection: View {
             )
         )
         guard DisplayPresets.save(preset, for: display.identityKey) else {
-            message = "A preset named '\(name)' already exists."
+            message = String(localized: "A preset named '\(name)' already exists.")
             return
         }
-        message = "Saved preset '\(name)'."
+        message = String(localized: "Saved preset '\(name)'.")
         newName = ""
         reload()
     }
@@ -420,11 +420,11 @@ private struct DisplayPresetsSection: View {
             controller: DisplayController.shared
         )
         if outcome.applied.isEmpty && !outcome.requested.isEmpty {
-            message = "Nothing in '\(preset.name)' applies to this display."
+            message = String(localized: "Nothing in '\(preset.name)' applies to this display.")
         } else if outcome.unavailable.isEmpty {
-            message = "Applied '\(preset.name)'."
+            message = String(localized: "Applied '\(preset.name)'.")
         } else {
-            message = "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", "))."
+            message = String(localized: "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", ")).")
         }
     }
 
