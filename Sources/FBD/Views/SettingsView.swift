@@ -1,9 +1,8 @@
 import FBDCore
 import SwiftUI
 
-/// Settings, laid out as a sidebar of pages plus a long scrolling pane — the
-/// structure a BetterDisplay user expects (`Displays` · `Groups` ·
-/// `Application` · `Menu` · `Keyboard` · `About`), rendered in FBD's own idiom.
+/// Settings, laid out as a native sidebar of pages (`Displays` · `Groups` · `Application` ·
+/// `Menu` · `Keyboard` · `About`) beside a grouped form, in the standard Settings window.
 ///
 /// The pages themselves live in `Settings*Page.swift` files. This file owns the
 /// shell, the page vocabulary, and the navigation contract other views use.
@@ -84,6 +83,9 @@ struct SettingsView: View {
     private let targetDisplayID: CGDirectDisplayID?
 
     @State private var page: SettingsPage
+    /// Settings actions report refusals through `FBDNotice` too; the popover's banner is not on
+    /// screen while this window is, so the window hosts its own.
+    @ObservedObject private var notice = FBDNotice.shared
 
     init(targetDisplayID: CGDirectDisplayID? = nil, initialPage: SettingsPage = .displays) {
         self.targetDisplayID = targetDisplayID
@@ -91,53 +93,23 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-            Divider().opacity(0.35)
-            pane
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        // Explicit saturated blue for the switch on-state so active toggles
-        // are unmistakable against the material background.
-        .tint(.blue)
-    }
-
-    /// The page list. Deliberately plain buttons rather than a `List`: the panel
-    /// is a floating glass surface and a table-backed sidebar fights it.
-    private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(SettingsPage.allCases) { item in
-                Button {
-                    page = item
-                } label: {
-                    HStack(spacing: FBDTheme.spacingM) {
-                        Image(systemName: item.symbol)
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(width: 16)
-                            .accessibilityHidden(true)
-                        Text(item.title)
-                            .font(.callout)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, FBDTheme.spacingS)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: FBDTheme.radiusTile, style: .continuous)
-                            .fill(page == item ? Color.accentColor.opacity(0.18) : Color.clear)
-                    )
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(page == item ? Color.accentColor : Color.primary)
-                .accessibilityLabel(item.settingsLabel)
-                .accessibilityAddTraits(page == item ? AccessibilityTraits.isSelected : [])
+        NavigationSplitView {
+            List(SettingsPage.allCases, selection: $page) { item in
+                Label(item.title, systemImage: item.symbol)
+                    .tag(item)
+                    .accessibilityLabel(item.settingsLabel)
             }
-            Spacer(minLength: 0)
+            .navigationSplitViewColumnWidth(200)
+        } detail: {
+            pane
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if notice.message != nil {
+                        FBDNoticeBanner(notice: notice)
+                            .padding(.vertical, FBDTheme.spacingS)
+                            .background(.bar)
+                    }
+                }
         }
-        .padding(.horizontal, FBDTheme.spacingM)
-        // Clear the traffic-light zone, which the panel draws over the content.
-        .padding(.top, 36)
-        .frame(width: 170, alignment: .topLeading)
     }
 
     @ViewBuilder

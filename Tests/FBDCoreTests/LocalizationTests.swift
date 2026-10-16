@@ -156,11 +156,13 @@ final class LocalizationTests: XCTestCase {
 
     /// The reverse of `testEveryKeyStillExistsInTheSource`: every plain user-facing literal in the
     /// app's views must have a key, or it silently stays English in the other languages.
+    /// Covers the SwiftUI initialisers, the app's own `SectionHeader` / `TitledSection` and any
+    /// `title:` argument (`FBDListRow`, `FBDToggleTile`, …), whose `LocalizedStringKey` is looked up.
     /// Interpolated strings (format keys) and non-literal arguments are not checked here.
     func testEveryUserFacingLiteralHasAKey() throws {
         let keys = Set(try parse(stringsURL("en")).keys)
         let pattern = try NSRegularExpression(
-            pattern: #"(?:\b(?:Text|Button|Label|Toggle|Menu|Picker|TextField|Link)\(|\.(?:help|accessibilityLabel|accessibilityHint)\(|String\(localized:\s*|NSLocalizedString\(|\bfbdConfirmation\(|\bconfirmationDialog\(|\bconfirm:\s*|\bmessage:\s*)\s*"((?:[^"\\]|\\.)*)""#
+            pattern: #"(?:\b(?:Text|Button|Label|Toggle|Menu|Picker|TextField|Link|SectionHeader|TitledSection)\(|\btitle:\s*|\.(?:help|accessibilityLabel|accessibilityHint)\(|String\(localized:\s*|NSLocalizedString\(|\bfbdConfirmation\(|\bconfirmationDialog\(|\bconfirm:\s*|\bmessage:\s*)\s*"((?:[^"\\]|\\.)*)""#
         )
         var missing: [String] = []
         for module in Self.sourceModules {

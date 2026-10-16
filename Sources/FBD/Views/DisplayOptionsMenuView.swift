@@ -135,21 +135,16 @@ struct DisplayOptionsMenuView: View {
             ForEach(1...ModeFavourites.slotCount, id: \.self) { slot in
                 Menu(favouriteSlotLabel(slot)) {
                     if let favourite = ModeFavourites.favourite(slot: slot, for: display.identityKey) {
-                        Button("Apply \(favouriteSummary(favourite))") {
-                            let recall = favouriteResolution.applyFavourite(
-                                slot: slot,
-                                for: display.identityKey,
-                                to: display
-                            )
-                            if recall.isUnavailable {
-                                FBDNotice.shared.report(String(localized: "Favourite \(slot) no longer has a matching mode on this display."))
-                            }
+                        Button("Apply \(DisplayOptionActions.favouriteSummary(favourite))") {
+                            DisplayOptionActions.applyFavourite(slot, to: display, using: favouriteResolution)
                             refreshTick += 1
                         }
                         Divider()
                     }
                     Button("Record current resolution") {
-                        recordFavourite(slot)
+                        if DisplayOptionActions.recordFavourite(slot, for: display, using: favouriteResolution) {
+                            refreshTick += 1
+                        }
                     }
                 }
             }
@@ -178,19 +173,19 @@ struct DisplayOptionsMenuView: View {
         // mirror onto, and the menu opened empty — a dead affordance. Disable it
         // and say why instead.
         Menu("Mirror Display") {
-            if CGDisplayIsInMirrorSet(display.id) != 0 {
+            if DisplayOptionActions.isMirrored(display) {
                 Button("Unmirror") {
-                    unmirrorDisplay()
+                    DisplayOptionActions.unmirror(display)
                 }
                 Divider()
             }
             ForEach(mirrorTargets) { target in
                 Button(target.name) {
-                    mirror(to: target)
+                    DisplayOptionActions.mirror(display, onto: target)
                 }
             }
         }
-        .disabled(mirrorTargets.isEmpty && CGDisplayIsInMirrorSet(display.id) == 0)
+        .disabled(mirrorTargets.isEmpty && !DisplayOptionActions.isMirrored(display))
         .help(mirrorTargets.isEmpty
               ? "Connect another display to mirror onto"
               : "Mirror this display onto another display")
@@ -198,7 +193,7 @@ struct DisplayOptionsMenuView: View {
         // Picture in Picture (the old "Stream Display" twin was removed —
         // both called the same function).
         Button("Picture in Picture") {
-            startVideoFilterWindow()
+            DisplayOptionActions.startPictureInPicture(of: display)
         }
 
         // Local streaming: redirect this display onto another one, full-screen.
@@ -207,12 +202,7 @@ struct DisplayOptionsMenuView: View {
             Menu("Stream to") {
                 ForEach(mirrorTargets, id: \.id) { target in
                     Button(target.name) {
-                        _ = pipController.startPiP(
-                            source: .display(display.id),
-                            on: target.id,
-                            presentation: .fullScreen,
-                            filter: .identity
-                        )
+                        DisplayOptionActions.stream(display, to: target)
                     }
                 }
             }
@@ -273,14 +263,7 @@ struct DisplayOptionsMenuView: View {
             // the menu closed and you landed on the Overview page. It now opens
             // the Per-Display tab and scrolls to this display.
             Button("Show in Settings") {
-                NotificationCenter.default.post(
-                    name: .fbdOpenSettings,
-                    object: nil,
-                    userInfo: [
-                        "tab": SettingsView.SettingsPage.displays.rawValue,
-                        "displayID": NSNumber(value: display.id),
-                    ]
-                )
+                DisplayOptionActions.showInSettings(display)
             }
         }
     }
@@ -292,30 +275,7 @@ struct DisplayOptionsMenuView: View {
         guard let favourite = ModeFavourites.favourite(slot: slot, for: display.identityKey) else {
             return "\(slot) — empty"
         }
-        return "\(slot) — \(favouriteSummary(favourite))"
-    }
-
-    private func favouriteSummary(_ favourite: ModeFavourite) -> String {
-        var text = "\(favourite.width) × \(favourite.height)"
-        if favourite.isHiDPI { text += " HiDPI" }
-        if favourite.refreshRate > 0 { text += String(format: " @ %.2f Hz", favourite.refreshRate) }
-        return text
-    }
-
-    /// Record the display's current mode into a slot, reporting either outcome
-    /// — a menu dismisses on selection, so a status line inside it would never
-    /// be read (the banner is the surface for menu-initiated actions).
-    private func recordFavourite(_ slot: Int) {
-        guard let mode = favouriteResolution.currentMode(for: display) else {
-            FBDNotice.shared.report(String(localized: "No current resolution to record."))
-            return
-        }
-        guard ModeFavourites.save(mode, into: slot, for: display.identityKey) else {
-            FBDNotice.shared.report(String(localized: "Resolution favourite \(slot) is out of range."))
-            return
-        }
-        FBDNotice.shared.report(String(localized: "Recorded resolution favourite \(slot)."))
-        refreshTick += 1
+        return "\(slot) — \(DisplayOptionActions.favouriteSummary(favourite))"
     }
 
     /// Applies a named preset and says what actually happened: a preset can name
@@ -343,28 +303,18 @@ struct DisplayOptionsMenuView: View {
     private var hidpiBinding: Binding<Bool> {
         Binding(
             get: { display.currentMode?.isHiDPI ?? false },
-            set: { wantHiDPI in
-                guard let current = display.currentMode else { return }
-                let candidate = display.modes.first {
-                    $0.width == current.width && $0.height == current.height
-                        && $0.refreshRate == current.refreshRate
-                        && $0.isHiDPI == wantHiDPI
-                }
-                if let candidate {
-                    DisplayController.shared.applyMode(candidate, to: display)
-                }
-            }
+            set: { DisplayOptionActions.setHiDPI($0, on: display) }
         )
     }
 
     private var autoBrightnessAvailable: Bool {
-        DisplayController.shared.isAmbientLightCompensationEnabled(on: display) != nil
+        DisplayOptionActions.autoBrightness(of: display) != nil
     }
 
     private var autoBrightnessBinding: Binding<Bool> {
         Binding(
-            get: { DisplayController.shared.isAmbientLightCompensationEnabled(on: display) ?? false },
-            set: { DisplayController.shared.setAmbientLightCompensation($0, on: display) }
+            get: { DisplayOptionActions.autoBrightness(of: display) ?? false },
+            set: { DisplayOptionActions.setAutoBrightness($0, on: display) }
         )
     }
 
@@ -387,43 +337,7 @@ struct DisplayOptionsMenuView: View {
 
     /// Other online displays available as mirror or stream targets.
     private var mirrorTargets: [Display] {
-        DisplayController.shared.displays.filter { $0.id != display.id && $0.isOnline }
-    }
-
-    /// Mirror this display onto a target by creating (or reusing) a group
-    /// containing exactly the two displays, then mirroring the group.
-    private func mirror(to target: Display) {
-        let groups = DisplayGroupsController()
-        if let existing = groups.groups.first(where: {
-            $0.displayIDs == [display.id, target.id] || $0.displayIDs == [target.id, display.id]
-        }) {
-            reportIfNeeded(groups.mirror(inGroup: existing.id), "mirror \(display.name) onto \(target.name)")
-            return
-        }
-        groups.createGroup(name: "Mirror \(display.name) → \(target.name)", displayIDs: [display.id, target.id])
-        if let group = groups.groups.last {
-            reportIfNeeded(groups.mirror(inGroup: group.id), "mirror \(display.name) onto \(target.name)")
-        }
-    }
-
-    /// Surface a refused display-groups operation instead of discarding it. The
-    /// result was previously thrown away, so a refused mirror looked like a dead
-    /// menu item.
-    private func reportIfNeeded(_ succeeded: Bool, _ action: String) {
-        guard !succeeded else { return }
-        FBDNotice.shared.report(String(localized: "Could not \(action)."))
-    }
-
-    private func unmirrorDisplay() {
-        let groups = DisplayGroupsController()
-        for group in groups.groups where group.displayIDs.contains(display.id) {
-            reportIfNeeded(groups.unmirror(inGroup: group.id), "unmirror \(display.name)")
-        }
-    }
-
-    /// Start the floating video-filter (PiP) window for this display.
-    private func startVideoFilterWindow() {
-        _ = pipController.startPiP(displayID: display.id, filter: .identity)
+        DisplayOptionActions.mirrorTargets(for: display)
     }
 
     private var validPresets: [XDRPreset] {

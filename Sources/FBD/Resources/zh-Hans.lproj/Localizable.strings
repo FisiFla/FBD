@@ -6,7 +6,6 @@
 
 /* 显示器列表 */
 "No displays" = "没有显示器";
-"Connect a display to control it here." = "连接显示器后即可在此控制。";
 
 /* 单个显示器的菜单 */
 "Manage Display" = "管理显示器";
@@ -25,7 +24,6 @@
 
 /* 分区 */
 "Display Groups" = "显示器组";
-"No groups yet. Create one to sync brightness or mirror displays." = "尚无显示器组。创建一个即可同步亮度或镜像显示器。";
 "Virtual Screens" = "虚拟屏幕";
 "Stream to" = "串流到";
 "Apple Display Preset" = "Apple 显示器预设";
@@ -49,16 +47,12 @@
 "This display does not support DDC/CI, so its monitor controls (input, speakers, contrast) are unavailable." = "此显示器不支持 DDC/CI，因此无法使用其显示器控制（输入源、扬声器、对比度）。";
 
 /* 窗口 */
-"Free Better Display" = "自由、更好的显示器";
 "Settings" = "设置";
-"Back to FBD" = "返回 FBD";
-"Close FBD panel" = "关闭 FBD 面板";
 
 /* 面板分区标题（经由 disclosureSection，其标题现为 LocalizedStringKey） */
 "Resolutions" = "分辨率";
 "EDID" = "EDID";
 "Filters" = "滤镜";
-"More controls" = "更多控制";
 
 /* 设置 — 分区标题 */
 "About" = "关于";
@@ -215,7 +209,7 @@
 "The group is active while both a sync source and a sync target are connected." = "同步源和同步目标都已连接时该组即生效。";
 "The group is always active." = "该组始终生效。";
 "The lowest hardware brightness value before software dimming takes over." = "软件调暗接管前的最低硬件亮度值。";
-"The panel shows one row per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit." = "面板为每台显示器显示一行，包含亮度、滤镜、分辨率和 XDR/HDR 控制，底部还有虚拟屏幕、显示器组、画中画、更新和退出的入口。";
+"The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display." = "面板显示每台显示器的亮度，以及显示器支持时的音量；深色模式、夜览、原彩显示和保持唤醒的快捷开关；预设；以及虚拟屏幕和显示器组的入口。点按某台显示器的行可打开其页面，该显示器的其他所有控制项都在那里。";
 "The system appearance — the switch Control Center flips, so another app can change it too." = "系统外观——与控制中心所切换的是同一个开关，因此其他应用也能更改它。";
 "The top of the XDR/HDR upscaling range on the combined scale." = "组合刻度上 XDR/HDR 升频范围的上限。";
 "This Mac (base M3) may not reconnect its built-in display without a reboot." = "此 Mac（基础款 M3）可能无法在不重新启动的情况下重新连接其内建显示器。";
@@ -308,27 +302,19 @@
 "Brightness unavailable" = "亮度不可用";
 "Cancel" = "取消";
 "Capabilities read" = "已读取功能";
-"Check for Updates" = "检查更新";
 "Check for Updates…" = "检查更新…";
 "Choose file…" = "选择文件…";
-"Close" = "关闭";
 "Color Profile" = "色彩描述文件";
-"Could not create virtual display." = "无法创建虚拟显示器。";
 "Could not read EDID for this display" = "无法读取这台显示器的 EDID";
 "DDC control is unavailable under Rosetta — run FBD natively (arm64) for full functionality." = "DDC 控制在 Rosetta 下不可用——请以原生（arm64）方式运行 FBD 以获得完整功能。";
 "DDC input source (VCP 0x60), 1–15" = "DDC 输入源（VCP 0x60），1–15";
 "Delete this group?" = "要删除此分组吗？";
-"Destroy" = "销毁";
-"Destroy this virtual screen?" = "要销毁此虚拟屏幕吗？";
 "Disable" = "停用";
 "Disconnect" = "断开";
-"Disconnect all" = "全部断开";
 "Disconnect all but the main display?" = "要断开除主显示器以外的所有显示器吗？";
-"Disconnect all virtual screens?" = "要断开所有虚拟屏幕吗？";
 "Disconnect virtual screens while locked" = "锁定时断开虚拟屏幕";
 "Dismiss message" = "关闭消息";
 "Display is offline — connect it to control it." = "显示器已离线——连接后即可控制。";
-"Display will go dark until re-enabled" = "显示器将变黑，直到重新启用";
 "Every other display turns off until it is re-enabled." = "其他所有显示器都会关闭，直到重新启用。";
 "Export EDID…" = "导出 EDID…";
 "FBD" = "FBD";
@@ -336,27 +322,19 @@
 "Failed to apply override" = "应用覆盖失败";
 "Failed to restore factory EDID" = "恢复出厂 EDID 失败";
 "Failed — EDID override requires Apple Silicon" = "失败——EDID 覆盖需要 Apple 芯片";
-"Group name" = "分组名称";
 "Manual override: a raw DDC input source (VCP 0x60) between 1 and 15" = "手动覆盖：1 到 15 之间的原始 DDC 输入源（VCP 0x60）";
 "More options" = "更多选项";
 "Name" = "名称";
-"New group" = "新建分组";
 "No current resolution to record." = "没有可记录的当前分辨率。";
 "No displays connected" = "未连接显示器";
 "No reply from the display" = "显示器没有响应";
-"Open a floating picture-in-picture window for the primary display" = "为主显示器打开浮动的画中画窗口";
-"PiP" = "画中画";
 "Picture in Picture" = "画中画";
 "Preset" = "预设";
 "Query the display's supported VCP features (VCP 0xF3)" = "查询显示器支持的 VCP 功能（VCP 0xF3）";
 "Quit FBD" = "退出 FBD";
 "Reading capabilities…" = "正在读取功能…";
-"Reconnect all" = "全部重新连接";
 "Record current resolution" = "记录当前分辨率";
-"Refresh rate" = "刷新率";
 "Remove this rule" = "移除此规则";
-"Resolution" = "分辨率";
-"Restore default" = "恢复默认";
 "Restore factory" = "恢复出厂";
 "Restore the factory EDID?" = "要恢复出厂 EDID 吗？";
 "Safe mode: saved EDID override and configuration-protection restore are off for this session" = "安全模式：本次会话中已关闭已保存的 EDID 覆盖和配置保护恢复";
@@ -371,7 +349,6 @@
 "System events only fire for rules scoped to \"Any display\"." = "系统事件只会触发范围为“任意显示器”的规则。";
 "The display did not accept that write" = "显示器未接受该写入";
 "The displays themselves are not affected." = "显示器本身不受影响。";
-"The virtual screen is removed until you create it again." = "该虚拟屏幕将被移除，直到您重新创建。";
 "Volume" = "音量";
 "Version %@" = "版本 %@";
 "Brightness for %@" = "%@的亮度";
@@ -421,3 +398,62 @@
 "No preset is named '%@' on this display." = "这台显示器上没有名为“%@”的预设。";
 "no part of '%@' applies to this display." = "“%@”中没有任何内容适用于这台显示器。";
 "Applied preset '%@'." = "已应用预设“%@”。";
+"On" = "开启";
+"Unavailable" = "不可用";
+
+/* Task 4 */
+"FBD Settings" = "FBD 设置";
+"All Modes" = "所有模式";
+
+/* Task 8 */
+"Resolution" = "分辨率";
+"Refresh rate" = "刷新率";
+"Brightness" = "亮度";
+"XDR preset" = "XDR 预设";
+"Main display" = "主显示器";
+"Rotation" = "旋转";
+"Colour profile" = "色彩描述文件";
+"Arrangement" = "排列";
+"empty" = "空";
+"This display does not report %@." = "此显示器不提供“%@”。";
+
+/* Task 5 */
+"Presets" = "预设";
+"New Preset…" = "新建预设…";
+"None" = "无";
+"Check for Updates" = "检查更新";
+"Night Shift" = "夜览";
+"Keep Awake" = "保持唤醒";
+"Not supported on this Mac" = "此 Mac 不支持";
+
+/* Task 7 */
+"Saved '%@'." = "已保存“%@”。";
+"Virtual screens aren't available on this Mac" = "此 Mac 不支持虚拟屏幕";
+"New Virtual Screen" = "新建虚拟屏幕";
+"Reconnect" = "重新连接";
+"Disconnect All" = "全部断开";
+"Destroy" = "销毁";
+"New Group" = "新建群组";
+"Disconnect all virtual screens?" = "断开所有虚拟屏幕？";
+"Destroy this virtual screen?" = "销毁此虚拟屏幕？";
+"The virtual screen is removed until you create it again." = "该虚拟屏幕将被移除，直到你再次创建。";
+"Could not create virtual display." = "无法创建虚拟显示器。";
+"Group name" = "群组名称";
+"No groups yet. Create one to sync brightness or mirror displays." = "还没有群组。创建一个以同步亮度或镜像显示器。";
+"1 display" = "1 台显示器";
+"%lld displays" = "%lld 台显示器";
+
+/* Task 6 */
+"Restore Default" = "恢复默认";
+"Monitor Controls" = "显示器控制";
+"Monitor controls unavailable — no DDC/CI" = "显示器控制不可用 — 不支持 DDC/CI";
+"Make Main Display" = "设为主显示器";
+"Show All %lld Modes" = "显示全部 %lld 种模式";
+"Show Fewer" = "显示较少";
+"%lld°" = "%lld°";
+"More" = "更多";
+"Record" = "记录";
+"Record the current resolution into this slot" = "将当前分辨率记录到此位置";
+"Reconnect All" = "全部重新连接";
+"Target Nits" = "目标尼特";
+"Group" = "显示器组";

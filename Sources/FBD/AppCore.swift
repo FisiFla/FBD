@@ -46,6 +46,7 @@ final class AppCore {
         }
         SystemVolumeController.shared.refresh()
         statusItemController.install()
+        SettingsWindowController.shared.startObserving()
 
         // Keep the Mac awake if that is what was asked for last time. Deliberately
         // outside the safe-mode gate below: that gate exists to escape a bad
@@ -243,8 +244,9 @@ final class AppCore {
         case "close":
             // Deterministic panel teardown, so a script or a test never has to
             // guess with synthetic Escape keypresses or go hunting for the close
-            // button. `fbd://open` is its counterpart.
+            // button. `fbd://open` is its counterpart, so this closes Settings too.
             statusItemController.closePanel()
+            SettingsWindowController.shared.close()
         case "brightness":
             setBrightness(from: url)
         default:
@@ -252,8 +254,9 @@ final class AppCore {
         }
     }
 
+    /// Settings opens in its own window; the status item closes the popover on the same
+    /// notification.
     private func openSettingsPanel() {
-        statusItemController.showPanel()
         NotificationCenter.default.post(name: .fbdOpenSettings, object: nil)
     }
 
@@ -417,11 +420,14 @@ final class AppCore {
 // MARK: - App-level notifications
 
 extension Notification.Name {
-    /// Posted when the settings panel should be shown (fbd://open).
+    /// Posted when the Settings window should be shown (fbd://open). userInfo: `"tab"` (a
+    /// `SettingsView.SettingsPage` name) and `"displayID"` (an `NSNumber`), both optional.
     static let fbdOpenSettings = Notification.Name("FBDOpenSettings")
-    /// Posted by the Settings back button when leaving the settings page.
+    /// Posted when the Settings window closes.
     static let fbdSettingsClosed = Notification.Name("FBDSettingsClosed")
-    static let fbdPanelCloseRequested = Notification.Name("FBDPanelCloseRequested")
     /// Posted once at startup when DDC is unavailable under Rosetta.
     static let fbdRosettaWarningActive = Notification.Name("FBDRosettaWarningActive")
+    /// Posted when virtual screen state changes (created/destroyed/reconnected).
+    /// FBDCore declares the same name internally; this is the app target's handle on it.
+    static let fbdVirtualScreensChanged = Notification.Name("FBDVirtualScreensChanged")
 }

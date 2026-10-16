@@ -9,8 +9,8 @@ import SwiftUI
 ///
 /// A shared surface rather than per-view state, because these actions live in
 /// **menus**, which dismiss on selection: a status line inside the menu would
-/// never be on screen long enough to read. The banner sits under the panel's top
-/// bar instead, where it is visible on either page.
+/// never be on screen long enough to read. The banner sits at the top of the
+/// popover, on every page, and at the top of the Settings window's detail pane.
 @MainActor
 final class FBDNotice: ObservableObject {
     static let shared = FBDNotice()

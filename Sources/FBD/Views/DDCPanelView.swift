@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 struct DDCPanelView: View {
     @ObservedObject var display: Display
-    /// Bumped by DisplayRowView's `.fbdDisplayUpdated` handler; any change
+    /// Bumped by the host's `.fbdDisplayUpdated` handler; any change
     /// here triggers a DDC read-back.
     let refreshRequest: Int
 
@@ -68,10 +68,6 @@ struct DDCPanelView: View {
 
     private var ddcPanel: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingM) {
-            Label("DDC / CI", systemImage: "cable.connector")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.teal)
-
             sliderRow(label: "Contrast", accessibilityLabel: String(localized: "Contrast for \(display.name)"), value: Binding(
                 get: { contrast },
                 set: { contrast = $0 }
@@ -82,15 +78,46 @@ struct DDCPanelView: View {
                 set: { volume = $0 }
             )) { DisplayController.shared.setVolume($0, on: display) }
 
+            Toggle("Mute", isOn: Binding(
+                get: { muted },
+                set: { muted = $0; DisplayController.shared.setMuted($0, on: display) }
+            ))
+            .toggleStyle(.fbdTrailingSwitch)
+            .controlSize(.small)
+            .font(FBDTheme.Font.secondary)
+            .accessibilityLabel("Mute \(display.name)")
+            .padding(.horizontal, FBDTheme.spacingM)
+
+            // Named inputs, when the display has told us which ones it has. A checkmark list
+            // with the input in effect marked: the read rides in the same batched DDC refresh
+            // as contrast/volume, so marking it costs nothing extra, and when the display does
+            // not answer the checkmark falls back to the last one set rather than inventing one.
+            if !inputOptions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Input")
+                        .font(FBDTheme.Font.secondary)
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, FBDTheme.spacingXS)
+                        .padding(.horizontal, FBDTheme.spacingM)
+                    ForEach(inputOptions, id: \.self) { value in
+                        FBDListRow(
+                            symbol: "rectangle.connected.to.line.below",
+                            verbatim: inputLabel(value),
+                            isChecked: value == effectiveInput
+                        ) {
+                            setInput(value)
+                        }
+                    }
+                }
+                .help("Switch the display's input (VCP 0x60)")
+            } else {
+                Text("Read capabilities to list this display's inputs by name.")
+                    .font(FBDTheme.Font.secondary)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, FBDTheme.spacingM)
+            }
+
             HStack(spacing: FBDTheme.spacingM) {
-                Toggle("Mute", isOn: Binding(
-                    get: { muted },
-                    set: { muted = $0; DisplayController.shared.setMuted($0, on: display) }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .accessibilityLabel("Mute \(display.name)")
-                Spacer()
                 TextField("Input", text: $inputSource)
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 50, idealWidth: 70, maxWidth: 90)
@@ -105,64 +132,22 @@ struct DDCPanelView: View {
                 // feedback at all.
                 .disabled(parsedInputSource == nil)
                 .help("Manual override: a raw DDC input source (VCP 0x60) between 1 and 15")
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, FBDTheme.spacingM)
 
-            // Named inputs, when the display has told us which ones it has. A menu
-            // of actions with a checkmark on the input in effect: the read rides in
-            // the same batched DDC refresh as contrast/volume, so marking it costs
-            // nothing extra, and when the display does not answer the checkmark
-            // falls back to the last one set rather than inventing one.
-            if !inputOptions.isEmpty {
-                HStack(spacing: FBDTheme.spacingM) {
-                    Text("Input")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 54, alignment: .leading)
-                    Menu(inputMenuTitle) {
-                        ForEach(inputOptions, id: \.self) { value in
-                            Button {
-                                setInput(value)
-                            } label: {
-                                if value == effectiveInput {
-                                    Label(inputLabel(value), systemImage: "checkmark")
-                                } else {
-                                    Text(inputLabel(value))
-                                }
-                            }
-                        }
-                    }
-                    .controlSize(.small)
-                    .fixedSize()
-                    .help("Switch the display's input (VCP 0x60)")
-                    Spacer()
-                }
-            } else {
-                Text("Read capabilities to list this display's inputs by name.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Button {
+            FBDListRow(symbol: "doc.text.magnifyingglass", title: "Read capabilities") {
                 readCapabilities()
-            } label: {
-                Label("Read capabilities", systemImage: "doc.text.magnifyingglass")
             }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundStyle(.secondary)
             .help("Query the display's supported VCP features (VCP 0xF3)")
             // Disabled while the probe is in flight, so it cannot be queued twice.
             .disabled(isProbing)
 
             if let status {
                 FBDStatusLine(status: status)
+                    .padding(.horizontal, FBDTheme.spacingM)
             }
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: FBDTheme.radiusInset, style: .continuous)
-                .fill(Color(nsColor: .underPageBackgroundColor))
-        )
     }
 
     private func sliderRow(
@@ -173,7 +158,7 @@ struct DDCPanelView: View {
     ) -> some View {
         HStack(spacing: FBDTheme.spacingM) {
             Text(label)
-                .font(.caption)
+                .font(FBDTheme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .frame(width: 54, alignment: .leading)
             FDBSlider(
@@ -183,14 +168,18 @@ struct DDCPanelView: View {
                 ),
                 in: 0...1,
                 accessibilityLabel: accessibilityLabel,
-                valueText: { "\(Int(($0 * 100).rounded()))%" }
+                valueText: { "\(Int(($0 * 100).rounded()))%" },
+                // The default sun glyphs mean brightness; the row's label already names the value.
+                endSymbols: nil
             )
             Text(value.wrappedValue.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
-                .font(.caption)
+                .font(FBDTheme.Font.secondary)
                 .monospacedDigit()
                 .frame(width: 36, alignment: .trailing)
                 .foregroundStyle(.secondary)
         }
+        // Non-row controls take the list rows' inset so they line up with the row chips.
+        .padding(.horizontal, FBDTheme.spacingM)
     }
 
     /// Trailing-debounced DDC write: the slider drags at ~60 Hz and every DDC write is a slow I2C
@@ -232,11 +221,6 @@ struct DDCPanelView: View {
     /// than given a plausible-looking wrong label.
     private func inputLabel(_ value: UInt16) -> String {
         DDC.inputSourceName(for: value) ?? String(format: "Input 0x%02X", value)
-    }
-
-    private var inputMenuTitle: String {
-        guard let effectiveInput else { return "Choose…" }
-        return inputLabel(effectiveInput)
     }
 
     private func setInput(_ value: UInt16) {

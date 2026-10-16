@@ -19,6 +19,13 @@ Every planned feature tier has code and unit tests (CI runs build + tests on eve
 but CI cannot exercise real displays. Apple locks down private display APIs differently per
 macOS release; FBD degrades gracefully (feature off, UI notes it) when a path is unavailable.
 
+## Screenshots
+
+<img src="docs/plans/fbd-ui-revamp/home-dark.png" alt="FBD's menu-bar panel: brightness slider, quick toggles, presets and navigation rows" width="386">
+
+The panel on macOS 27 (Liquid Glass). More, including each display's page, All Modes, Settings,
+light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/plans/fbd-ui-revamp/).
+
 ## Feature matrix by macOS version
 
 | Feature | macOS 13–15 | macOS 26 | macOS 27 |

@@ -53,5 +53,7 @@ let package = Package(
         // App Intents / Shortcuts (Tier 5).
         .target(name: "FBDIntents", dependencies: ["FBDCore"]),
         .testTarget(name: "FBDCoreTests", dependencies: ["FBDCore"]),
+        // UI-layer logic (PanelModel etc.). Executable targets are @testable-importable on macOS.
+        .testTarget(name: "FBDAppTests", dependencies: ["FBD"]),
     ]
 )
