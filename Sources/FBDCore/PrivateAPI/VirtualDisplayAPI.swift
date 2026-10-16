@@ -95,14 +95,19 @@ public enum VirtualDisplayAPI {
             log.warning("config create failed: \(takeError(err)?.localizedDescription ?? "unknown")")
             return nil
         }
+        // FBDVD*Create are alloc/init shims: the results are +1, so each is adopted with
+        // takeRetainedValue. The config is only needed for the create call below.
+        let configObject = Unmanaged<AnyObject>.fromOpaque(config).takeRetainedValue()
         var err2: UnsafeMutableRawPointer?
-        guard let vd = FBDVDCreate(Unmanaged.passUnretained(vdClass as AnyObject).toOpaque(), config, &err2) else {
+        guard let vd = withExtendedLifetime(configObject, {
+            FBDVDCreate(Unmanaged.passUnretained(vdClass as AnyObject).toOpaque(), config, &err2)
+        }) else {
             log.warning("virtual display create failed: \(takeError(err2)?.localizedDescription ?? "unknown")")
             return nil
         }
         let displayID = FBDVDDisplayID(vd)
         log.debug("virtual display created: id=\(displayID)")
-        return VirtualDisplayHandle(ref: Unmanaged<AnyObject>.fromOpaque(vd).takeUnretainedValue(), displayID: CGDirectDisplayID(displayID))
+        return VirtualDisplayHandle(ref: Unmanaged<AnyObject>.fromOpaque(vd).takeRetainedValue(), displayID: CGDirectDisplayID(displayID))
     }
 
     /// Build a mode object (macOS 26+). Refresh rate is a Float per the encoding.
@@ -120,7 +125,7 @@ public enum VirtualDisplayAPI {
             Float(refreshRate),
             &err
         ) else { return nil }
-        return Unmanaged<AnyObject>.fromOpaque(mode).takeUnretainedValue()
+        return Unmanaged<AnyObject>.fromOpaque(mode).takeRetainedValue()
     }
 
     /// Build a settings object with a native/preferred mode plus optional modes
@@ -141,6 +146,6 @@ public enum VirtualDisplayAPI {
             rotations,
             &err
         ) else { return nil }
-        return Unmanaged<AnyObject>.fromOpaque(settings).takeUnretainedValue()
+        return Unmanaged<AnyObject>.fromOpaque(settings).takeRetainedValue()
     }
 }

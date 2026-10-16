@@ -581,4 +581,25 @@ final class CombinedBrightnessTests: XCTestCase {
         XCTAssertEqual(display.softwareDim, 1, accuracy: 1e-9)
         XCTAssertEqual(module.get(for: display) ?? -1, 0.8, accuracy: 1e-9)
     }
+
+    // MARK: - Slider path falls back when the native write fails
+
+    func testSliderFallsBackToSoftwareBoostWhenNativeWriteFails() {
+        xdr.writeOutcomes = [false]
+
+        XCTAssertTrue(module.set(0.5, on: display))
+
+        XCTAssertEqual(overlay.boostCalls.last?.factor ?? 0, 1.6, accuracy: 0.001) // 800/500
+        XCTAssertTrue(display.isXDRUpscaled)
+        XCTAssertEqual(display.xdrUpscaleTargetNits, 800)
+    }
+
+    func testSliderNativeFailureStaysFailedWhenSoftwareDisabled() {
+        xdr.writeOutcomes = [false]
+        Settings.softwareUpscalingEnabled = false
+
+        XCTAssertFalse(module.set(0.5, on: display))
+        XCTAssertTrue(overlay.boostCalls.isEmpty)
+        XCTAssertFalse(display.isXDRUpscaled)
+    }
 }

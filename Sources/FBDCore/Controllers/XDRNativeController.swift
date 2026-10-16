@@ -28,6 +28,10 @@ public final class XDRNativeController {
     /// Per-display bookkeeping for the slot we rewrote, keyed by `identityKey`.
     private var slotStates: [String: SlotState] = [:]
 
+    /// Displays (by `identityKey`) whose preset write was silently rejected — native upscaling
+    /// is unavailable there, so `isAvailable` says so and callers use the software boost.
+    private var writeRejected: Set<String> = []
+
     private struct SlotState {
         let index: Int
         /// The slot's dict before FBD overwrote it (blank for factory slots).
@@ -51,9 +55,17 @@ public final class XDRNativeController {
         let isCapable = presets.contains { $0.isValid }
         let activeIndex = SkyLightAPI.activePresetIndex(for: display.id)
         let activePreset = activeIndex.flatMap { index in presets.first { $0.index == index } }
-        let isUpscaled = activePreset.map { Self.isFBDSlotName($0.name) } ?? false
+        let presetUpscaled = activePreset.map { Self.isFBDSlotName($0.name) } ?? false
+        // A software boost leaves the active preset factory-named, so the name alone would
+        // clobber its state on every reconfiguration while the overlay is still running.
+        let softwareBoostActive = Self.isSoftwareBoostActive(
+            presetUpscaled: presetUpscaled,
+            trackedNativeSlot: slotStates[display.identityKey] != nil,
+            displayUpscaled: display.isXDRUpscaled
+        )
+        let isUpscaled = presetUpscaled || softwareBoostActive
         var targetNits = activePreset.flatMap { Self.upscaleNits(fromPresetName: $0.name) }
-            ?? persistedTarget(for: display)
+            ?? (softwareBoostActive ? display.xdrUpscaleTargetNits : persistedTarget(for: display))
 
         // Restart case: a target was persisted but no FBD preset is active and
         // this session has not tracked a slot (fresh process). Re-apply when a
@@ -87,7 +99,8 @@ public final class XDRNativeController {
 
     /// True when the display has valid Apple presets.
     public func isAvailable(for display: Display) -> Bool {
-        display.isXDRCapable || SkyLightAPI.presets(for: display.id).contains { $0.isValid }
+        if writeRejected.contains(display.identityKey) { return false }
+        return display.isXDRCapable || SkyLightAPI.presets(for: display.id).contains { $0.isValid }
     }
 
     /// Apply native XDR upscaling so the brightness slider ceiling becomes
@@ -110,6 +123,7 @@ public final class XDRNativeController {
         }
 
         let key = display.identityKey
+        let hadState = slotStates[key] != nil
         let stateToSave = slotStates[key] ?? SlotState(
             index: slot.index,
             originalData: slot.raw,
@@ -124,6 +138,9 @@ public final class XDRNativeController {
             log.warning("setUpscaleTarget: writing preset slot \(slot.index) failed for display \(display.id)")
             return false
         }
+        // Record before activating: from here the slot holds an FBD-named dict, so a failure
+        // below must still leave it tracked for disableUpscaling to restore.
+        slotStates[key] = stateToSave
 
         // Self-test: on macOS 26+ SLSDisplaySetPresetData can silently reject
         // writes (verified empirically on macOS 27 — readback stays unchanged
@@ -134,6 +151,8 @@ public final class XDRNativeController {
             // Name prefix alone is not enough when re-targeting an existing FBD
             // slot: a rejected write would leave the OLD name (still prefixed).
             log.warning("setUpscaleTarget: preset slot \(slot.index) write was rejected (preset writes are write-protected on this macOS version) — native XDR upscaling unavailable, use the software method")
+            writeRejected.insert(key)
+            if !hadState { slotStates[key] = nil }
             return false
         }
         guard SkyLightAPI.setActivePreset(slot.index, for: display.id) else {
@@ -141,11 +160,7 @@ public final class XDRNativeController {
             return false
         }
 
-        slotStates[key] = stateToSave
         Settings.defaults.set(target, forKey: targetKey(for: display))
-        // NOTE: state is recorded BEFORE activation on purpose — if activation
-        // fails, a later disableUpscaling must restore the slot's original data
-        // rather than the FBD dict we just wrote.
 
         let updatedPresets = SkyLightAPI.presets(for: display.id)
         display.updateXDRState(
@@ -256,6 +271,12 @@ public final class XDRNativeController {
     }
 
     // MARK: - Pure helpers (unit-tested, no SkyLight)
+
+    /// Whether a software boost (not a preset) is what upscales the display: the preset isn't
+    /// FBD-named, no native slot is tracked, yet the display is flagged upscaled.
+    static func isSoftwareBoostActive(presetUpscaled: Bool, trackedNativeSlot: Bool, displayUpscaled: Bool) -> Bool {
+        !presetUpscaled && !trackedNativeSlot && displayUpscaled
+    }
 
     /// Clamp an upscale target to the preset's slider range.
     public static func clampedTarget(_ nits: Int, preset: XDRPreset) -> Int {

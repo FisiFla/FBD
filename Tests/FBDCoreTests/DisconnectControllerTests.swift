@@ -67,4 +67,17 @@ final class DisconnectControllerTests: XCTestCase {
         // The return value is informational; calling for effect alone must compile.
         controller.apply([ConnectionStep(displayID: unknownA, enable: true, reason: "enable")])
     }
+
+    func testBuiltInDisabledFlagPersistsAcrossInstances() {
+        let suite = "test.fbd.disconnect"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let first = DisconnectController(defaults: defaults)
+        XCTAssertFalse(first.builtInDisabledByUs)
+        first.builtInDisabledByUs = true
+
+        XCTAssertTrue(DisconnectController(defaults: defaults).builtInDisabledByUs)
+    }
 }
