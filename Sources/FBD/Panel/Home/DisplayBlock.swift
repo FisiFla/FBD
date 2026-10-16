@@ -29,12 +29,11 @@ struct DisplayBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingM) {
             header
-            BrightnessSliderView(display: display)
-                .accessibilityIdentifier("home.brightness.\(display.id)")
-            if model.showsVolume(for: display) {
+            BrightnessSliderView(display: display, accessibilityIdentifier: "home.brightness.\(display.id)")
+            if model.showsVolume(for: display), let current = volume {
                 FDBSlider(
                     value: Binding(
-                        get: { volume ?? 0.5 },
+                        get: { volume ?? current },
                         set: { volume = $0; scheduleVolumeWrite($0) }
                     ),
                     in: 0...1,
@@ -58,6 +57,10 @@ struct DisplayBlock: View {
                 DisplayController.shared.readDDCState(for: display) { volume = $0.volume }
             }
         }
+    }
+
+    private var powerLabel: LocalizedStringKey {
+        display.isOnline ? LocalizedStringKey("Disable display") : LocalizedStringKey("Re-enable display")
     }
 
     private var header: some View {
@@ -91,8 +94,8 @@ struct DisplayBlock: View {
                 }
                 .fbdGlassButton()
                 .controlSize(.small)
-                .help(display.isOnline ? "Disable display" : "Re-enable display")
-                .accessibilityLabel(display.isOnline ? "Disable display" : "Re-enable display")
+                .help(powerLabel)
+                .accessibilityLabel(powerLabel)
             }
             Button {
                 model.open(.display(display.id))
