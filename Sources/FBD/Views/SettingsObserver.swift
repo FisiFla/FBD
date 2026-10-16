@@ -21,7 +21,11 @@ final class SettingsObserver: ObservableObject {
         observers.append(NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick &+= 1 }
+            // Deferred a runloop turn: a control that writes a default while SwiftUI is updating
+            // a view would otherwise publish a change from within that update.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.tick &+= 1 }
+            }
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: .fbdHotkeysUnavailable, object: nil, queue: .main
