@@ -93,13 +93,24 @@ struct FDBSlider: View {
     }
 
     private var thumb: some View {
-        Capsule()
-            .fill(.white)
-            .fbdGlass(in: Capsule())
+        thumbBody
             .overlay(Capsule().stroke(Color.black.opacity(0.08), lineWidth: 1))
             .shadow(color: .black.opacity(0.18), radius: isDragging ? 3 : 2, y: isDragging ? 1.5 : 1)
             .frame(width: Self.thumbWidth, height: Self.thumbHeight)
             .scaleEffect(thumbScale)
+    }
+
+    /// A glass pill on macOS 26+, tinted light so it stays clearly visible on the track (an
+    /// opaque fill under the glass would hide it); the plain white pill otherwise.
+    @ViewBuilder
+    private var thumbBody: some View {
+        if FBDGlass.isAvailable {
+            Capsule()
+                .fill(Color.clear)
+                .fbdGlass(in: Capsule(), tint: .white.opacity(0.55))
+        } else {
+            Capsule().fill(.white)
+        }
     }
 
     private var track: some View {

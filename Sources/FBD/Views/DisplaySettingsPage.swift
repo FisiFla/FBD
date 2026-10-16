@@ -96,6 +96,7 @@ struct DisplaySettingsPage: View {
             Text("Connection management")
         } footer: {
             Text("Disconnecting a display turns it off until it is re-enabled. The built-in display is never disconnected on Macs where it may not come back without a reboot.")
+                .fbdLeadingFooter()
         }
         .fbdConfirmation(
             "Disconnect all but the main display?",
@@ -119,6 +120,7 @@ struct DisplaySettingsPage: View {
             )
         } footer: {
             Text("Lets the pointer move between displays whose edges do not line up, instead of stopping at the gap.")
+                .fbdLeadingFooter()
         }
     }
 
@@ -192,6 +194,7 @@ private struct DisplayProtectionSection: View {
             Text("Configuration protection")
         } footer: {
             Text("Re-applies the selected properties when this display reconnects. Properties this display cannot report are unavailable.")
+                .fbdLeadingFooter()
         }
     }
 
@@ -244,6 +247,7 @@ private struct DisplayFavouritesSection: View {
             Text("Resolution favourites")
         } footer: {
             Text("Record the current display mode into a slot and recall it later.")
+                .fbdLeadingFooter()
         }
         .id(refresh)
     }
@@ -347,6 +351,7 @@ private struct DisplayPresetsSection: View {
             Text("Display presets")
         } footer: {
             Text("Save this display's current configuration under a name and apply it again later. A preset never changes which display is the main one.")
+                .fbdLeadingFooter()
         }
         .onAppear { reload() }
     }
@@ -400,5 +405,14 @@ private struct DisplayPresetsSection: View {
         _ = DisplayPresets.remove(id: preset.id, for: display.identityKey)
         message = nil
         reload()
+    }
+}
+
+private extension View {
+    /// A grouped `Form` lays a footer out trailing-aligned; these explain the section above
+    /// them, so they read from the leading edge like the rest of the form.
+    func fbdLeadingFooter() -> some View {
+        multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
