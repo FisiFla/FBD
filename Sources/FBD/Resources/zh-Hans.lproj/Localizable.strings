@@ -337,7 +337,6 @@
 "Reading capabilities…" = "正在读取功能…";
 "Record current resolution" = "记录当前分辨率";
 "Remove this rule" = "移除此规则";
-"Restore default" = "恢复默认";
 "Restore factory" = "恢复出厂";
 "Restore the factory EDID?" = "要恢复出厂 EDID 吗？";
 "Safe mode: saved EDID override and configuration-protection restore are off for this session" = "安全模式：本次会话中已关闭已保存的 EDID 覆盖和配置保护恢复";
@@ -445,3 +444,12 @@
 "No groups yet. Create one to sync brightness or mirror displays." = "还没有群组。创建一个以同步亮度或镜像显示器。";
 "1 display" = "1 台显示器";
 "%lld displays" = "%lld 台显示器";
+
+/* Task 6 */
+"Restore Default" = "恢复默认";
+"Monitor Controls" = "显示器控制";
+"Monitor controls unavailable — no DDC/CI" = "显示器控制不可用 — 不支持 DDC/CI";
+"Make Main Display" = "设为主显示器";
+"Show All %lld Modes" = "显示全部 %lld 种模式";
+"Show Fewer" = "显示较少";
+"%lld°" = "%lld°";

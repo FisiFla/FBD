@@ -342,7 +342,6 @@
 "Reading capabilities…" = "Reading capabilities…";
 "Record current resolution" = "Record current resolution";
 "Remove this rule" = "Remove this rule";
-"Restore default" = "Restore default";
 "Restore factory" = "Restore factory";
 "Restore the factory EDID?" = "Restore the factory EDID?";
 "Safe mode: saved EDID override and configuration-protection restore are off for this session" = "Safe mode: saved EDID override and configuration-protection restore are off for this session";
@@ -450,3 +449,12 @@
 "No groups yet. Create one to sync brightness or mirror displays." = "No groups yet. Create one to sync brightness or mirror displays.";
 "1 display" = "1 display";
 "%lld displays" = "%lld displays";
+
+/* Task 6 */
+"Restore Default" = "Restore Default";
+"Monitor Controls" = "Monitor Controls";
+"Monitor controls unavailable — no DDC/CI" = "Monitor controls unavailable — no DDC/CI";
+"Make Main Display" = "Make Main Display";
+"Show All %lld Modes" = "Show All %lld Modes";
+"Show Fewer" = "Show Fewer";
+"%lld°" = "%lld°";
