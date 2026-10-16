@@ -419,3 +419,12 @@
 "Arrangement" = "排列";
 "empty" = "空";
 "This display does not report %@." = "此显示器不提供“%@”。";
+
+/* Task 5 */
+"Presets" = "预设";
+"New Preset…" = "新建预设…";
+"None" = "无";
+"Check for Updates" = "检查更新";
+"Night Shift" = "夜览";
+"Keep Awake" = "保持唤醒";
+"Not supported on this Mac" = "此 Mac 不支持";
