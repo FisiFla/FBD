@@ -65,8 +65,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         hosting.onContentHeightChange = { [weak self] in self?.scheduleFit() }
         installEscapeMonitor()
         let center = NotificationCenter.default
-        // Content can still ask for the panel to close.
-        center.addObserver(self, selector: #selector(closeFromNotification(_:)), name: .fbdPanelCloseRequested, object: nil)
         // Settings opens in its own window; the popover gets out of the way.
         center.addObserver(self, selector: #selector(closeFromNotification(_:)), name: .fbdOpenSettings, object: nil)
         // Settings is where the status item's icon and visibility are edited.

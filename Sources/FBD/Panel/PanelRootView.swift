@@ -7,12 +7,20 @@ struct PanelRootView: View {
     @ObservedObject var model: PanelModel
     @Namespace private var glassNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var notice = FBDNotice.shared
+    @State private var rosettaWarningVisible = PanelRootView.rosettaWarningActive
 
     var body: some View {
         FBDGlassContainer(spacing: FBDTheme.spacingM) {
             VStack(alignment: .leading, spacing: FBDTheme.spacingM) {
                 if model.route != .home {
                     FBDPageHeader(title: title(for: model.route), namespace: glassNamespace) { model.back() }
+                }
+                // On every page, and outside the page transition so they don't slide with it.
+                // Menus dismiss on selection, so failures reported from them land here.
+                FBDNoticeBanner(notice: notice)
+                if rosettaWarningVisible {
+                    RosettaWarningView()
                 }
                 ScrollView(.vertical, showsIndicators: false) {
                     page(for: model.route)
@@ -28,6 +36,17 @@ struct PanelRootView: View {
         .frame(width: FBDTheme.panelWidth)
         .animation(reduceMotion ? nil : FBDTheme.animationPanel, value: model.route)
         .environment(\.panelGlassNamespace, glassNamespace)
+        // The panel is non-activating and often not key; without this, switches and sliders
+        // render in the gray inactive variant whenever another window has focus.
+        .environment(\.controlActiveState, .key)
+        .onReceive(NotificationCenter.default.publisher(for: .fbdRosettaWarningActive)) { _ in
+            rosettaWarningVisible = true
+        }
+    }
+
+    /// Whether the Rosetta warning banner applies to this process.
+    static var rosettaWarningActive: Bool {
+        IOAVServiceAPI.isAppleSilicon && IOAVServiceAPI.isRunningUnderRosetta && Settings.showRosettaWarning
     }
 
     @ViewBuilder
