@@ -91,6 +91,9 @@ final class AppCore {
         // read per event, so a disabled policy is a no-op rather than a dead
         // observer, and the state machine always restores what it recorded.
         lockDim.start()
+        // Latch the "hotkeys unavailable" notification before the tap is installed, so Settings
+        // pages opened later still know about it.
+        _ = SettingsObserver.shared
         HotkeyController.shared.start()
         UpdaterController.shared.start()
         // Recreate persisted virtual screens at launch (they are process-lifetime).
@@ -102,13 +105,14 @@ final class AppCore {
         // Settings, so `fbdcli http on/off` applies without an app restart.
         reconcileHTTPServer()
         // Same-process writes arrive instantly via the notification;
-        // cross-process writes (the CLI) are covered by a light poll.
+        // cross-process writes (the CLI) are not reliably announced, so a slow
+        // poll covers them (reconcile is a cheap no-op when nothing changed).
         observers.append(NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reconcileHTTPServer() }
         })
-        let pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        let pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.reconcileHTTPServer() }
         }
         httpReconcileTimer = pollTimer
@@ -331,7 +335,8 @@ final class AppCore {
 
     /// Show the HUD for the display that changed (falling back to the first
     /// display when the notification carries no id or the display is gone).
-    private func showOSD() {        guard Settings.customOSDEnabled else { return }
+    private func showOSD() {
+        guard Settings.customOSDEnabled else { return }
         let display: Display?
         if let id = pendingOSDDisplayID, let found = displayController.display(withID: id) {
             display = found
