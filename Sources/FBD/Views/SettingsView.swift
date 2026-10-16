@@ -83,6 +83,9 @@ struct SettingsView: View {
     private let targetDisplayID: CGDirectDisplayID?
 
     @State private var page: SettingsPage
+    /// Settings actions report refusals through `FBDNotice` too; the popover's banner is not on
+    /// screen while this window is, so the window hosts its own.
+    @ObservedObject private var notice = FBDNotice.shared
 
     init(targetDisplayID: CGDirectDisplayID? = nil, initialPage: SettingsPage = .displays) {
         self.targetDisplayID = targetDisplayID
@@ -99,6 +102,13 @@ struct SettingsView: View {
             .navigationSplitViewColumnWidth(200)
         } detail: {
             pane
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if notice.message != nil {
+                        FBDNoticeBanner(notice: notice)
+                            .padding(.vertical, FBDTheme.spacingS)
+                            .background(.bar)
+                    }
+                }
         }
     }
 

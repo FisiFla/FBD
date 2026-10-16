@@ -79,6 +79,15 @@ struct VirtualScreensPage: View {
                     .foregroundStyle(.red)
                     .padding(.horizontal, FBDTheme.spacingM)
             }
+            if !pendingAutoConnectConfigs.isEmpty {
+                FBDListRow(symbol: "arrow.clockwise", title: "Reconnect All") {
+                    controller.reconnectAuto()
+                    if !pendingAutoConnectConfigs.isEmpty {
+                        createError = String(localized: "Could not create virtual display.")
+                    }
+                    changed()
+                }
+            }
             if !controller.screens.isEmpty {
                 FBDListRow(symbol: "eject", title: "Disconnect All", role: .destructive) {
                     confirmingDisconnectAll = true
@@ -141,6 +150,11 @@ struct VirtualScreensPage: View {
 
     private var inactiveConfigs: [VirtualScreenConfig] {
         controller.configs.filter { !controller.isActive(id: $0.id) }
+    }
+
+    /// Saved screens set to connect automatically that are not up — what "Reconnect All" brings back.
+    private var pendingAutoConnectConfigs: [VirtualScreenConfig] {
+        inactiveConfigs.filter(\.autoConnect)
     }
 
     private func changed() {

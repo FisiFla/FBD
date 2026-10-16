@@ -53,7 +53,6 @@
 "Resolutions" = "解析度";
 "EDID" = "EDID";
 "Filters" = "濾鏡";
-"More controls" = "更多控制";
 
 /* 設定 — 區段標題 */
 "About" = "關於";
@@ -210,7 +209,7 @@
 "The group is active while both a sync source and a sync target are connected." = "同步來源與同步目標都已連接時該群組即生效。";
 "The group is always active." = "該群組永遠生效。";
 "The lowest hardware brightness value before software dimming takes over." = "軟體調暗接管前的最低硬體亮度值。";
-"The panel shows one row per display, with brightness, filters, resolutions and XDR/HDR controls, and a footer for Virtual Screens, Groups, PiP, updates and quit." = "面板為每台顯示器顯示一列，包含亮度、濾鏡、解析度與 XDR/HDR 控制，底部還有虛擬螢幕、顯示器群組、子母畫面、更新與結束的入口。";
+"The panel shows each display's brightness and, where the monitor supports it, volume; quick toggles for Dark Mode, Night Shift, True Tone and Keep Awake; presets; and rows for virtual screens and display groups. Click a display's row for its page, which has every other control for that display." = "面板顯示每台顯示器的亮度，以及顯示器支援時的音量；深色模式、夜覽、原彩顯示和保持喚醒的快速切換；預設；以及虛擬螢幕和顯示器群組的入口。按一下某台顯示器的列可開啟其頁面，該顯示器的其他所有控制項都在那裡。";
 "The system appearance — the switch Control Center flips, so another app can change it too." = "系統外觀——與控制中心所切換的是同一個開關，因此其他應用程式也能更改它。";
 "The top of the XDR/HDR upscaling range on the combined scale." = "組合刻度上 XDR/HDR 升頻範圍的上限。";
 "This Mac (base M3) may not reconnect its built-in display without a reboot." = "此 Mac（基礎款 M3）可能無法在不重新啟動的情況下重新連接其內建顯示器。";
@@ -317,7 +316,6 @@
 "Disconnect virtual screens while locked" = "鎖定時中斷虛擬螢幕";
 "Dismiss message" = "關閉訊息";
 "Display is offline — connect it to control it." = "顯示器已離線——連接後即可控制。";
-"Display will go dark until re-enabled" = "顯示器將變黑，直到重新啟用";
 "Every other display turns off until it is re-enabled." = "其他所有顯示器都會關閉，直到重新啟用。";
 "Export EDID…" = "匯出 EDID…";
 "FBD" = "FBD";
@@ -454,3 +452,9 @@
 "Show All %lld Modes" = "顯示全部 %lld 種模式";
 "Show Fewer" = "顯示較少";
 "%lld°" = "%lld°";
+"More" = "更多";
+"Record" = "記錄";
+"Record the current resolution into this slot" = "將目前解析度記錄到此位置";
+"Reconnect All" = "全部重新連接";
+"Target Nits" = "目標尼特";
+"Group" = "顯示器群組";

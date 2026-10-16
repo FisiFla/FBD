@@ -16,6 +16,18 @@ final class ModeListLogicTests: XCTestCase {
         XCTAssertEqual(sizes.count, Set(sizes).count)
     }
 
+    /// The display page shows "Show All N Modes" only when the curated list leaves something out.
+    func testCuratedHidesAnythingOnlyWhenModesAreLeftOut() throws {
+        let modes = try XCTUnwrap(DisplayModeFixtures.macBookAir())
+        let current = modes[0]
+        let curated = ModeListLogic.curated(modes: modes, current: current)
+        XCTAssertEqual(
+            ModeListLogic.curatedHidesAnything(modes: modes, current: current),
+            curated.count < modes.count
+        )
+        XCTAssertFalse(ModeListLogic.curatedHidesAnything(modes: [current], current: current))
+    }
+
     func testRefreshRatesDeduplicatedAndSorted() throws {
         let modes = try XCTUnwrap(DisplayModeFixtures.macBookAir())
         let rates = ModeListLogic.refreshRates(modes: modes, current: modes[0])

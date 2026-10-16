@@ -11,6 +11,12 @@ enum ModeListLogic {
         CuratedModes.curated(from: modes, current: current)
     }
 
+    /// Whether `curated` leaves any mode out — when it does not, a "Show All" link would only
+    /// repeat the list.
+    static func curatedHidesAnything(modes: [DisplayMode], current: DisplayMode?) -> Bool {
+        CuratedModes.hidesAnything(from: modes, current: current)
+    }
+
     /// The refresh rates the current size offers (same logical size, same HiDPI-ness),
     /// deduplicated, highest first. Rates of other sizes are left out: picking one would find no
     /// matching mode and do nothing. A 0 Hz rate (a display that does not report one) is not a
