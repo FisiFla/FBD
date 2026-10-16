@@ -15,6 +15,11 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   DDC controls after its first refresh.
 - `fbdcli ddc-test` now reports the AV service and the DDC/CI reply separately.
 
+### Changed
+- EDID overrides are disabled on Apple Silicon. `IOAVServiceSetVirtualEDIDMode` was declared
+  with the wrong arguments (disassembly shows a 32-bit mode plus raw EDID bytes), and its mode
+  values are undocumented, so applying an override now fails instead of guessing.
+
 ## [1.8.0] - 2026-10-16
 
 ### Changed
