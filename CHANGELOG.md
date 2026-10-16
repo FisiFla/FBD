@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-16
+
 ### Changed
 - **Redesigned the menu-bar panel (Control Center style, Liquid Glass on macOS 26+); Settings now
   opens in its own window.** The panel is a borderless popover sized to its content (340 pt wide,
@@ -71,11 +73,30 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   never fight the user for the pointer. Off by default, like everything else in FBD that moves it.
 
 ### Fixed
+- **DDC/CI now uses the framing Apple Silicon monitors expect** (5-argument `IOAVService` I2C calls,
+  `0x84 0x03` / `0x82 0x01` packets, XOR checksum), matching the reference implementation. Brightness,
+  contrast, volume, input and mute over DDC are rewritten accordingly; not yet verified on hardware (#7).
+- Mute media key no longer only unmutes; DDC slider drags send the latest value instead of queueing
+  every step; the DDC service cache is refreshed on display changes; EDID product code and serial
+  are read little-endian.
+- XDR upscaling above the hardware ceiling falls back to the software boost when the native preset
+  write is refused (macOS 27); ending a boost no longer removes the dim or rounded-corner overlays.
+- A built-in display disabled by FBD, and a lock-dimmed brightness, are restored after a crash or quit.
+- `fbdcli`: a bad token or timeout is an error instead of silently driving the hardware directly;
+  `--direct` inside automation payloads is preserved; `help` lists `enable` on its own line; zsh
+  completion covers every command.
 - **Creating a virtual screen no longer crashes FBD.** The SkyLight calls that build a virtual
   display were handed pointers to a bridged `NSString` (the name) and `NSArray` (the optional modes)
   that were temporaries: Swift released them as soon as the pointer was taken, while SkyLight kept
   using it, so creating a screen from the app crashed. Both objects are now kept alive for the whole
   call.
+
+### Security
+- The HTTP API token and LG TV pairing key moved from preferences to the Keychain (migrated on first
+  run). `fbdcli` may show a one-time Keychain prompt.
+- The local API rejects browser requests (non-loopback `Host` or any `Origin`), sends no CORS headers,
+  caps concurrent connections and no longer falls back to a guessable token.
+- `FBD_DISPLAY_NAME` (from the monitor's EDID) is sanitised before it reaches automation scripts.
 
 ## [1.7.0] - 2026-10-14
 
