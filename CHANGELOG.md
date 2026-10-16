@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-16
+
 ### Fixed
 - External displays on Apple Silicon were never matched to their AV service, so DDC/CI and
   EDID reads could not work on any monitor. The service is now paired by EDID UUID and
