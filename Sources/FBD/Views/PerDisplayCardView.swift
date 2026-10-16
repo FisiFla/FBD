@@ -27,6 +27,9 @@ struct PerDisplayCardView: View {
         Section {
             if display.isOnline {
                 BrightnessSliderView(display: display)
+                    // Scroll anchor for DisplaySettingsPage: one concrete first row per display
+                    // (a Form flattens Section content, so an id on the Section is unreliable).
+                    .id(display.id)
                 disclosureSection(icon: "slider.horizontal.3", title: "Filters") {
                     FilterControlsView(display: display)
                 }
@@ -49,6 +52,7 @@ struct PerDisplayCardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
+                    .id(display.id)
             }
         } header: {
             header

@@ -45,9 +45,8 @@ struct DisplaySettingsPage: View {
                 connectionManagementSection(displays)
 
                 ForEach(shown) { display in
+                    // The scroll target for `targetDisplayID` lives on this card's first row.
                     PerDisplayCardView(display: display)
-                        // Scroll target for a caller that asked Settings to reveal this display.
-                        .id(display.id)
                     DisplayProtectionSection(display: display)
                     DisplayFavouritesSection(display: display)
                     DisplayPresetsSection(display: display)
