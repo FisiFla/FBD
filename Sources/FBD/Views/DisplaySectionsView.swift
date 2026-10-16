@@ -4,8 +4,8 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The per-display disclosure sections: Resolutions, XDR / HDR, EDID and the
-/// color-profile picker. Each owns its subsystem's state and helpers:
+/// The per-display sections: Resolutions, XDR / HDR, Color Profile and EDID, each a section
+/// header over flat checkmark rows. Each owns its subsystem's state and helpers:
 /// - XDR upscale target (slider-local value + trailing debounce),
 /// - EDID export/override/restore (controller + exported data + status),
 /// - color profiles (controller + lazily loaded list).
@@ -20,6 +20,9 @@ struct DisplaySectionsView: View {
     /// here re-syncs the XDR upscale slider with the display's effective
     /// target.
     let xdrSyncRequest: Int
+    /// False on the popover's display page, which lists resolutions itself (with refresh rates
+    /// and a link to the All Modes page). Defaulted so the Settings call sites are unchanged.
+    var showsResolutions = true
 
     // MARK: XDR upscale target (slider-local, trailing-debounced)
 
@@ -52,23 +55,17 @@ struct DisplaySectionsView: View {
     @State private var colorProfilesLoaded = false
 
     var body: some View {
-        Group {
-            if !display.modes.isEmpty {
-                disclosureSection(icon: "list.bullet.rectangle", title: "Resolutions") {
-                    resolutionsList
-                }
+        VStack(alignment: .leading, spacing: FBDTheme.spacingL) {
+            if showsResolutions && !display.modes.isEmpty {
+                section("Resolutions") { resolutionsList }
             }
-            if display.isXDRCapable {
-                disclosureSection(icon: "sun.max.trianglebadge.exclamationmark", title: "XDR / HDR") {
-                    xdrControls
-                }
-            }
-            if !display.isBuiltin {
-                disclosureSection(icon: "rectangle.dashed", title: "EDID") {
-                    edidControls
-                }
+            if display.isXDRCapable || display.isHDRModeCapable {
+                section("XDR / HDR") { xdrControls }
             }
             colorProfileControls
+            if !display.isBuiltin {
+                section("EDID") { edidControls }
+            }
         }
         .onAppear {
             syncUpscaleTarget()
@@ -82,6 +79,16 @@ struct DisplaySectionsView: View {
         }
     }
 
+    private func section<Content: View>(
+        _ title: LocalizedStringKey,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingXS) {
+            DetailSectionHeader(title: title)
+            content()
+        }
+    }
+
     // MARK: - Resolutions
 
     private var resolutionsList: some View {
@@ -89,86 +96,58 @@ struct DisplaySectionsView: View {
         // list inline is not a list — this display reports 132 modes — and reaching a
         // resolution through the ⋯ submenu costs three clicks, so neither extreme is right.
         let offered = display.offeredModes
-        let curated = CuratedModes.curated(from: offered, current: display.currentMode)
-        return VStack(alignment: .leading, spacing: 2) {
+        let curated = ModeListLogic.curated(modes: offered, current: display.currentMode)
+        return VStack(alignment: .leading, spacing: 0) {
             if offered.isEmpty {
                 Text("No modes available")
-                    .font(.caption)
+                    .font(FBDTheme.Font.secondary)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(showAllModes ? offered : curated, id: \.self) { mode in
                     modeRow(mode)
                 }
                 if CuratedModes.hidesAnything(from: offered, current: display.currentMode) {
-                    Button {
+                    FBDListRow(
+                        symbol: showAllModes ? "chevron.up" : "list.bullet",
+                        title: showAllModes ? "Show Fewer" : "Show All \(offered.count) Modes"
+                    ) {
                         showAllModes.toggle()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: showAllModes ? "chevron.up" : "chevron.down")
-                                .font(.caption2)
-                            Text(showAllModes ? "Show fewer" : "Show all \(offered.count) modes")
-                                .font(.caption)
-                            Spacer(minLength: 0)
-                        }
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    /// One row of the resolution list: the mode, its badges, and a checkmark when it is the
-    /// mode in effect — the checkmark column Crisp's menus guidance asks for, on every row
-    /// rather than only some.
+    /// One row of the resolution list: the mode, its refresh rate and HiDPI badge, and a
+    /// checkmark when it is the mode in effect — the checkmark column Crisp's menus guidance
+    /// asks for, on every row rather than only some.
     private func modeRow(_ mode: DisplayMode) -> some View {
-        Button {
+        FBDListRow(
+            symbol: "rectangle",
+            title: LocalizedStringKey(mode.label),
+            value: modeDetail(mode),
+            isChecked: mode == display.currentMode
+        ) {
             DisplayController.shared.applyMode(mode, to: display)
-        } label: {
-            HStack(spacing: 6) {
-                Text(mode.label)
-                if !mode.refreshLabel.isEmpty {
-                    Text(mode.refreshLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if mode.isHiDPI {
-                    Text("HiDPI")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                if mode == display.currentMode {
-                    Image(systemName: "checkmark")
-                        .font(.caption)
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+    }
+
+    private func modeDetail(_ mode: DisplayMode) -> String? {
+        let parts = [mode.refreshLabel, mode.isHiDPI ? String(localized: "HiDPI") : ""].filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     // MARK: - EDID (Tier 4)
 
     private var edidControls: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    Button("Export EDID…") { exportEDID() }
-                    Button("Apply override…") { confirmingEDIDOverride = true }
-                    Button("Restore factory") { confirmingEDIDRestore = true }
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            VStack(alignment: .leading, spacing: 0) {
+                FBDListRow(symbol: "square.and.arrow.up", title: "Export EDID…") { exportEDID() }
+                FBDListRow(symbol: "square.and.arrow.down", title: "Apply override…", role: .destructive) {
+                    confirmingEDIDOverride = true
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Button("Export EDID…") { exportEDID() }
-                        Button("Apply override…") { confirmingEDIDOverride = true }
-                    }
-                    Button("Restore factory") { confirmingEDIDRestore = true }
-                }
+                FBDListRow(symbol: "arrow.uturn.backward", title: "Restore factory") { confirmingEDIDRestore = true }
             }
-            .controlSize(.small)
             .fbdConfirmation(
                 "Apply an EDID override?",
                 isPresented: $confirmingEDIDOverride,
@@ -213,8 +192,7 @@ struct DisplaySectionsView: View {
                         .textSelection(.enabled)
                 }
                 .frame(maxHeight: 110)
-                Button("Save to file…") { saveEDIDToFile() }
-                    .controlSize(.small)
+                FBDListRow(symbol: "square.and.arrow.down.on.square", title: "Save to file…") { saveEDIDToFile() }
             }
 
             if let edidStatus {
@@ -349,22 +327,26 @@ struct DisplaySectionsView: View {
     private var colorProfileControls: some View {
         Group {
             if !colorProfiles.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Picker("Color Profile", selection: colorProfileBinding) {
+                section("Color Profile") {
+                    // Read once per render: each read is a ColorSync query.
+                    let current = colorProfileBinding.wrappedValue
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(colorProfiles) { profile in
-                            Text(profile.name).tag(profile.url as URL?)
+                            FBDListRow(
+                                symbol: "paintpalette",
+                                title: LocalizedStringKey(profile.name),
+                                isChecked: profile.url == current
+                            ) {
+                                colorProfileBinding.wrappedValue = profile.url
+                            }
                         }
-                    }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity)
-                    Button("Restore default") {
-                        if colorProfileController.restoreDefault(for: display) {
-                            refreshTick += 1
+                        FBDListRow(symbol: "arrow.uturn.backward", title: "Restore Default") {
+                            if colorProfileController.restoreDefault(for: display) {
+                                refreshTick += 1
+                            }
                         }
+                        .disabled(current == nil)
                     }
-                    .controlSize(.small)
-                    .disabled(colorProfileController.defaultProfile(for: display) == nil)
                 }
             }
         }
@@ -394,36 +376,9 @@ struct DisplaySectionsView: View {
     // MARK: - XDR / HDR controls
 
     private var xdrControls: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle("XDR upscaling", isOn: Binding(
-                get: { display.isXDRUpscaled },
-                set: { on in
-                    if on {
-                        DisplayController.shared.setXDRUpscaleTarget(Int(Settings.xdrUpscaleTargetNits), on: display)
-                    } else {
-                        DisplayController.shared.disableXDRUpscaling(on: display)
-                    }
-                }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-
-            if display.isXDRUpscaled {
-                upscaleSlider
-                Text("Upscaled to \(display.xdrUpscaleTargetNits ?? Settings.xdrUpscaleTargetNits) nits")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !validPresets.isEmpty {
-                Picker("Preset", selection: presetBinding) {
-                    ForEach(validPresets) { preset in
-                        Text(preset.name).tag(preset.index)
-                    }
-                }
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            if display.isXDRCapable {
+                xdrUpscaleControls
             }
 
             if display.isHDRModeCapable {
@@ -437,12 +392,54 @@ struct DisplaySectionsView: View {
         }
     }
 
+    @ViewBuilder
+    private var xdrUpscaleControls: some View {
+        Toggle("XDR upscaling", isOn: Binding(
+            get: { display.isXDRUpscaled },
+            set: { on in
+                if on {
+                    DisplayController.shared.setXDRUpscaleTarget(Int(Settings.xdrUpscaleTargetNits), on: display)
+                } else {
+                    DisplayController.shared.disableXDRUpscaling(on: display)
+                }
+            }
+        ))
+        .toggleStyle(.switch)
+        .controlSize(.small)
+
+        if display.isXDRUpscaled {
+            upscaleSlider
+            Text("Upscaled to \(display.xdrUpscaleTargetNits ?? Settings.xdrUpscaleTargetNits) nits")
+                .font(FBDTheme.Font.secondary)
+                .foregroundStyle(.secondary)
+        }
+
+        if !validPresets.isEmpty {
+            Text("Preset")
+                .font(FBDTheme.Font.secondary)
+                .foregroundStyle(.secondary)
+                .padding(.top, FBDTheme.spacingXS)
+            let active = presetBinding.wrappedValue
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(validPresets) { preset in
+                    FBDListRow(
+                        symbol: "sun.max",
+                        title: LocalizedStringKey(preset.name),
+                        isChecked: preset.index == active
+                    ) {
+                        presetBinding.wrappedValue = preset.index
+                    }
+                }
+            }
+        }
+    }
+
     private var upscaleSlider: some View {
         Group {
             if let range = upscaleRange {
                 HStack(spacing: 8) {
                     Text("Target")
-                        .font(.caption)
+                        .font(FBDTheme.Font.secondary)
                         .foregroundStyle(.secondary)
                         .frame(width: 44, alignment: .leading)
                     FDBSlider(
@@ -461,7 +458,7 @@ struct DisplaySectionsView: View {
                         valueText: { String(localized: "\(Int($0.rounded())) nits") }
                     )
                     Text("\(Int(upscaleTargetNits)) nits")
-                        .font(.caption)
+                        .font(FBDTheme.Font.secondary)
                         .monospacedDigit()
                         .frame(width: 64, alignment: .trailing)
                 }
@@ -507,5 +504,14 @@ struct DisplaySectionsView: View {
         }
         upscaleDebounceWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(150), execute: workItem)
+    }
+}
+
+/// Section title. File-private stand-in for Task 5's `SectionHeader` (same body), which is not
+/// on this branch.
+private struct DetailSectionHeader: View {
+    let title: LocalizedStringKey
+    var body: some View {
+        Text(title).font(FBDTheme.Font.sectionHeader).foregroundStyle(.secondary)
     }
 }
