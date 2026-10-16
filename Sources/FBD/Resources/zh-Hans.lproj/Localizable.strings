@@ -421,3 +421,5 @@
 "No preset is named '%@' on this display." = "这台显示器上没有名为“%@”的预设。";
 "no part of '%@' applies to this display." = "“%@”中没有任何内容适用于这台显示器。";
 "Applied preset '%@'." = "已应用预设“%@”。";
+"On" = "开启";
+"Unavailable" = "不可用";

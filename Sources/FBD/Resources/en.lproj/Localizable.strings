@@ -426,3 +426,5 @@
 "No preset is named '%@' on this display." = "No preset is named '%@' on this display.";
 "no part of '%@' applies to this display." = "no part of '%@' applies to this display.";
 "Applied preset '%@'." = "Applied preset '%@'.";
+"On" = "On";
+"Unavailable" = "Unavailable";
