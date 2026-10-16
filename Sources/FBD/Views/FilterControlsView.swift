@@ -151,11 +151,13 @@ struct FilterControlsView: View {
         applyScreenFilter()
     }
 
+    /// Switches and sliders take the list rows' inset so they line up with the row chips.
     private var filterControls: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
             Toggle("Apply to Display", isOn: filterActiveBinding)
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .padding(.horizontal, FBDTheme.spacingM)
             Slider(value: filterContrast, in: 0.5...2, step: 0.05) {
                 Text("Contrast")
             } minimumValueLabel: {
@@ -164,6 +166,7 @@ struct FilterControlsView: View {
                 Text("2")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
             Slider(value: filterSaturation, in: 0...2, step: 0.05) {
                 Text("Saturation")
             } minimumValueLabel: {
@@ -172,6 +175,7 @@ struct FilterControlsView: View {
                 Text("2")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
             Slider(value: filterGamma, in: 0.4...2.5, step: 0.05) {
                 Text("Gamma")
             } minimumValueLabel: {
@@ -180,6 +184,7 @@ struct FilterControlsView: View {
                 Text("2.5")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
             Slider(value: filterTemperature, in: 0.5...1.5, step: 0.05) {
                 Text("Color Temperature")
             } minimumValueLabel: {
@@ -188,9 +193,11 @@ struct FilterControlsView: View {
                 Text("Cool")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
             Toggle("Invert Colors", isOn: filterInvert)
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .padding(.horizontal, FBDTheme.spacingM)
 
             Divider()
             Slider(value: filterSharpness, in: 0...ScreenFilterParams.maxSharpness, step: 0.1) {
@@ -201,6 +208,7 @@ struct FilterControlsView: View {
                 Text("\(Int(ScreenFilterParams.maxSharpness))")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
             if filterParams.sharpness > 0 {
                 Slider(value: filterUnsharpRadius, in: 0...ScreenFilterParams.maxUnsharpRadius, step: 0.5) {
                     Text("Radius (px)")
@@ -210,6 +218,8 @@ struct FilterControlsView: View {
                     Text("\(Int(ScreenFilterParams.maxUnsharpRadius))")
                 }
                 .font(FBDTheme.Font.secondary)
+                .padding(.horizontal, FBDTheme.spacingM)
+            .padding(.horizontal, FBDTheme.spacingM)
             }
 
             Divider()
@@ -221,15 +231,20 @@ struct FilterControlsView: View {
                 Text("4x")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
             if filterParams.zoom > 1 {
                 Slider(value: filterOffsetX, in: -panLimit...panLimit, step: 0.005) {
                     Text("Pan Horizontal")
                 }
                 .font(FBDTheme.Font.secondary)
+                .padding(.horizontal, FBDTheme.spacingM)
+            .padding(.horizontal, FBDTheme.spacingM)
                 Slider(value: filterOffsetY, in: -panLimit...panLimit, step: 0.005) {
                     Text("Pan Vertical")
                 }
                 .font(FBDTheme.Font.secondary)
+                .padding(.horizontal, FBDTheme.spacingM)
+            .padding(.horizontal, FBDTheme.spacingM)
             }
 
             Divider()
@@ -258,6 +273,7 @@ struct FilterControlsView: View {
                 Text("\(Int(cornerRadius))px")
             }
             .font(FBDTheme.Font.secondary)
+            .padding(.horizontal, FBDTheme.spacingM)
 
             FBDListRow(symbol: "arrow.counterclockwise", title: "Reset") {
                 resetScreenFilter()

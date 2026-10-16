@@ -12,6 +12,9 @@ struct BrightnessSliderView: View {
     @ObservedObject var display: Display
     /// Applied to the slider only (not the icon/readouts) so UI automation finds one element.
     var accessibilityIdentifier: String? = nil
+    /// The percent/nits column beside the slider. The home page turns it off and shows the
+    /// value only in the slider's drag bubble.
+    var showsReadout = true
 
     /// "42" for 0.42 — broken out so the accessibility value stays
     /// type-checkable.
@@ -21,12 +24,8 @@ struct BrightnessSliderView: View {
 
     var body: some View {
         if let brightness = display.brightness {
+            // FDBSlider draws the dim/bright sun symbols at its ends; no extra leading icon.
             HStack(spacing: 10) {
-                Image(systemName: "sun.max")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 18)
-
                 FDBSlider(
                     value: Binding(
                         get: { display.brightness ?? 0 },
@@ -35,29 +34,38 @@ struct BrightnessSliderView: View {
                     in: 0...1,
                     zoneFraction: xdrZoneFraction,
                     accessibilityLabel: String(localized: "Brightness for \(display.name)"),
-                    valueText: { _ in "\(Self.percentText(display.brightness ?? 0)) percent" }
+                    valueText: { _ in dragText }
                 )
                 .accessibilityValue("\(Self.percentText(display.brightness ?? 0)) percent")
                 .modifier(OptionalIdentifier(identifier: accessibilityIdentifier))
 
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text("\(Self.percentText(brightness))%")
-                        .font(.caption.weight(.medium))
-                        .monospacedDigit()
-                    if let nits = nitsEstimate {
-                        Text("\(nits) nits")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                if showsReadout {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text("\(Self.percentText(brightness))%")
+                            .font(.caption.weight(.medium))
                             .monospacedDigit()
+                        if let nits = nitsEstimate {
+                            Text("\(nits) nits")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
                     }
+                    .frame(width: 52, alignment: .trailing)
                 }
-                .frame(width: 52, alignment: .trailing)
             }
         } else {
             Label("Brightness unavailable", systemImage: "sun.max.trianglebadge.exclamationmark")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// The drag bubble: "81%", plus the nits estimate on XDR displays.
+    private var dragText: String {
+        let percent = "\(Self.percentText(display.brightness ?? 0))%"
+        guard let nits = nitsEstimate else { return percent }
+        return percent + " · " + String(localized: "\(nits) nits")
     }
 
     // MARK: XDR zone + nits estimate
