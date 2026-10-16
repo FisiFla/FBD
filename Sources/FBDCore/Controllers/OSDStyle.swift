@@ -38,7 +38,7 @@ public struct OSDStyle: Codable, Equatable, Sendable {
     /// The HUD background's relationship to the system appearance.
     public enum Background: String, Codable, CaseIterable, Sendable {
         /// The dark HUD material, whatever the system appearance. The incumbent
-        /// look, and the default.
+        /// look, and the fallback where glass is unavailable.
         case hudDark
         /// Follows the system's light/dark appearance.
         case adaptive
@@ -115,11 +115,20 @@ public struct OSDStyle: Codable, Equatable, Sendable {
 
     /// Read the stored style, clamped. Anything unreadable yields `.standard`.
     public static func load(defaults: UserDefaults = Settings.defaults) -> OSDStyle {
-        guard let data = defaults.data(forKey: Settings.osdStyleKey),
-              let style = try? JSONDecoder().decode(OSDStyle.self, from: data) else {
+        guard let data = defaults.data(forKey: Settings.osdStyleKey) else {
+            // Nothing saved: the glass HUD where the OS has it. A saved value always wins.
+            return OSDStyle(background: defaultBackground)
+        }
+        guard let style = try? JSONDecoder().decode(OSDStyle.self, from: data) else {
             return .standard
         }
         return style.clamped()
+    }
+
+    /// The background used when the user has not chosen one: glass where the OS provides it,
+    /// otherwise the dark HUD.
+    public static var defaultBackground: Background {
+        OSDGlass.isAvailable ? .glass : .hudDark
     }
 
     public static func save(_ style: OSDStyle, defaults: UserDefaults = Settings.defaults) {

@@ -17,6 +17,19 @@ final class OSDStyleTests: XCTestCase {
         XCTAssertEqual(OSDStyle.standard.background, .hudDark, "the default must stay the incumbent look")
     }
 
+    /// With nothing saved the HUD is glass wherever the OS has it; a saved choice still wins.
+    func testUnsavedBackgroundDefaultsToGlassOnlyWhereAvailable() throws {
+        let suite = "OSDStyleTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        XCTAssertEqual(OSDStyle.load(defaults: defaults).background,
+                       OSDGlass.isAvailable ? .glass : .hudDark)
+
+        OSDStyle.save(OSDStyle(background: .hudDark), defaults: defaults)
+        XCTAssertEqual(OSDStyle.load(defaults: defaults).background, .hudDark)
+    }
+
     /// Raw values are persisted JSON, so they are part of the on-disk contract: renaming one would
     /// silently reset the background of every user who had chosen it.
     func testTheBackgroundRawValuesAreStable() {
@@ -110,9 +123,10 @@ final class OSDStyleTests: XCTestCase {
         )
     }
 
-    /// Nothing stored yet, and a corrupt blob, both land on the shipped look.
+    /// Nothing stored yet lands on the defaults (glass where available); a corrupt blob lands on
+    /// the shipped look.
     func testUnreadableDataFallsBackToTheDefaults() {
-        XCTAssertEqual(OSDStyle.load(defaults: defaults), .standard)
+        XCTAssertEqual(OSDStyle.load(defaults: defaults), OSDStyle(background: OSDStyle.defaultBackground))
 
         defaults.set(Data("not-json".utf8), forKey: Settings.osdStyleKey)
         XCTAssertEqual(OSDStyle.load(defaults: defaults), .standard)
