@@ -15,10 +15,21 @@ public final class DisconnectController {
 
     private var hasRegistered = false
     private var observer: NSObjectProtocol?
-    /// True while the built-in display is disabled by us (auto-disconnect active).
-    private var builtInDisabledByUs = false
+    private static let disabledByUsKey = "builtInDisabledByUs"
 
-    public init() {}
+    private let defaults: UserDefaults
+
+    /// True while the built-in display is disabled by us (auto-disconnect active). Persisted:
+    /// the disable is committed `.permanently`, so a quit or crash while it is set must still
+    /// bring the built-in back on the next launch.
+    var builtInDisabledByUs: Bool {
+        get { defaults.bool(forKey: Self.disabledByUsKey) }
+        set { defaults.set(newValue, forKey: Self.disabledByUsKey) }
+    }
+
+    public init(defaults: UserDefaults = Settings.defaults) {
+        self.defaults = defaults
+    }
 
     /// Disable or re-enable a display in the layout. Black screen on disable —
     /// only auto-used for external displays / user-initiated actions.
@@ -77,6 +88,8 @@ public final class DisconnectController {
         ) { [weak self] _ in
             self?.evaluateAutoDisconnect()
         }
+        // A flag left set by a previous run: re-enable the built-in if its reason has gone.
+        if builtInDisabledByUs { evaluateAutoDisconnect() }
     }
 
     /// React to topology changes. Only acts when the setting is on, and only on
@@ -92,7 +105,7 @@ public final class DisconnectController {
         guard Settings.autoDisconnectBuiltInOnExternal else {
             // Setting turned off while we had the built-in disabled: restore it.
             if builtInDisabledByUs, let builtInID {
-                builtInDisabledByUs = !setEnabled(true, displayID: builtInID)
+                setBuiltIn(enabled: true, displayID: builtInID)
             }
             return
         }
@@ -104,10 +117,20 @@ public final class DisconnectController {
 
         if externalActive, !builtInDisabledByUs, CGDisplayIsActive(builtInID) != 0 {
             // External display newly active while the built-in is still on → disable it.
-            builtInDisabledByUs = setEnabled(false, displayID: builtInID)
+            setBuiltIn(enabled: false, displayID: builtInID)
         } else if !externalActive, builtInDisabledByUs {
             // External display gone; bring the built-in back.
-            builtInDisabledByUs = !setEnabled(true, displayID: builtInID)
+            setBuiltIn(enabled: true, displayID: builtInID)
+        }
+    }
+
+    /// Enable/disable the built-in, updating the flag *before* the call: `setEnabled` posts
+    /// `.fbdDisplaysChanged`, and an observer must not see a stale flag and act on it again.
+    /// Rolled back if the call is refused or fails.
+    private func setBuiltIn(enabled: Bool, displayID: CGDirectDisplayID) {
+        builtInDisabledByUs = !enabled
+        if !setEnabled(enabled, displayID: displayID) {
+            builtInDisabledByUs = enabled
         }
     }
 

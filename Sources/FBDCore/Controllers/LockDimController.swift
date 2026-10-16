@@ -205,6 +205,10 @@ public final class LockDimController {
     /// all agree on one copy.
     private static let enabledKey = "lockDimEnabled"
     private static let targetKey = "lockDimTargetPercent"
+    /// The pre-dim brightness while a lock dim is in force. Persisted so a quit or crash while
+    /// locked cannot strand the screen at the dimmed value (which brightness persistence has
+    /// stored as the user's level); restored on the next launch.
+    private static let preDimKey = "lockDimPreDimBrightness"
 
     /// macOS's distributed lock/unlock notifications.
     private static let lockedNotification = Notification.Name("com.apple.screenIsLocked")
@@ -257,6 +261,7 @@ public final class LockDimController {
     public func start() {
         guard !hasRegistered else { return }
         hasRegistered = true
+        restorePersistedPreDim()
         let center = DistributedNotificationCenter.default()
         observers.append(center.addObserver(
             forName: Self.lockedNotification, object: nil, queue: .main
@@ -291,6 +296,7 @@ public final class LockDimController {
     /// adapter without round-tripping through the distributed-notification
     /// system.
     func emit(_ event: LockDimEvent) {
+        restorePersistedPreDim()
         let policy = loadPolicy()
         guard policy.enabled else {
             // A disabled policy must never leave a dim behind: undo anything a
@@ -305,8 +311,26 @@ public final class LockDimController {
         switch action {
         case .none:
             break
-        case .dim(let value), .restore(let value):
+        case .dim(let value):
+            // Persist the value to return to before the dim overwrites it.
+            if let recorded = machine.recordedBrightness {
+                defaults.set(recorded, forKey: Self.preDimKey)
+            }
             applier.setBrightness(value)
+        case .restore(let value):
+            applier.setBrightness(value)
+            defaults.removeObject(forKey: Self.preDimKey)
         }
+    }
+
+    /// A pre-dim value left over from a previous run (quit or crash while locked): put the
+    /// screen back. Skipped while this run holds its own record, and kept until a display is
+    /// readable so an early call before enumeration retries instead of losing it.
+    func restorePersistedPreDim() {
+        guard machine.recordedBrightness == nil,
+              let saved = defaults.object(forKey: Self.preDimKey) as? Double,
+              applier.currentBrightness() != nil else { return }
+        applier.setBrightness(min(max(saved, 0), 1))
+        defaults.removeObject(forKey: Self.preDimKey)
     }
 }

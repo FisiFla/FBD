@@ -140,4 +140,13 @@ final class XDRPresetTests: XCTestCase {
             "PresetWhitePoint": 3,
         ]
     }
+
+    // MARK: - isSoftwareBoostActive
+
+    func testSoftwareBoostActiveOnlyWithoutNativePresetOrTrackedSlot() {
+        XCTAssertTrue(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: false, displayUpscaled: true))
+        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: true, trackedNativeSlot: false, displayUpscaled: true))
+        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: true, displayUpscaled: true))
+        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: false, displayUpscaled: false))
+    }
 }

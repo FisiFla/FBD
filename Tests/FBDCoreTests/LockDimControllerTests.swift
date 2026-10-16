@@ -263,4 +263,28 @@ final class LockDimControllerTests: XCTestCase {
         XCTAssertNotNil(UserDefaults(suiteName: suiteName)?.object(forKey: "lockDimTargetPercent"))
         XCTAssertNil(UserDefaults.standard.object(forKey: "lockDimTargetPercent"), "must not write to UserDefaults.standard")
     }
+
+    // MARK: - Pre-dim persistence
+
+    func testPreDimBrightnessIsPersistedWhileDimmed() {
+        fake.brightness = 0.8
+        let controller = makeController(policy: enabled(10))
+        controller.emit(.screenLocked)
+        XCTAssertEqual(UserDefaults(suiteName: suiteName)?.object(forKey: "lockDimPreDimBrightness") as? Double, 0.8)
+        controller.emit(.screenUnlocked)
+        XCTAssertNil(UserDefaults(suiteName: suiteName)?.object(forKey: "lockDimPreDimBrightness"))
+    }
+
+    func testLeftoverPreDimIsRestoredOnNextLaunch() {
+        fake.brightness = 0.8
+        makeController(policy: enabled(10)).emit(.screenLocked)
+        XCTAssertEqual(fake.brightness ?? -1, 0.1, accuracy: 0.001)
+
+        // "Relaunch": a fresh controller on the same defaults, screen still dimmed.
+        let relaunched = makeController()
+        relaunched.restorePersistedPreDim()
+
+        XCTAssertEqual(fake.brightness ?? -1, 0.8, accuracy: 0.001)
+        XCTAssertNil(UserDefaults(suiteName: suiteName)?.object(forKey: "lockDimPreDimBrightness"))
+    }
 }

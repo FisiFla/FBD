@@ -99,7 +99,11 @@ public final class VirtualScreenController {
         }
         // HDR is best-effort: set the mode's EOTF via KVC (4 = HDR, 0 = SDR).
         // The call is non-throwing; an ignored/unknown key falls back to SDR.
-        mode.setValue(config.isHDR ? 4 : 0, forKey: "eotf")
+        // KVC raises an uncatchable NSUndefinedKeyException for a missing key, so only set it
+        // when the class really has the property.
+        if (mode as? NSObject)?.responds(to: NSSelectorFromString("setEotf:")) == true {
+            mode.setValue(config.isHDR ? 4 : 0, forKey: "eotf")
+        }
         if config.isHDR {
             log.debug("HDR requested for \(config.name); eotf set best-effort")
         }
