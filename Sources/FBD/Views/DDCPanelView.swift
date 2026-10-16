@@ -15,8 +15,11 @@ struct DDCPanelView: View {
 
     // Send-only DDC controls have no readable state on Display yet — keep the
     // last sent value locally so the controls stay interactive.
-    @State private var contrast: Double = 0.5
-    @State private var volume: Double = 0.5
+    // Nil until the monitor answers a read: the slider then shows "—" rather than a made-up 50%.
+    @State private var contrast: Double?
+    @State private var volume: Double?
+    /// Trailing-debounce work items for the contrast / volume writes, keyed by row label.
+    @State private var pendingWrites: [String: DispatchWorkItem] = [:]
     @State private var muted = false
     @State private var inputSource = ""
     /// The input we last set from the named menu, for immediate feedback. The next DDC refresh
@@ -164,7 +167,7 @@ struct DDCPanelView: View {
 
     private func sliderRow(
         label: String,
-        value: Binding<Double>,
+        value: Binding<Double?>,
         send: @escaping (Double) -> Void
     ) -> some View {
         HStack(spacing: FBDTheme.spacingM) {
@@ -174,19 +177,30 @@ struct DDCPanelView: View {
                 .frame(width: 54, alignment: .leading)
             FDBSlider(
                 value: Binding(
-                    get: { value.wrappedValue },
-                    set: { value.wrappedValue = $0; send($0) }
+                    get: { value.wrappedValue ?? 0.5 },
+                    set: { value.wrappedValue = $0; scheduleWrite(label, $0, send) }
                 ),
                 in: 0...1,
                 accessibilityLabel: "\(label) for \(display.name)",
                 valueText: { "\(Int(($0 * 100).rounded()))%" }
             )
-            Text("\(Int((value.wrappedValue * 100).rounded()))%")
+            Text(value.wrappedValue.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
                 .font(.caption)
                 .monospacedDigit()
                 .frame(width: 36, alignment: .trailing)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// Trailing-debounced DDC write: the slider drags at ~60 Hz and every DDC write is a slow I2C
+    /// transaction, so only the value the drag settles on (the release value) is sent.
+    private func scheduleWrite(_ key: String, _ newValue: Double, _ send: @escaping (Double) -> Void) {
+        pendingWrites[key]?.cancel()
+        let workItem = DispatchWorkItem {
+            Task { @MainActor in send(newValue) }
+        }
+        pendingWrites[key] = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120), execute: workItem)
     }
 
     /// The entered VCP 0x60 value, or nil when the field holds no usable one.

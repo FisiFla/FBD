@@ -4,7 +4,8 @@ import SwiftUI
 /// Media-key handling and which display the keys act on.
 @MainActor
 struct KeyboardSettingsPage: View {
-    @State private var hotkeysUnavailable = false
+    /// Re-renders this page when a setting changes; also carries the latched hotkeys-unavailable flag.
+    @ObservedObject private var settingsObserver = SettingsObserver.shared
 
     var body: some View {
         Form {
@@ -16,7 +17,7 @@ struct KeyboardSettingsPage: View {
                 Text("Off by default: FBD only takes the F1/F2 and F10–F12 keys when you opt in. Requires Accessibility permission, and only affects keys while FBD is running.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if hotkeysUnavailable {
+                if settingsObserver.hotkeysUnavailable {
                     Label("Media keys unavailable — allow Accessibility for FBD in System Settings", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -39,9 +40,6 @@ struct KeyboardSettingsPage: View {
             }
         }
         .formStyle(.grouped)
-        .onReceive(NotificationCenter.default.publisher(for: .fbdHotkeysUnavailable)) { _ in
-            hotkeysUnavailable = true
-        }
     }
 
     private var targetBinding: Binding<KeyboardControlTarget> {

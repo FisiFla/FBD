@@ -4,6 +4,8 @@ import SwiftUI
 /// Options that affect the menu-bar panel and the display menus.
 @MainActor
 struct MenuSettingsPage: View {
+    /// Re-renders this page when a setting changes (`Settings` is not observable).
+    @ObservedObject private var settingsObserver = SettingsObserver.shared
     var body: some View {
         Form {
             Section {

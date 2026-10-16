@@ -29,7 +29,7 @@ struct AutomationSettingsView: View {
 
     var body: some View {
         Section {
-            Text("Runs your command when a display connects or disconnects, or when the system sleeps or wakes. Shell rules execute as /bin/zsh -c, with FBD_EVENT and FBD_DISPLAY_NAME in the environment — add only commands you trust. Nothing runs until you add a rule.")
+            Text("Runs your command when a display connects or disconnects, or when the system sleeps or wakes. Shell rules execute as /bin/zsh -c, with FBD_EVENT and FBD_DISPLAY_NAME in the environment — add only commands you trust. FBD_DISPLAY_NAME comes from the monitor itself, so treat it as untrusted input and always quote it in scripts. Nothing runs until you add a rule.")
                 .font(.caption)
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)

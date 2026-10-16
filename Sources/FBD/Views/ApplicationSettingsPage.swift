@@ -8,7 +8,9 @@ import SwiftUI
 @MainActor
 struct ApplicationSettingsPage: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var hotkeysUnavailable = false
+    /// Re-renders this page when a setting changes (`Settings` is not observable); also carries
+    /// the latched hotkeys-unavailable flag.
+    @ObservedObject private var settingsObserver = SettingsObserver.shared
     @State private var nightShift = NightShiftController()
     @State private var trueTone = TrueToneController()
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "App")
@@ -19,7 +21,7 @@ struct ApplicationSettingsPage: View {
                 Toggle("Launch at Login", isOn: launchAtLoginBinding)
                 Toggle("Show Rosetta warning", isOn: bool(Settings.showRosettaWarning) { Settings.showRosettaWarning = $0 })
                 Toggle("Enable connect/disconnect for displays", isOn: bool(Settings.enableDisconnectOption) { Settings.enableDisconnectOption = $0 })
-                if hotkeysUnavailable {
+                if settingsObserver.hotkeysUnavailable {
                     Label("Media keys unavailable — allow Accessibility for FBD in System Settings", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -136,9 +138,6 @@ struct ApplicationSettingsPage: View {
         }
         .formStyle(.grouped)
         .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
-        .onReceive(NotificationCenter.default.publisher(for: .fbdHotkeysUnavailable)) { _ in
-            hotkeysUnavailable = true
-        }
     }
 
     // MARK: Brightness model

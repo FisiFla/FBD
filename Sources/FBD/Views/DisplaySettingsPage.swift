@@ -8,6 +8,8 @@ import SwiftUI
 /// actions, and one card per display carrying that display's own settings.
 @MainActor
 struct DisplaySettingsPage: View {
+    /// Re-renders this page when a setting changes (`Settings` is not observable).
+    @ObservedObject private var settingsObserver = SettingsObserver.shared
     let targetDisplayID: CGDirectDisplayID?
 
     @State private var layoutProtection = LayoutProtectionController()
