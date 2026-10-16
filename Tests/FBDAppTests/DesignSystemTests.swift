@@ -13,4 +13,10 @@ final class DesignSystemTests: XCTestCase {
         XCTAssertFalse(FDBSlider.showsValueOverlay(isDragging: false))
         XCTAssertTrue(FDBSlider.showsValueOverlay(isDragging: true))
     }
+
+    func testListRowInteractivity() {
+        _ = FBDListRow(symbol: "x", verbatim: "**Home** %@")
+        XCTAssertFalse(FBDListRow.isInteractive(action: nil))
+        XCTAssertTrue(FBDListRow.isInteractive(action: {}))
+    }
 }

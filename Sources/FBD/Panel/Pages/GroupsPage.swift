@@ -6,7 +6,7 @@ struct GroupsPage: View {
 
     // Not a singleton: held here like the pre-revamp list view did. It is a plain class, so
     // `tick` forces a re-read after changes.
-    private let controller = DisplayGroupsController()
+    @State private var controller = DisplayGroupsController()
     @State private var tick = 0
 
     @State private var newName = ""
@@ -61,7 +61,7 @@ struct GroupsPage: View {
         HStack(spacing: FBDTheme.spacingS) {
             FBDListRow(
                 symbol: "square.grid.2x2",
-                title: LocalizedStringKey(group.name),
+                verbatim: group.name,
                 value: Self.memberCount(group.displayIDs.count),
                 showsChevron: expandedGroupID != group.id
             ) {
@@ -85,6 +85,22 @@ struct GroupsPage: View {
 
     private func policyList(_ group: DisplayGroup) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: FBDTheme.spacingM) {
+                Button("Mirror") {
+                    _ = controller.mirror(inGroup: group.id)
+                    changed()
+                }
+                .fbdGlassButton()
+                .controlSize(.small)
+                .disabled(group.displayIDs.count < 2)
+                Button("Unmirror") {
+                    _ = controller.unmirror(inGroup: group.id)
+                    changed()
+                }
+                .fbdGlassButton()
+                .controlSize(.small)
+            }
+            .padding(.vertical, FBDTheme.spacingXS)
             ForEach(GroupActivationPolicy.allCases, id: \.self) { policy in
                 FBDListRow(
                     symbol: "circle", title: Self.label(for: policy),

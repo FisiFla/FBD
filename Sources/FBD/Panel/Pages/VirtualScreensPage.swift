@@ -42,9 +42,9 @@ struct VirtualScreensPage: View {
                 HStack(spacing: FBDTheme.spacingS) {
                     FBDListRow(
                         symbol: "rectangle.on.rectangle",
-                        title: LocalizedStringKey(screen.config.name),
+                        verbatim: screen.config.name,
                         value: Self.subtitle(screen.config)
-                    ) {}
+                    )
                     Button { pendingDestroy = screen } label: { Image(systemName: "trash") }
                         .fbdGlassButton()
                         .controlSize(.small)
@@ -55,9 +55,9 @@ struct VirtualScreensPage: View {
                 HStack(spacing: FBDTheme.spacingS) {
                     FBDListRow(
                         symbol: "rectangle.on.rectangle",
-                        title: LocalizedStringKey(config.name),
+                        verbatim: config.name,
                         value: Self.subtitle(config)
-                    ) {}
+                    )
                     Button("Reconnect") {
                         if !controller.reconnect(id: config.id) {
                             createError = String(localized: "Could not create virtual display.")
@@ -114,7 +114,7 @@ struct VirtualScreensPage: View {
                 .textFieldStyle(.roundedBorder)
             ForEach(Self.resolutionPresets) { preset in
                 FBDListRow(
-                    symbol: "aspectratio", title: LocalizedStringKey(preset.label),
+                    symbol: "aspectratio", verbatim: preset.label,
                     isChecked: preset == newPreset
                 ) { newPreset = preset }
             }
