@@ -12,6 +12,7 @@ private final class MockExternal: ExternalControlling {
     var writeCalls = 0
     var lastWriteData: Data?
     var shouldFailWrites = false
+    var onWrite: (() -> Void)?
 
     func avService(for display: Display) -> OpaquePointer? {
         // Any non-nil sentinel satisfies DDCController.isAvailable.
@@ -28,6 +29,7 @@ private final class MockExternal: ExternalControlling {
     func writeI2C(_ address: UInt8, data: Data, for display: Display) -> Bool {
         writeCalls += 1
         lastWriteData = data
+        onWrite?()
         return !shouldFailWrites
     }
 
@@ -35,6 +37,9 @@ private final class MockExternal: ExternalControlling {
 }
 
 final class DDCControllerTests: XCTestCase {
+    /// m1ddc-style 12-byte get-VCP reply: code 0x10, max 100, current 50.
+    private static let brightnessReply = Data([0x6E, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32, 0x00, 0x00])
+
     private var display: Display {
         Display(
             id: 0x1234,
@@ -66,7 +71,7 @@ final class DDCControllerTests: XCTestCase {
     /// cannot catch it, which is exactly why this asserts the callback arrives.
     func testReadStateCompletesRatherThanDeadlocking() {
         let mock = MockExternal()
-        mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        mock.readScript = [Self.brightnessReply]
         let controller = makeController(mock: mock)
 
         let answered = expectation(description: "readState returned")
@@ -86,7 +91,7 @@ final class DDCControllerTests: XCTestCase {
 
     func testReadVCPSucceedsOnFirstAttempt() {
         let mock = MockExternal()
-        mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        mock.readScript = [Self.brightnessReply]
         let controller = makeController(mock: mock)
 
         let value = controller.readVCP(0x10, for: display)
@@ -100,7 +105,7 @@ final class DDCControllerTests: XCTestCase {
     func testReadVCPRetriesWhenDisplayDoesNotAnswerFirst() throws {
         let mock = MockExternal()
         // First read: no reply (nil). Second read: valid reply.
-        mock.readScript = [nil, Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        mock.readScript = [nil, Self.brightnessReply]
         let controller = makeController(mock: mock)
 
         let value = controller.readVCP(0x10, for: display)
@@ -111,7 +116,7 @@ final class DDCControllerTests: XCTestCase {
 
     func testReadVCPRetriesUntilSuccessAcrossMultipleFailures() {
         let mock = MockExternal()
-        mock.readScript = [nil, nil, Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        mock.readScript = [nil, nil, Self.brightnessReply]
         let controller = makeController(mock: mock)
         // Lower the retry budget so the test is fast: total attempts = 3.
         let previous = Settings.ddcReadRetries
@@ -141,7 +146,7 @@ final class DDCControllerTests: XCTestCase {
     func testReadVCPDoesNotExceedRetryBudgetWhenRequestWriteFails() throws {
         let mock = MockExternal()
         mock.shouldFailWrites = true
-        mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        mock.readScript = [Self.brightnessReply]
         let controller = makeController(mock: mock)
         let previous = Settings.ddcReadRetries
         Settings.ddcReadRetries = 0
@@ -157,7 +162,7 @@ final class DDCControllerTests: XCTestCase {
     func testReadVCPRetriesWhenRequestWriteFails() throws {
         let mock = MockExternal()
         mock.shouldFailWrites = true
-        mock.readScript = [Data([0x6E, 0x10, 0x03, 0x00, 0x64, 0x00, 0x32, 0x6F])]
+        mock.readScript = [Self.brightnessReply]
         let controller = makeController(mock: mock)
         let previous = Settings.ddcReadRetries
         Settings.ddcReadRetries = 1
@@ -191,23 +196,61 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertEqual(mock.lastWriteData, Data(DDC.writeVCPPacket(code: 0x10, value: 75)))
     }
 
+    func testWriteVCPCoalescesPendingWritesLatestWinsPerCode() {
+        let mock = MockExternal()
+        let controller = makeController(mock: mock)
+        let previous = Settings.ddcCooldownMilliseconds
+        Settings.ddcCooldownMilliseconds = 300
+        defer { Settings.ddcCooldownMilliseconds = previous }
+        let delivered = expectation(description: "writes delivered")
+        delivered.expectedFulfillmentCount = 2
+        mock.onWrite = { delivered.fulfill() }
+
+        // The first write takes the immediate slot, so the three code-0x10 writes below
+        // all land while their (cooldown-delayed) slot is still pending.
+        controller.writeVCP(0x12, value: 1, for: display)
+        controller.writeVCP(0x10, value: 10, for: display)
+        controller.writeVCP(0x10, value: 20, for: display)
+        controller.writeVCP(0x10, value: 30, for: display)
+
+        wait(for: [delivered], timeout: 3)
+        // Leave room for any (wrong) extra writes to show up.
+        let settle = expectation(description: "settle")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.7) { settle.fulfill() }
+        wait(for: [settle], timeout: 2)
+        XCTAssertEqual(mock.writeCalls, 2)
+        XCTAssertEqual(mock.lastWriteData, Data(DDC.writeVCPPacket(code: 0x10, value: 30)))
+    }
+
+    func testWriteVCPKeepsDifferentCodesIndependent() {
+        let mock = MockExternal()
+        let controller = makeController(mock: mock)
+        let previous = Settings.ddcCooldownMilliseconds
+        Settings.ddcCooldownMilliseconds = 10
+        defer { Settings.ddcCooldownMilliseconds = previous }
+        let delivered = expectation(description: "both codes delivered")
+        delivered.expectedFulfillmentCount = 2
+        mock.onWrite = { delivered.fulfill() }
+
+        controller.writeVCP(0x10, value: 10, for: display)
+        controller.writeVCP(0x12, value: 20, for: display)
+
+        wait(for: [delivered], timeout: 3)
+        XCTAssertEqual(mock.writeCalls, 2)
+    }
+
     // MARK: - Capabilities
 
-    func testReadCapabilitiesConcatenatesChunkedReply() throws {
-        // A full capabilities reply (header + payload + terminator) split
-        // mid-payload across two reads; the third read returns nil so the
-        // loop stops.
-        let payload = Array("(vcp(10 60 62)F(1)mccs_ver(2.2)".utf8)
-        var full = Data([0x6F, 0xF3, 0x00, UInt8(payload.count >> 8), UInt8(payload.count & 0xFF)])
-        full.append(contentsOf: payload)
-        full.append(0x6F)
-        let split = 11
+    func testReadCapabilitiesAssemblesFragmentsByOffset() throws {
+        // The capabilities string comes back in fragments, each requested by offset;
+        // an empty fragment ends it.
+        let text = Array("(vcp(10 60 62)F(1)mccs_ver(2.2)".utf8)
+        let first = Array(text.prefix(16)), second = Array(text.dropFirst(16))
+        func fragment(_ offset: Int, _ payload: [UInt8]) -> Data {
+            Data([0x6E, UInt8(0x80 | (payload.count + 3)), 0xE3, UInt8(offset >> 8), UInt8(offset & 0xFF)] + payload + [0x00])
+        }
         let mock = MockExternal()
-        mock.readScript = [
-            Data(full.prefix(split)),
-            Data(full.dropFirst(split)),
-            nil,
-        ]
+        mock.readScript = [fragment(0, first), fragment(16, second), fragment(text.count, [])]
         let controller = makeController(mock: mock)
 
         let caps = controller.readCapabilities(for: display)
@@ -215,5 +258,6 @@ final class DDCControllerTests: XCTestCase {
         XCTAssertNotNil(caps)
         XCTAssertEqual(caps?.vcpCodes, [0x10, 0x60, 0x62])
         XCTAssertEqual(caps?.mccsVersion, "2.2")
+        XCTAssertEqual(mock.lastWriteData, Data(DDC.capabilitiesRequest(offset: UInt16(text.count))))
     }
 }
