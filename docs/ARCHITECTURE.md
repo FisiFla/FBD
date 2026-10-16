@@ -20,31 +20,72 @@ FBDCLIParserTests  unit tests (parsers)
 
 ## Data flow
 
+`AppCore` (`Sources/FBD/AppCore.swift`, `@MainActor`) is the composition root of the
+menu-bar app. `start()` wires everything in order: it registers the
+`.fbdDisplaysChanged` / `.fbdDisplayUpdated` observers *before* starting
+`DisplayController` (so the first popover sees the populated list), then starts the
+independent controllers, the HTTP server and the OSD, and applies the Dock policy.
+
 ```
-UI (SwiftUI views) ──► DisplayController (@MainActor, singleton)
-                          │  routes by capability
-                          ├─► AppleController ──► DisplayServicesAPI (Apple displays)
-                          ├─► DDCController ──► ExternalController ──► IOAVServiceAPI (I2C, arm64)
-                          ├─► CombinedBrightness (nits curve: hardware → native XDR → software)
-                          ├─► OverlayController (@MainActor; ScreenCaptureKit +
-                          │    Metal — software boost, full-screen filters
-                          │    (ScreenFilterParams), dim-to-black, PiP)
-                          ├─► XDRNativeController ──► SkyLightAPI (native preset rewrite)
-                          └─► ResolutionController ──► CGSAPI + SkyLightAPI
+AppCore (composition root, created at launch)
+ ├─► StatusItemController ──► SwiftUI panel/Settings views (consume DisplayController)
+ ├─► DisplayController (@MainActor singleton; display list + per-display control routing)
+ │     ├─► AppleController ──► DisplayServicesAPI (Apple displays)
+ │     ├─► DDCController ──► ExternalController ──► IOAVServiceAPI (I2C, arm64)
+ │     ├─► CombinedBrightness (nits curve: hardware → native XDR → software)
+ │     ├─► OverlayController (ScreenCaptureKit + Metal: software boost, filters, dim, PiP)
+ │     ├─► XDRNativeController ──► SkyLightAPI (native preset rewrite)
+ │     └─► ResolutionController ──► CGSAPI + SkyLightAPI
+ ├─► VirtualScreenController, DisconnectController, LayoutProtectionController,
+ │   EdgeCrossingController, EDIDController, ConfigProtectionController,
+ │   LockDimController, DisplayAutomationController, KeepAwakeController,
+ │   NightShift/TrueTone, PipStreamController, HotkeyController, UpdaterController (Sparkle)
+ └─► HTTPServer ──► route handler ──► DisplayController / the controllers above
+                    ▲
+fbdcli ─────────────┘  (when the app is running — ADR 0004; otherwise direct controllers)
 Display state (ObservableObject, @Published) ◄── notifications: .fbdDisplaysChanged / .fbdDisplayUpdated
 ```
 
-Everything else hangs off `AppCore`, not `DisplayController`: display groups and their
-sync policy, named presets, configuration protection, the pointer controllers
-(containment and edge crossing), keep-awake, lock-dim, Night Shift / True Tone,
-virtual screens, corner-radius masks, and the network TV/AVR drivers. Each owns its
-own state and its own timer, and is started once from `AppCore.start()`.
+`DisplayController` owns the display list and the per-display control paths; it is *not* the hub
+for everything else. Display groups and their sync policy, named presets, configuration
+protection, the pointer controllers (containment and edge crossing), keep-awake, lock-dim,
+Night Shift / True Tone, virtual screens, corner-radius masks and the network TV/AVR drivers hang
+off `AppCore`. Each owns its own state and its own timer and is started once from
+`AppCore.start()`. The HTTP server is reconciled live against `Settings` (notification plus a
+1.5 s poll for cross-process writes by the CLI), so `fbdcli http on/off` needs no restart.
 
-- `DisplayController` is the single public entry point for UI, CLI, and future integrations.
+- `DisplayController` is the entry point for display state and per-display control (UI, HTTP API, CLI direct mode); other subsystems are reached through `AppCore`.
 - `Display` is a reference-type `ObservableObject`; instances are preserved across refreshes by display id (SwiftUI observes identity).
 - Controllers never throw to callers — they return nil/false and `os_log` (private APIs degrade, UI stays alive).
 - DDC I2C access is serialized per display (per-display `DispatchQueue`) with a cooldown (`Settings.ddcCooldownMilliseconds`, default 1 s) between writes.
 - Brightness writes are debounced (`Settings.brightnessDebounceMilliseconds`, default 100 ms) in `DisplayController`.
+
+## OS-version differences
+
+Apple changes private display APIs between releases, so FBD prefers runtime
+capability checks over version checks, and every private path has a fallback:
+
+- **Symbol resolution at runtime**: private C functions are declared in
+  `CPrivateAPI` and called through `PrivateAPI/` wrappers that return nil/false
+  when a symbol or framework is missing. `CGVirtualDisplay` is loaded with
+  `dlopen`/`dlsym` (`CGVirtualDisplayAPI.isAvailable`); the SkyLight
+  `SLVirtualDisplay` path is checked via `VirtualDisplayAPI.isAvailable`. macOS 26+
+  uses the latter, 13-15 the former.
+- **Runtime self-tests**: native XDR upscaling probes whether preset writes take
+  effect (`XDRNativeController`); when write-protected (macOS 27) `CombinedBrightness`
+  falls back to the software boost overlay (ADR 0003).
+- **Classes by name**: types that exist only on newer SDKs/OSes are looked up via
+  `NSClassFromString` and configured through KVC (`OSDGlass` for `NSGlassEffectView`,
+  macOS 26+; Night Shift / True Tone clients), because `#available` does not help when the
+  symbol is missing at *compile* time on older SDKs (CI builds with the macOS 15 SDK).
+- **`#available` sites** (the only ones): `VirtualScreenController` (session
+  notifications, macOS 14+), `AppIntentsBridge` and `FBDIntents` (App Intents,
+  macOS 13/14+).
+- **Hardware gates**: DDC requires native arm64 (`IOAVServiceAPI.isAppleSilicon`,
+  Rosetta detected and warned); the built-in-display disconnect is refused on base-M3
+  Macs.
+
+Per-version behaviour is tabulated in the README and `docs/PRIVATE_APIS.md`.
 
 ## Concurrency
 
