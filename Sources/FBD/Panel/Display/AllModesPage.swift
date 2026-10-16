@@ -19,7 +19,7 @@ struct AllModesPage: View {
             ForEach(modes, id: \.self) { mode in
                 FBDListRow(
                     symbol: "rectangle",
-                    title: LocalizedStringKey(mode.label),
+                    verbatim: mode.label,
                     value: detail(mode),
                     isChecked: mode == display.currentMode
                 ) {

@@ -80,7 +80,7 @@ struct DisplayDetailPage: View {
                 ForEach(ModeListLogic.curated(modes: display.offeredModes, current: display.currentMode), id: \.self) { mode in
                     FBDListRow(
                         symbol: "rectangle",
-                        title: LocalizedStringKey(mode.label),
+                        verbatim: mode.label,
                         value: mode.isHiDPI ? String(localized: "HiDPI") : nil,
                         isChecked: mode == display.currentMode
                     ) {
@@ -111,7 +111,7 @@ struct DisplayDetailPage: View {
                 ForEach(refreshRates, id: \.self) { hz in
                     FBDListRow(
                         symbol: "speedometer",
-                        title: LocalizedStringKey(ModeListLogic.rateLabel(hz)),
+                        verbatim: ModeListLogic.rateLabel(hz),
                         isChecked: hz == display.currentMode?.refreshRate
                     ) {
                         if let mode = ModeListLogic.mode(
