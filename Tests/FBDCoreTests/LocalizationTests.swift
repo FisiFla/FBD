@@ -131,6 +131,68 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
+    /// A translation may only use the key's arguments, in the key's order: a `%lld` that became
+    /// `%@` crashes (or prints garbage) at runtime, and the key-set check above cannot see it.
+    /// Dropping an argument is allowed — "%lld display%@" has no plural suffix in Chinese.
+    func testFormatSpecifiersMatchAcrossLanguages() throws {
+        let entries = try allEntries()
+        guard let reference = entries["en"] else { return XCTFail("no en entries") }
+        for language in Self.languages where language != "en" {
+            for (key, value) in entries[language] ?? [:] {
+                XCTAssertTrue(
+                    Self.isSubsequence(Self.specifiers(in: value), of: Self.specifiers(in: key)),
+                    "\(language) changes the format specifiers of \"\(key)\""
+                )
+            }
+        }
+        for (key, value) in reference {
+            XCTAssertEqual(Self.specifiers(in: value), Self.specifiers(in: key), "en value of \"\(key)\" changes its specifiers")
+        }
+    }
+
+    /// The reverse of `testEveryKeyStillExistsInTheSource`: every plain user-facing literal in the
+    /// app's views must have a key, or it silently stays English in the other languages.
+    /// Interpolated strings (format keys) and non-literal arguments are not checked here.
+    func testEveryUserFacingLiteralHasAKey() throws {
+        let keys = Set(try parse(stringsURL("en")).keys)
+        let root = packageRoot.appendingPathComponent("Sources/FBD")
+        let pattern = try NSRegularExpression(
+            pattern: #"(?:\b(?:Text|Button|Label|Toggle|Menu|Picker|TextField|Link)\(|\.(?:help|accessibilityLabel|accessibilityHint)\(|String\(localized:\s*|NSLocalizedString\(|\bfbdConfirmation\(|\bconfirmationDialog\(|\bconfirm:\s*|\bmessage:\s*)\s*"((?:[^"\\]|\\.)*)""#
+        )
+        var missing: [String] = []
+        for file in try FileManager.default.subpaths(atPath: root.path) ?? [] where file.hasSuffix(".swift") {
+            guard !file.hasSuffix("make_icon.swift") else { continue }
+            let text = (try? String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)) ?? ""
+            for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                guard let range = Range(match.range(at: 1), in: text) else { continue }
+                let literal = String(text[range])
+                // Interpolations, and text with no letters in it ("—", "°"), are not keys.
+                // Nor are bare multipliers such as "4x".
+                guard !literal.contains("\\("), literal.contains(where: \.isLetter),
+                      !(literal.first?.isNumber ?? false && !literal.contains(" ")) else { continue }
+                if !keys.contains(literal) { missing.append("\(file): \"\(literal)\"") }
+            }
+        }
+        XCTAssertEqual(missing, [], "user-facing literals with no en key:\n" + missing.joined(separator: "\n"))
+    }
+
+    static func isSubsequence(_ small: [String], of large: [String]) -> Bool {
+        var rest = large[...]
+        for item in small {
+            guard let index = rest.firstIndex(of: item) else { return false }
+            rest = rest[(index + 1)...]
+        }
+        return true
+    }
+
+    /// The printf-style specifiers of a string, in order (`%%` excluded).
+    static func specifiers(in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"%(?:\d+\$)?[-+0#]*\d*(?:\.\d+)?(?:lld|ld|hh|h|l|d|u|f|@|s)"#) else { return [] }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
+            Range($0.range, in: text).map { String(text[$0]) }
+        }
+    }
+
     /// The helper the source check leans on for format keys: they are split on their placeholders so
     /// each literal word between them can still be looked for. A key with *no* placeholder yields
     /// nothing, which is how `sourceUses` tells the two kinds apart.

@@ -142,7 +142,7 @@ struct DisplayOptionsMenuView: View {
                                 to: display
                             )
                             if recall.isUnavailable {
-                                FBDNotice.shared.report("Favourite \(slot) no longer has a matching mode on this display.")
+                                FBDNotice.shared.report(String(localized: "Favourite \(slot) no longer has a matching mode on this display."))
                             }
                             refreshTick += 1
                         }
@@ -242,7 +242,7 @@ struct DisplayOptionsMenuView: View {
                     // result used to be discarded, so the menu item closed and
                     // looked dead.
                     if DisplayController.shared.setRotation(angle, on: display) == nil {
-                        FBDNotice.shared.report("This display would not rotate to \(angle)°.")
+                        FBDNotice.shared.report(String(localized: "This display would not rotate to \(angle)°."))
                     }
                 }
             }
@@ -307,14 +307,14 @@ struct DisplayOptionsMenuView: View {
     /// be read (the banner is the surface for menu-initiated actions).
     private func recordFavourite(_ slot: Int) {
         guard let mode = favouriteResolution.currentMode(for: display) else {
-            FBDNotice.shared.report("No current resolution to record.")
+            FBDNotice.shared.report(String(localized: "No current resolution to record."))
             return
         }
         guard ModeFavourites.save(mode, into: slot, for: display.identityKey) else {
-            FBDNotice.shared.report("Resolution favourite \(slot) is out of range.")
+            FBDNotice.shared.report(String(localized: "Resolution favourite \(slot) is out of range."))
             return
         }
-        FBDNotice.shared.report("Recorded resolution favourite \(slot).")
+        FBDNotice.shared.report(String(localized: "Recorded resolution favourite \(slot)."))
         refreshTick += 1
     }
 
@@ -329,13 +329,13 @@ struct DisplayOptionsMenuView: View {
             controller: DisplayController.shared
         )
         if outcome.applied.isEmpty && !outcome.requested.isEmpty {
-            FBDNotice.shared.report("Nothing in '\(preset.name)' applies to this display.")
+            FBDNotice.shared.report(String(localized: "Nothing in '\(preset.name)' applies to this display."))
         } else if outcome.unavailable.isEmpty {
-            FBDNotice.shared.report("Applied '\(preset.name)'.")
+            FBDNotice.shared.report(String(localized: "Applied '\(preset.name)'."))
         } else {
-            FBDNotice.shared.report(
-                "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", "))."
-            )
+            FBDNotice.shared.report(String(
+                localized: "Applied '\(preset.name)' — skipped \(outcome.unavailable.names.joined(separator: ", "))."
+            ))
         }
         refreshTick += 1
     }
@@ -411,7 +411,7 @@ struct DisplayOptionsMenuView: View {
     /// menu item.
     private func reportIfNeeded(_ succeeded: Bool, _ action: String) {
         guard !succeeded else { return }
-        FBDNotice.shared.report("Could not \(action).")
+        FBDNotice.shared.report(String(localized: "Could not \(action)."))
     }
 
     private func unmirrorDisplay() {

@@ -74,7 +74,7 @@ final class AppCore {
             configProtection.start(controller: displayController)
         } else {
             log.notice("safe mode: skipping stored EDID override and configuration-protection restore")
-            FBDNotice.shared.report("Safe mode: saved EDID override and configuration-protection restore are off for this session")
+            FBDNotice.shared.report(String(localized: "Safe mode: saved EDID override and configuration-protection restore are off for this session"))
         }
         automation.start(controller: displayController)
         // Notification permission is asked for only when a stored rule needs it, so

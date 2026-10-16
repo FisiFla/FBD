@@ -145,7 +145,7 @@ struct FilterControlsView: View {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Choose a .cube 3D LUT"
+        panel.message = String(localized: "Choose a .cube 3D LUT")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         filterParams.lutPath = url.path
         applyScreenFilter()
