@@ -11,6 +11,8 @@ import XCTest
 /// exist somewhere in the source.
 final class LocalizationTests: XCTestCase {
     private static let languages = ["en", "zh-Hans", "zh-Hant"]
+    /// Modules whose literals resolve through the app's `Localizable.strings`.
+    private static let sourceModules = ["Sources/FBD", "Sources/FBDIntents"]
 
     /// The package root, derived from this file's own path — the same way
     /// `BrightnessPreferencesTests` reaches repo files.
@@ -116,10 +118,12 @@ final class LocalizationTests: XCTestCase {
     /// segments instead — see `literalSegments`, which the test below pins.
     func testEveryKeyStillExistsInTheSource() throws {
         var source = ""
-        for file in try FileManager.default.subpaths(atPath: packageRoot.appendingPathComponent("Sources/FBD").path) ?? [] {
-            guard file.hasSuffix(".swift") else { continue }
-            let url = packageRoot.appendingPathComponent("Sources/FBD").appendingPathComponent(file)
-            source += (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        for module in Self.sourceModules {
+            let root = packageRoot.appendingPathComponent(module)
+            for file in try FileManager.default.subpaths(atPath: root.path) ?? [] {
+                guard file.hasSuffix(".swift") else { continue }
+                source += (try? String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)) ?? ""
+            }
         }
         XCTAssertFalse(source.isEmpty, "could not read the app's sources")
 
@@ -155,22 +159,24 @@ final class LocalizationTests: XCTestCase {
     /// Interpolated strings (format keys) and non-literal arguments are not checked here.
     func testEveryUserFacingLiteralHasAKey() throws {
         let keys = Set(try parse(stringsURL("en")).keys)
-        let root = packageRoot.appendingPathComponent("Sources/FBD")
         let pattern = try NSRegularExpression(
             pattern: #"(?:\b(?:Text|Button|Label|Toggle|Menu|Picker|TextField|Link)\(|\.(?:help|accessibilityLabel|accessibilityHint)\(|String\(localized:\s*|NSLocalizedString\(|\bfbdConfirmation\(|\bconfirmationDialog\(|\bconfirm:\s*|\bmessage:\s*)\s*"((?:[^"\\]|\\.)*)""#
         )
         var missing: [String] = []
-        for file in try FileManager.default.subpaths(atPath: root.path) ?? [] where file.hasSuffix(".swift") {
-            guard !file.hasSuffix("make_icon.swift") else { continue }
-            let text = (try? String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)) ?? ""
-            for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
-                guard let range = Range(match.range(at: 1), in: text) else { continue }
-                let literal = String(text[range])
-                // Interpolations, and text with no letters in it ("—", "°"), are not keys.
-                // Nor are bare multipliers such as "4x".
-                guard !literal.contains("\\("), literal.contains(where: \.isLetter),
-                      !(literal.first?.isNumber ?? false && !literal.contains(" ")) else { continue }
-                if !keys.contains(literal) { missing.append("\(file): \"\(literal)\"") }
+        for module in Self.sourceModules {
+            let root = packageRoot.appendingPathComponent(module)
+            for file in try FileManager.default.subpaths(atPath: root.path) ?? [] where file.hasSuffix(".swift") {
+                guard !file.hasSuffix("make_icon.swift") else { continue }
+                let text = (try? String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)) ?? ""
+                for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                    guard let range = Range(match.range(at: 1), in: text) else { continue }
+                    let literal = String(text[range])
+                    // Interpolations, and text with no letters in it ("—", "°"), are not keys.
+                    // Nor are bare multipliers such as "4x".
+                    guard !literal.contains("\\("), literal.contains(where: \.isLetter),
+                          !(literal.first?.isNumber ?? false && !literal.contains(" ")) else { continue }
+                    if !keys.contains(literal) { missing.append("\(file): \"\(literal)\"") }
+                }
             }
         }
         XCTAssertEqual(missing, [], "user-facing literals with no en key:\n" + missing.joined(separator: "\n"))

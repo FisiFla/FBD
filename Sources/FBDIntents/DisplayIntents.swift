@@ -26,11 +26,11 @@ enum DisplayIntentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .displayNotFound:
-            return "The display could not be found. It may have been disconnected."
+            return String(localized: "The display could not be found. It may have been disconnected.")
         case .invalidValue(let message):
             return message
         case .operationFailed(let reason):
-            return "The operation failed: \(reason)"
+            return String(localized: "The operation failed: \(reason)")
         }
     }
 }
@@ -56,7 +56,7 @@ struct SetDisplayBrightnessIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         guard brightness.isFinite, (0...1).contains(brightness) else {
-            throw DisplayIntentError.invalidValue("Brightness must be between 0 and 1.")
+            throw DisplayIntentError.invalidValue(String(localized: "Brightness must be between 0 and 1."))
         }
         guard let target = await DisplayEntity.liveDisplay(id: display.id) else {
             throw DisplayIntentError.displayNotFound
@@ -65,7 +65,7 @@ struct SetDisplayBrightnessIntent: AppIntent {
             DisplayController.shared.setBrightness(brightness, on: target)
         }
         guard succeeded else {
-            throw DisplayIntentError.operationFailed("no brightness control path exists for this display.")
+            throw DisplayIntentError.operationFailed(String(localized: "no brightness control path exists for this display."))
         }
         return .result()
     }
@@ -87,14 +87,17 @@ struct GetDisplayBrightnessIntent: AppIntent {
     @Parameter(title: "Display", description: "The display to read.")
     var display: DisplayEntity
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ReturnsValue<Double> {
         guard let target = await DisplayEntity.liveDisplay(id: display.id) else {
             throw DisplayIntentError.displayNotFound
         }
         let value = await MainActor.run {
             DisplayController.shared.getBrightness(for: target)
         }
-        return .result(value: value ?? 0)
+        guard let value else {
+            throw DisplayIntentError.operationFailed(String(localized: "this display's brightness could not be read."))
+        }
+        return .result(value: value)
     }
 }
 
@@ -119,7 +122,7 @@ struct SetDisplayVolumeIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         guard volume.isFinite, (0...1).contains(volume) else {
-            throw DisplayIntentError.invalidValue("Volume must be between 0 and 1.")
+            throw DisplayIntentError.invalidValue(String(localized: "Volume must be between 0 and 1."))
         }
         guard let target = await DisplayEntity.liveDisplay(id: display.id) else {
             throw DisplayIntentError.displayNotFound
@@ -128,7 +131,7 @@ struct SetDisplayVolumeIntent: AppIntent {
             DisplayController.shared.setVolume(volume, on: target)
         }
         guard succeeded else {
-            throw DisplayIntentError.operationFailed("this display does not support DDC/CI volume control.")
+            throw DisplayIntentError.operationFailed(String(localized: "this display does not support DDC/CI volume control."))
         }
         return .result()
     }
@@ -143,11 +146,11 @@ struct ListDisplaysIntent: AppIntent {
     static var description: IntentDescription? = IntentDescription("Lists the displays currently connected to this Mac.")
     static var openAppWhenRun = false
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let names = await MainActor.run {
             DisplayController.shared.displays.map(\.name)
         }
-        let summary = names.isEmpty ? "No displays found." : names.joined(separator: ", ")
+        let summary = names.isEmpty ? String(localized: "No displays found.") : names.joined(separator: ", ")
         return .result(dialog: IntentDialog(stringLiteral: summary))
     }
 }
@@ -173,7 +176,7 @@ struct EnableXDRUpscalingIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         guard nits > 0 else {
-            throw DisplayIntentError.invalidValue("The upscaling target must be greater than 0 nits.")
+            throw DisplayIntentError.invalidValue(String(localized: "The upscaling target must be greater than 0 nits."))
         }
         guard let target = await DisplayEntity.liveDisplay(id: display.id) else {
             throw DisplayIntentError.displayNotFound
@@ -182,7 +185,7 @@ struct EnableXDRUpscalingIntent: AppIntent {
             DisplayController.shared.setXDRUpscaleTarget(nits, on: target)
         }
         guard succeeded else {
-            throw DisplayIntentError.operationFailed("this display does not support XDR upscaling.")
+            throw DisplayIntentError.operationFailed(String(localized: "this display does not support XDR upscaling."))
         }
         return .result()
     }
@@ -207,9 +210,9 @@ struct SetLockDimIntent: AppIntent {
     @Parameter(title: "Target", description: "Brightness percentage to dim to: 0 is fully dark, 100 is no dim at all.", default: 10)
     var targetPercent: Double
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ReturnsValue<Int> {
         guard targetPercent.isFinite, (0...100).contains(targetPercent) else {
-            throw DisplayIntentError.invalidValue("The target must be a percentage between 0 and 100.")
+            throw DisplayIntentError.invalidValue(String(localized: "The target must be a percentage between 0 and 100."))
         }
         // `clamped()` is the same normalisation the app, the CLI and the HTTP API
         // apply, so a value reaching Settings is always in range.
@@ -242,11 +245,11 @@ struct SetKeyboardControlTargetIntent: AppIntent {
     @Parameter(title: "Target", description: "mouseScreen, focusedScreen, allSuitableScreens or audioDeviceMatch.")
     var target: String
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let raw = target.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let resolved = KeyboardControlTarget(rawValue: raw) else {
             let allowed = KeyboardControlTarget.allCases.map(\.rawValue).joined(separator: ", ")
-            throw DisplayIntentError.invalidValue("Unknown target '\(raw)'. Valid targets: \(allowed).")
+            throw DisplayIntentError.invalidValue(String(localized: "Unknown target '\(raw)'. Valid targets: \(allowed)."))
         }
         await MainActor.run { Settings.keyboardControlTarget = resolved }
         return .result(value: resolved.rawValue)
@@ -270,16 +273,16 @@ struct SyncDisplayGroupIntent: AppIntent {
     @Parameter(title: "Group", description: "The name of the display group to sync.")
     var groupName: String
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ReturnsValue<Int> {
         let name = groupName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            throw DisplayIntentError.invalidValue("A display group name is required.")
+            throw DisplayIntentError.invalidValue(String(localized: "A display group name is required."))
         }
         // Resolve the group first so an unknown name is reported as such rather
         // than as a group with nothing to sync.
         let groupID = await MainActor.run { DisplayGroupsController().group(named: name)?.id }
         guard let groupID else {
-            throw DisplayIntentError.invalidValue("No display group is named '\(name)'.")
+            throw DisplayIntentError.invalidValue(String(localized: "No display group is named '\(name)'."))
         }
 
         let written = await MainActor.run { () -> Int? in
@@ -310,7 +313,7 @@ struct SyncDisplayGroupIntent: AppIntent {
             )
         }
         guard let written else {
-            throw DisplayIntentError.operationFailed("the group has no connected member with a readable brightness.")
+            throw DisplayIntentError.operationFailed(String(localized: "the group has no connected member with a readable brightness."))
         }
         return .result(value: written)
     }
@@ -337,10 +340,10 @@ struct ApplyDisplayPresetIntent: AppIntent {
     @Parameter(title: "Display", description: "The display the preset belongs to.")
     var display: DisplayEntity
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let name = preset.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            throw DisplayIntentError.invalidValue("A preset name is required.")
+            throw DisplayIntentError.invalidValue(String(localized: "A preset name is required."))
         }
         guard let target = await DisplayEntity.liveDisplay(id: display.id) else {
             throw DisplayIntentError.displayNotFound
@@ -351,7 +354,7 @@ struct ApplyDisplayPresetIntent: AppIntent {
             DisplayPresets.preset(named: name, for: target.identityKey)
         }
         guard let preset = resolved else {
-            throw DisplayIntentError.invalidValue("No preset is named '\(name)' on this display.")
+            throw DisplayIntentError.invalidValue(String(localized: "No preset is named '\(name)' on this display."))
         }
 
         let outcome = await MainActor.run {
@@ -363,8 +366,8 @@ struct ApplyDisplayPresetIntent: AppIntent {
             )
         }
         guard !outcome.applied.isEmpty || outcome.requested.isEmpty else {
-            throw DisplayIntentError.operationFailed("no part of '\(preset.name)' applies to this display.")
+            throw DisplayIntentError.operationFailed(String(localized: "no part of '\(preset.name)' applies to this display."))
         }
-        return .result(dialog: IntentDialog(stringLiteral: "Applied preset '\(preset.name)'."))
+        return .result(dialog: IntentDialog(stringLiteral: String(localized: "Applied preset '\(preset.name)'.")))
     }
 }
