@@ -693,6 +693,9 @@ func cmdConfigGroupSync(_ controller: DisplayController, _ args: [String]) -> In
         return 1
     }
     let written = groups.applyGroupSync(percent / 100, inGroup: group.id, controller: controller)
+    // Writes are debounced onto the main queue; pump it so they land before the process exits.
+    let settle = Double(Settings.brightnessDebounceMilliseconds) / 1000.0 + 0.5
+    RunLoop.main.run(until: Date().addingTimeInterval(settle))
     print("\(group.name): synced \(written) display(s) to \(Int(percent))%")
     return 0
 }

@@ -13,6 +13,7 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   signatures (missing allocator; missing out-parameter).
 - A display that has an AV service but never answers DDC/CI (most TVs) is no longer offered
   DDC controls after its first refresh.
+- `fbdcli config group-sync` exited before its debounced brightness writes landed, so it reported success without changing anything.
 - `fbdcli ddc-test` now reports the AV service and the DDC/CI reply separately.
 
 ### Changed
