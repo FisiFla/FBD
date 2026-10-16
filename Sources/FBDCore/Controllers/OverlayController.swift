@@ -217,7 +217,8 @@ public final class OverlayController {
     @discardableResult
     public func setSoftwareBoost(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         guard factor > 1 else {
-            stop(for: displayID)
+            // Boost only: the dim and corner mask are owned by other callers.
+            teardownBoost(for: displayID)
             return true
         }
         return setScreenFilter(ScreenFilterParams(brightness: factor), displayID: displayID)

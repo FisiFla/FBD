@@ -46,13 +46,28 @@ public final class VirtualDisplayRegistry {
         return ids.contains(id)
     }
 
-    /// Drop IDs that are no longer online (called from DisplayController
-    /// refresh, which owns the authoritative display list).
-    public func prune(keeping live: Set<CGDirectDisplayID>) {
+    /// Vendor number FBD gives every virtual display it creates.
+    static let fbdVendorNumber: UInt32 = 0xFBD0
+
+    /// Whether a live ID still looks like an FBD virtual display. A display whose vendor is
+    /// known and isn't FBD's is a real monitor that was handed a reused ID; an unknown vendor
+    /// (0 / unknown) can't contradict the registry, so it is kept.
+    static func vendorAllowsVirtual(_ id: CGDirectDisplayID) -> Bool {
+        let vendor = CGDisplayVendorNumber(id)
+        return vendor == 0 || vendor == 0xFFFF_FFFF || vendor == fbdVendorNumber
+    }
+
+    /// Drop IDs that are no longer online, or that a real monitor now holds (called from
+    /// DisplayController refresh, which owns the authoritative display list).
+    public func prune(
+        keeping live: Set<CGDirectDisplayID>,
+        isStillVirtual: ((CGDirectDisplayID) -> Bool)? = nil
+    ) {
+        let verify = isStillVirtual ?? Self.vendorAllowsVirtual
         lock.lock()
-        let removed = ids.subtracting(live)
-        if !removed.isEmpty {
-            ids = ids.intersection(live)
+        let kept = ids.intersection(live).filter(verify)
+        if kept != ids {
+            ids = kept
             persist()
         }
         lock.unlock()
