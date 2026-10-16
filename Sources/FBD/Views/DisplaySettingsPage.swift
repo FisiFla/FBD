@@ -16,6 +16,7 @@ struct DisplaySettingsPage: View {
     @State private var hasSavedArrangement = false
     @State private var disconnect = DisconnectController()
     @State private var lastConnectionResult: String?
+    @State private var confirmingDisconnectAll = false
 
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "Settings")
 
@@ -85,7 +86,7 @@ struct DisplaySettingsPage: View {
             HStack(spacing: FBDTheme.spacingM) {
                 Button("Connect all") { run(.connectAll, displays) }
                     .controlSize(.small)
-                Button("Disconnect all but main") { run(.disconnectAllButMain, displays) }
+                Button("Disconnect all but main") { confirmingDisconnectAll = true }
                     .controlSize(.small)
                 Button("Save arrangement") {
                     layoutProtection.saveCurrentArrangement()
@@ -102,6 +103,14 @@ struct DisplaySettingsPage: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .fbdConfirmation(
+            "Disconnect all but the main display?",
+            isPresented: $confirmingDisconnectAll,
+            confirm: "Disconnect",
+            message: "Every other display turns off until it is re-enabled."
+        ) {
+            run(.disconnectAllButMain, displays)
         }
     }
 

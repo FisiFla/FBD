@@ -7,6 +7,7 @@ struct GroupsSettingsPage: View {
     @State private var controller = DisplayGroupsController()
     @State private var groups: [DisplayGroup] = []
     @State private var newGroupName = ""
+    @State private var groupPendingDelete: DisplayGroup?
 
     var body: some View {
         Form {
@@ -63,10 +64,7 @@ struct GroupsSettingsPage: View {
                             .disabled(group.displayIDs.count < 2)
                         Button("Unmirror") { _ = controller.unmirror(inGroup: group.id) }
                             .controlSize(.small)
-                        Button("Delete", role: .destructive) {
-                            controller.deleteGroup(id: group.id)
-                            reload()
-                        }
+                        Button("Delete", role: .destructive) { groupPendingDelete = group }
                         .controlSize(.small)
                     }
                 } header: {
@@ -76,6 +74,21 @@ struct GroupsSettingsPage: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: reload)
+        .fbdConfirmation(
+            "Delete this group?",
+            isPresented: Binding(
+                get: { groupPendingDelete != nil },
+                set: { if !$0 { groupPendingDelete = nil } }
+            ),
+            confirm: "Delete",
+            message: "The displays themselves are not affected."
+        ) {
+            if let group = groupPendingDelete {
+                controller.deleteGroup(id: group.id)
+                reload()
+            }
+            groupPendingDelete = nil
+        }
     }
 
     private func reload() { groups = controller.groups }

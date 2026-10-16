@@ -15,8 +15,8 @@ struct DisplayRowView: View {
     /// Bumped when .fbdDisplayUpdated fires for this display to re-render.
     @State private var refreshTick = 0
     /// Confirmation for the soft-disconnect action — shared by the header
-    /// power button (which carries the confirmation dialog) and the options
-    /// menu's "Manage Display" item.
+    /// power button and the options menu's "Manage Display" item; the dialog
+    /// hangs off the row itself, which is always present.
     @State private var confirmingDisable = false
     /// Bumped by the refresh handler so the DDC panel re-reads monitor state.
     @State private var ddcRefreshRequest = 0
@@ -41,6 +41,7 @@ struct DisplayRowView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .fbdPanelBand()
+        .fbdDisableDisplayConfirmation(isPresented: $confirmingDisable, display: display)
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplayUpdated)) { note in
             if let id = note.userInfo?["displayID"] as? CGDirectDisplayID, id == display.id {
                 refreshTick += 1
@@ -122,26 +123,14 @@ struct DisplayRowView: View {
                 Button {
                     confirmingDisable = true
                 } label: {
-                Image(systemName: "power")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(display.isOnline ? .red : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(display.isOnline ? "Disable display" : "Display offline")
-            .accessibilityLabel(display.isOnline ? "Disable display" : "Re-enable display")
-            .accessibilityHint("Display will go dark until re-enabled")
-            .confirmationDialog(
-                "Disable display?",
-                isPresented: $confirmingDisable,
-                titleVisibility: .visible
-            ) {
-                Button("Disable", role: .destructive) {
-                    _ = DisconnectController().setEnabled(false, displayID: display.id)
+                    Image(systemName: "power")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(display.isOnline ? .red : .secondary)
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Display will go dark until re-enabled.")
-            }
+                .buttonStyle(.borderless)
+                .help(display.isOnline ? "Disable display" : "Display offline")
+                .accessibilityLabel(display.isOnline ? "Disable display" : "Re-enable display")
+                .accessibilityHint("Display will go dark until re-enabled")
             }
         }
     }

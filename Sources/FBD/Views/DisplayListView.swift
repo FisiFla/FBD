@@ -37,6 +37,10 @@ struct DisplayListView: View {
 
     // Display group creation form.
     @State private var newGroupName = ""
+    // Pending destructive actions, confirmed through dialogs on the sections below.
+    @State private var confirmingDisconnectAllScreens = false
+    @State private var screenPendingDestroy: VirtualScreenInstance?
+    @State private var groupPendingDelete: DisplayGroup?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var notice = FBDNotice.shared
@@ -396,10 +400,7 @@ struct DisplayListView: View {
                             .controlSize(.small)
                         }
                         if !virtualScreens.screens.isEmpty {
-                            Button("Disconnect all") {
-                                virtualScreens.disconnectAll()
-                                virtualScreensTick += 1
-                            }
+                            Button("Disconnect all") { confirmingDisconnectAllScreens = true }
                             .controlSize(.small)
                         }
                         Spacer(minLength: 0)
@@ -417,6 +418,29 @@ struct DisplayListView: View {
             Label("Virtual Screens", systemImage: "rectangle.3.group")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+        }
+        .fbdConfirmation(
+            "Disconnect all virtual screens?",
+            isPresented: $confirmingDisconnectAllScreens,
+            confirm: "Disconnect all"
+        ) {
+            virtualScreens.disconnectAll()
+            virtualScreensTick += 1
+        }
+        .fbdConfirmation(
+            "Destroy this virtual screen?",
+            isPresented: Binding(
+                get: { screenPendingDestroy != nil },
+                set: { if !$0 { screenPendingDestroy = nil } }
+            ),
+            confirm: "Destroy",
+            message: "The virtual screen is removed until you create it again."
+        ) {
+            if let screen = screenPendingDestroy {
+                _ = virtualScreens.destroy(id: screen.id)
+                virtualScreensTick += 1
+            }
+            screenPendingDestroy = nil
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -477,10 +501,7 @@ struct DisplayListView: View {
                         .font(.caption2)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
-                    Button("Destroy") {
-                        _ = virtualScreens.destroy(id: screen.id)
-                        virtualScreensTick += 1
-                    }
+                    Button("Destroy") { screenPendingDestroy = screen }
                     .controlSize(.mini)
                 }
             }
@@ -552,6 +573,21 @@ struct DisplayListView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
+        .fbdConfirmation(
+            "Delete this group?",
+            isPresented: Binding(
+                get: { groupPendingDelete != nil },
+                set: { if !$0 { groupPendingDelete = nil } }
+            ),
+            confirm: "Delete",
+            message: "The displays themselves are not affected."
+        ) {
+            if let group = groupPendingDelete {
+                groupsController.deleteGroup(id: group.id)
+                syncGroups()
+            }
+            groupPendingDelete = nil
+        }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .fbdPanelBand()
@@ -579,8 +615,7 @@ struct DisplayListView: View {
                 }
                 .controlSize(.mini)
                 Button(role: .destructive) {
-                    groupsController.deleteGroup(id: group.id)
-                    syncGroups()
+                    groupPendingDelete = group
                 } label: {
                     Image(systemName: "trash")
                 }
