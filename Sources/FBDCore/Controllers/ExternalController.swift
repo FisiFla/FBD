@@ -106,11 +106,17 @@ public final class ExternalController: ExternalControlling {
         handle(for: display)?.ref
     }
 
+    /// DDC/CI transfers carry the 0x51 host address as the IOAVService data address (m1ddc);
+    /// other chips (EDID 0x50) use offset 0.
+    private static func dataAddress(for chip: UInt8) -> UInt8 {
+        chip == DDC.i2cAddress ? DDC.sourceAddress : 0
+    }
+
     /// Raw I2C read (e.g. DDC address 0x37, EDID address 0x50).
     /// Keeps the AVService handle alive for the duration of the transaction.
     public func readI2C(_ address: UInt8, length: Int, for display: Display) -> Data? {
         guard let handle = handle(for: display) else { return nil }
-        return IOAVServiceAPI.readI2C(handle.ref, address: address, length: length)
+        return IOAVServiceAPI.readI2C(handle.ref, address: address, offset: Self.dataAddress(for: address), length: length)
     }
 
     /// Raw I2C write. Returns false when no AVService is available or the
@@ -118,7 +124,7 @@ public final class ExternalController: ExternalControlling {
     @discardableResult
     public func writeI2C(_ address: UInt8, data: Data, for display: Display) -> Bool {
         guard let handle = handle(for: display) else { return false }
-        return IOAVServiceAPI.writeI2C(handle.ref, address: address, data: data)
+        return IOAVServiceAPI.writeI2C(handle.ref, address: address, dataAddress: Self.dataAddress(for: address), data: data)
     }
 
     /// Drop all cached services (call after display topology changes).

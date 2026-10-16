@@ -6,7 +6,8 @@ import os
 ///
 /// Concurrency model:
 /// - All I2C traffic for a display is serialized on a per-display queue.
-/// - **Set-VCP writes are enqueued asynchronously** and spaced by
+/// - **Set-VCP writes are enqueued asynchronously**, coalesced latest-wins per
+///   (display, VCP code), and spaced by
 ///   `Settings.ddcCooldownMilliseconds` (some displays glitch when the DDC bus
 ///   is hammered — OSD flicker, dropped replies). `writeVCP` returns
 ///   immediately; it only reports whether the request was accepted for delivery.
@@ -15,6 +16,9 @@ import os
 ///   They may block the calling thread briefly; never call them from a hot path.
 ///
 /// Never throws: failures degrade to nil/false with a logged warning.
+///
+/// Wire framing follows m1ddc (see `DDC`). It has NOT yet been verified on real
+/// hardware (issue #7).
 public final class DDCController {
     private let external: ExternalControlling
     /// Whether the DDC transport is supported on this host (Apple Silicon).
@@ -26,6 +30,9 @@ public final class DDCController {
     private var queues: [String: DispatchQueue] = [:]
     /// Next allowed set-write deadline per display (cooldown bookkeeping).
     private var nextWriteAt: [String: DispatchTime] = [:]
+    /// Latest value awaiting delivery per display → VCP code. A newer write for the same code
+    /// replaces the value of the already-scheduled slot instead of queuing another.
+    private var pendingWrites: [String: [UInt8: UInt16]] = [:]
     /// Cached maximum values from the last successful VCP read, keyed by display → code.
     private var lastMaxValue: [String: [UInt8: UInt16]] = [:]
     /// Displays we already attempted a live capabilities read for (fallback path).
@@ -74,7 +81,7 @@ public final class DDCController {
 
     // MARK: - VCP
 
-    /// Read a VCP feature. Synchronous: write request → settle → read 8-byte
+    /// Read a VCP feature. Synchronous: write request → settle → read 12-byte
     /// reply → parse. Retries up to `Settings.ddcReadRetries` extra attempts
     /// (some monitors only answer on the 2nd–3rd try). Returns nil on failure.
     public func readVCP(_ code: UInt8, for display: Display) -> DDC.DDCValue? {
@@ -110,7 +117,7 @@ public final class DDCController {
         }
         // Give the display a moment to prepare its reply.
         Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
-        guard let reply = external.readI2C(DDC.i2cAddress, length: 8, for: display) else {
+        guard let reply = external.readI2C(DDC.i2cAddress, length: DDC.vcpReplyLength, for: display) else {
             log.warning("readVCP: no reply for \(display.id) (code \(String(format: "0x%02X", code)))")
             return nil
         }
@@ -130,10 +137,20 @@ public final class DDCController {
         guard isAvailable(for: display) else { return false }
         let key = display.identityKey
         let q = queue(for: display)
+        lock.lock()
+        let alreadyPending = pendingWrites[key]?[code] != nil
+        pendingWrites[key, default: [:]][code] = value
+        lock.unlock()
+        // A slot is already scheduled for this code: it will pick up the newer value.
+        if alreadyPending { return true }
         let slot = nextWriteSlot(for: key)
         q.asyncAfter(deadline: slot) { [weak self] in
             guard let self else { return }
-            let data = Data(DDC.writeVCPPacket(code: code, value: value))
+            self.lock.lock()
+            let latest = self.pendingWrites[key]?.removeValue(forKey: code)
+            self.lock.unlock()
+            guard let latest else { return }
+            let data = Data(DDC.writeVCPPacket(code: code, value: latest))
             guard self.external.writeI2C(DDC.i2cAddress, data: data, for: display) else {
                 self.log.warning("writeVCP failed for \(display.id) (code \(String(format: "0x%02X", code)))")
                 return
@@ -178,7 +195,7 @@ public final class DDCController {
             let state = DDC.DDCState(
                 contrast: self.featureValueOnQueue(.contrast, for: display),
                 volume: self.featureValueOnQueue(.volume, for: display),
-                muted: self.featureValueOnQueue(.mute, for: display).map { $0 <= 1.5 },
+                muted: self.featureValueOnQueue(.mute, for: display).map(DDC.isMuted),
                 inputSource: self.featureValueOnQueue(.inputSource, for: display)
             )
             Task { @MainActor in completion(state) }
@@ -208,8 +225,8 @@ public final class DDCController {
     // MARK: - Capabilities
 
     /// Read and parse the display's capabilities reply (VCP 0xF3).
-    /// Some displays deliver the reply in chunks; up to three sequential
-    /// 256-byte reads are attempted and concatenated.
+    /// The reply is fetched fragment by fragment (32 bytes per request) and
+    /// concatenated.
     public func readCapabilities(for display: Display) -> DDC.DDCCapabilities? {
         guard isAvailable(for: display) else { return nil }
         return queue(for: display).sync { self.capabilitiesResult(for: display) }
@@ -243,29 +260,31 @@ public final class DDCController {
     /// The probe itself. **Must run on the display's queue** — both entry points
     /// above arrange that.
     private func capabilitiesResult(for display: Display) -> DDC.DDCCapabilities? {
-        guard external.writeI2C(DDC.i2cAddress, data: Data(DDC.capabilitiesRequest), for: display) else {
-            log.warning("readCapabilities: request write failed for \(display.id)")
-            return nil
-        }
-        Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
-        var collected = Data()
-        for _ in 0..<3 {
-            guard let chunk = external.readI2C(DDC.i2cAddress, length: 256, for: display) else { break }
-            collected.append(chunk)
-            if let text = DDC.parseCapabilitiesText(collected),
-               // Only accept a *complete* reply: a truncated first chunk
-               // can already contain "vcp(" — require the group to be
-               // closed so we keep collecting until the full blob arrives.
-               // Sub-values are single-level parens: vcp(10 12(01 02) 60).
-               text.range(of: #"vcp\((?:[0-9A-Fa-f ]|\([0-9A-Fa-f ]*\))*\)"#, options: .regularExpression) != nil {
-                let caps = DDC.parseCapabilities(text)
-                lock.lock()
-                liveCapabilitiesChecked.remove(display.identityKey)
-                lock.unlock()
-                return caps
+        // The string arrives in ≤32-byte fragments, each fetched by offset; an empty
+        // fragment ends it. Capped so a misbehaving display cannot loop forever.
+        var assembled: [UInt8] = []
+        for _ in 0..<64 {
+            let request = DDC.capabilitiesRequest(offset: UInt16(assembled.count))
+            guard external.writeI2C(DDC.i2cAddress, data: Data(request), for: display) else {
+                log.warning("readCapabilities: request write failed for \(display.id)")
+                return nil
             }
-            if collected.count >= 256 + 256 { break }
+            Thread.sleep(forTimeInterval: Double(Settings.ddcSettleMilliseconds) / 1000)
+            guard let reply = external.readI2C(DDC.i2cAddress, length: DDC.capabilitiesReplyLength, for: display),
+                  let fragment = DDC.parseCapabilitiesFragment(reply),
+                  fragment.offset == assembled.count else { break }
+            if fragment.payload.isEmpty { break }
+            assembled.append(contentsOf: fragment.payload)
             Thread.sleep(forTimeInterval: 0.02)
+        }
+        // Only accept a *complete* string: require the vcp group to be closed.
+        if let text = DDC.parseCapabilitiesText(Data(assembled)),
+           text.range(of: #"vcp\((?:[0-9A-Fa-f ]|\([0-9A-Fa-f ]*\))*\)"#, options: .regularExpression) != nil {
+            let caps = DDC.parseCapabilities(text)
+            lock.lock()
+            liveCapabilitiesChecked.remove(display.identityKey)
+            lock.unlock()
+            return caps
         }
         log.warning("readCapabilities: no valid reply for \(display.id)")
         return nil
