@@ -2,7 +2,7 @@
 # zsh completion for fbdcli.
 #
 # Install: add this file's directory to your fpath and run compinit, e.g.
-#   mkdir -p ~/.zfunc && cp completions/fbdcli.zsh ~/.zfunc/
+#   mkdir -p ~/.zfunc && cp completions/_fbdcli ~/.zfunc/
 #   echo 'fpath=(~/.zfunc $fpath); autoload -Uz compinit && compinit' >> ~/.zshrc
 
 _fbdcli() {
@@ -23,6 +23,8 @@ _fbdcli() {
     'preset:List factory presets or activate one by index'
     'hdr:Show or set HDR framebuffer mode'
     'virtual:Virtual screens (list/create/destroy/reconnect/disconnect-all)'
+    'rotate:Rotate a display (0, 90, 180, 270)'
+    'filter:Apply a full-screen software filter (or off)'
     'disable:Disable a display (black screen)'
     'enable:Re-enable a disabled display'
     'layout:Save/restore/protect the display arrangement'
@@ -35,7 +37,10 @@ _fbdcli() {
     'auth-token:Print the local HTTP API token'
     'settings:Print a masked settings dump'
     'pip:Stream a display in a picture-in-picture window'
+    'stream:Redirect a display onto another display (or stop)'
+    'automation:Per-display event automation rules'
     'osd:Show a transient OSD HUD'
+    'sysvolume:Get or set the Mac output volume (CoreAudio)'
     'nightshift:Get or set Night Shift strength'
     'truetone:Get or set True Tone'
     'dark-mode:Get or set system Dark Mode'
@@ -80,9 +85,28 @@ _fbdcli() {
           _fbdcli_tv
           ;;
         config)
-          _values 'config subcommand' \
-            show protect favourite lockdim lockdim-target keytarget \
-            group-policy group-enabled group-sync connections model device
+          _fbdcli_config
+          ;;
+        profile)
+          _fbdcli_profile
+          ;;
+        pip)
+          _fbdcli_pip
+          ;;
+        stream)
+          _fbdcli_stream
+          ;;
+        automation)
+          _fbdcli_automation
+          ;;
+        rotate)
+          _fbdcli_rotate
+          ;;
+        filter)
+          _fbdcli_filter
+          ;;
+        sysvolume)
+          _arguments '--list[list output devices]' '--device[select an output device]:device id or name:' '1:volume (0-100):'
           ;;
         report)
           _message 'optional output file'
@@ -136,6 +160,7 @@ _fbdcli_layout() {
     'save:Save the current display arrangement'
     'restore:Restore the saved arrangement'
     'protect:Get or set layout protection'
+    'edge-crossing:Get or set pointer crossing between misaligned displays'
   )
   _describe 'layout subcommand' sub
 }
@@ -152,6 +177,108 @@ _fbdcli_group() {
     'unmirror:Unmirror a group'
   )
   _describe 'group subcommand' sub
+}
+
+_fbdcli_config() {
+  local -a sub
+  if (( CURRENT > 3 )); then
+    case $words[3] in
+      vscreen) _values 'vscreen subcommand' list associate disassociate apply ;;
+      uiscale) _values 'uiscale action' on off show ;;
+      device) _values 'device subcommand' list add remove attach detach attachments ;;
+      keytarget) _values 'keytarget' mouse focused all audio ;;
+      connections) _values 'connections action' connect-all disconnect-all-but-main swap-identical ;;
+      favourite) _values 'favourite action' list save apply ;;
+      lockdim) _values 'lockdim' on off ;;
+    esac
+    return
+  fi
+  sub=(
+    'show:Show the configuration summary'
+    'protect:Per-property configuration protection'
+    'favourite:Resolution favourites (list/save/apply)'
+    'preset:Display presets'
+    'lockdim:Lock dimming (on/off)'
+    'lockdim-target:Lock dimming target (0-100)'
+    'keytarget:Keyboard control target (mouse/focused/all/audio)'
+    'group-policy:Display-group sync policy'
+    'group-enabled:Enable or disable a display group sync'
+    'group-sync:Group sync value (0-100)'
+    'connections:connect-all, disconnect-all-but-main, swap-identical'
+    'model:Per-model setting'
+    'device:Saved network devices (list/add/remove/attach/detach/attachments)'
+    'identity:Display identity method'
+    'transfer:Transfer settings between two displays'
+    'vscreen:Virtual screen associations (list/associate/disassociate/apply)'
+    'uiscale:UI scale matching (on/off/show)'
+  )
+  _describe 'config subcommand' sub
+}
+
+_fbdcli_profile() {
+  local -a sub
+  sub=(
+    'list:List color profiles'
+    'apply:Apply a color profile by index or URL'
+    'restore:Restore the default color profile'
+  )
+  _describe 'profile subcommand' sub
+}
+
+_fbdcli_pip() {
+  local -a sub
+  sub=(
+    'list:List capturable displays, windows and apps'
+    'stop:Stop the active CLI PiP stream'
+    '--window:Stream a single window (window id)'
+    '--app:Stream every window of an app (bundle id)'
+  )
+  _describe 'pip subcommand' sub
+}
+
+_fbdcli_stream() {
+  local -a sub
+  sub=('stop:Stop the active CLI stream')
+  _describe 'stream subcommand' sub
+}
+
+_fbdcli_automation() {
+  local -a sub
+  if (( CURRENT > 4 )) && [[ $words[3] == add ]]; then
+    case $CURRENT in
+      5) _values 'event' connect disconnect sleep wake manual ;;
+      6) _values 'action' shell url notify ;;
+    esac
+    return
+  fi
+  sub=(
+    'list:List automation rules'
+    'add:Add a rule (<id|any> <event> <shell|url|notify> <payload>)'
+    'enable:Enable a rule'
+    'disable:Disable a rule'
+    'remove:Remove a rule'
+    'test:Run a rule now and show its output'
+    'run:Run a rule now and show its output'
+    'log:Show runs from this session'
+  )
+  _describe 'automation subcommand' sub
+}
+
+_fbdcli_rotate() {
+  if (( CURRENT > 3 )); then
+    _values 'rotation' 0 90 180 270
+  else
+    _fbdcli_display_id
+  fi
+}
+
+_fbdcli_filter() {
+  if (( CURRENT > 3 )); then
+    _arguments '--invert[invert colours]' '--sharpness[sharpness]:amount:' '--radius[unsharp radius]:px:' \
+      '--zoom[zoom factor]:factor:' '--pan[pan offset]:x y:' '--lut[3D LUT file]:file:_files -g "*.cube"' 'off[clear the filter]'
+  else
+    _fbdcli_display_id
+  fi
 }
 
 _fbdcli_protect() {
