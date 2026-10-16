@@ -12,7 +12,8 @@ struct PerDisplayCardView: View {
     @ObservedObject var display: Display
 
     /// Confirmation for the soft-disconnect action — shared by the header
-    /// button (which carries the confirmation dialog) and the options menu.
+    /// button and the options menu; the dialog hangs off the card itself,
+    /// which is always present.
     @State private var confirmingDisable = false
     /// Bumped when .fbdDisplayUpdated fires for this display to re-render.
     @State private var refreshTick = 0
@@ -55,6 +56,7 @@ struct PerDisplayCardView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fbdCard()
+        .fbdDisableDisplayConfirmation(isPresented: $confirmingDisable, display: display)
         .onReceive(NotificationCenter.default.publisher(for: .fbdDisplayUpdated)) { note in
             if let id = note.userInfo?["displayID"] as? CGDirectDisplayID, id == display.id {
                 refreshTick += 1
@@ -101,18 +103,6 @@ struct PerDisplayCardView: View {
                 .help(display.isOnline ? "Disable display" : "Re-enable display")
                 .accessibilityLabel(display.isOnline ? "Disable display" : "Re-enable display")
                 .fbdIconButton()
-                .confirmationDialog(
-                    "Disable display?",
-                    isPresented: $confirmingDisable,
-                    titleVisibility: .visible
-                ) {
-                    Button("Disable", role: .destructive) {
-                        _ = DisconnectController().setEnabled(false, displayID: display.id)
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Display will go dark until re-enabled.")
-                }
             }
         }
     }

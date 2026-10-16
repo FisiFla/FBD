@@ -134,17 +134,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         button.setAccessibilityLabel("FBD — display control")
         // Right-click opens a context menu; left-click toggles the panel.
         let menu = NSMenu()
-        let showItem = NSMenuItem(title: "Show FBD", action: #selector(togglePanel(_:)), keyEquivalent: "")
+        let showItem = NSMenuItem(title: NSLocalizedString("Show FBD", comment: ""), action: #selector(togglePanel(_:)), keyEquivalent: "")
         showItem.target = self
         menu.addItem(showItem)
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: NSLocalizedString("Settings…", comment: ""), action: #selector(openSettings(_:)), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
-        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates(_:)), keyEquivalent: "u")
+        let updateItem = NSMenuItem(title: NSLocalizedString("Check for Updates…", comment: ""), action: #selector(checkForUpdates(_:)), keyEquivalent: "u")
         updateItem.target = self
         menu.addItem(updateItem)
         menu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "Quit FBD", action: #selector(quitApp(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: NSLocalizedString("Quit FBD", comment: ""), action: #selector(quitApp(_:)), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         contextMenu = menu
@@ -263,9 +263,19 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     /// Escape closes the panel. A local monitor is used because the panel is
     /// non-activating and may not be key while visible.
+    ///
+    /// It only acts on an Escape delivered to the panel itself: with the panel
+    /// merely visible, the key may belong to an open/save panel, a sheet or
+    /// confirmation dialog, or a text field (including IME composition), all of
+    /// which use Escape to cancel their own thing.
     private func installEscapeMonitor() {
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.keyCode == 53, self.panel.isVisible else {
+            guard let self, event.keyCode == 53, self.panel.isVisible,
+                  event.window === self.panel, self.panel.attachedSheet == nil
+            else {
+                return event
+            }
+            if let text = self.panel.firstResponder as? NSTextView, text.hasMarkedText() {
                 return event
             }
             self.closePanel()

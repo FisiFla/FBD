@@ -15,8 +15,11 @@ struct DDCPanelView: View {
 
     // Send-only DDC controls have no readable state on Display yet — keep the
     // last sent value locally so the controls stay interactive.
-    @State private var contrast: Double = 0.5
-    @State private var volume: Double = 0.5
+    // Nil until the monitor answers a read: the slider then shows "—" rather than a made-up 50%.
+    @State private var contrast: Double?
+    @State private var volume: Double?
+    /// Trailing-debounce work items for the contrast / volume writes, keyed by row label.
+    @State private var pendingWrites: [String: DispatchWorkItem] = [:]
     @State private var muted = false
     @State private var inputSource = ""
     /// The input we last set from the named menu, for immediate feedback. The next DDC refresh
@@ -69,12 +72,12 @@ struct DDCPanelView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.teal)
 
-            sliderRow(label: "Contrast", value: Binding(
+            sliderRow(label: "Contrast", accessibilityLabel: String(localized: "Contrast for \(display.name)"), value: Binding(
                 get: { contrast },
                 set: { contrast = $0 }
             )) { DisplayController.shared.setContrast($0, on: display) }
 
-            sliderRow(label: "Volume", value: Binding(
+            sliderRow(label: "Volume", accessibilityLabel: String(localized: "Volume for \(display.name)"), value: Binding(
                 get: { volume },
                 set: { volume = $0 }
             )) { DisplayController.shared.setVolume($0, on: display) }
@@ -163,8 +166,9 @@ struct DDCPanelView: View {
     }
 
     private func sliderRow(
-        label: String,
-        value: Binding<Double>,
+        label: LocalizedStringResource,
+        accessibilityLabel: String,
+        value: Binding<Double?>,
         send: @escaping (Double) -> Void
     ) -> some View {
         HStack(spacing: FBDTheme.spacingM) {
@@ -174,19 +178,30 @@ struct DDCPanelView: View {
                 .frame(width: 54, alignment: .leading)
             FDBSlider(
                 value: Binding(
-                    get: { value.wrappedValue },
-                    set: { value.wrappedValue = $0; send($0) }
+                    get: { value.wrappedValue ?? 0.5 },
+                    set: { value.wrappedValue = $0; scheduleWrite(String(localized: label), $0, send) }
                 ),
                 in: 0...1,
-                accessibilityLabel: "\(label) for \(display.name)",
+                accessibilityLabel: accessibilityLabel,
                 valueText: { "\(Int(($0 * 100).rounded()))%" }
             )
-            Text("\(Int((value.wrappedValue * 100).rounded()))%")
+            Text(value.wrappedValue.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
                 .font(.caption)
                 .monospacedDigit()
                 .frame(width: 36, alignment: .trailing)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// Trailing-debounced DDC write: the slider drags at ~60 Hz and every DDC write is a slow I2C
+    /// transaction, so only the value the drag settles on (the release value) is sent.
+    private func scheduleWrite(_ key: String, _ newValue: Double, _ send: @escaping (Double) -> Void) {
+        pendingWrites[key]?.cancel()
+        let workItem = DispatchWorkItem {
+            Task { @MainActor in send(newValue) }
+        }
+        pendingWrites[key] = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120), execute: workItem)
     }
 
     /// The entered VCP 0x60 value, or nil when the field holds no usable one.
@@ -228,9 +243,9 @@ struct DDCPanelView: View {
         let accepted = DisplayController.shared.setInputSource(value, on: display)
         if accepted {
             selectedInput = value
-            status = .succeeded("Input set to \(inputLabel(value))")
+            status = .succeeded(String(localized: "Input set to \(inputLabel(value))"))
         } else {
-            status = .failed("The display did not accept that write")
+            status = .failed(String(localized: "The display did not accept that write"))
         }
     }
 
@@ -246,11 +261,11 @@ struct DDCPanelView: View {
     /// sleeps for the DDC settle interval and does up to three I2C reads, and it
     /// used to do all of that on the main actor.
     private func readCapabilities() {
-        status = .working("Reading capabilities…")
+        status = .working(String(localized: "Reading capabilities…"))
         DisplayController.shared.readCapabilities(for: display) { answered in
             status = answered
-                ? .succeeded("Capabilities read")
-                : .failed("No reply from the display")
+                ? .succeeded(String(localized: "Capabilities read"))
+                : .failed(String(localized: "No reply from the display"))
         }
     }
 }

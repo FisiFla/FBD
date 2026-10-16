@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Labelled settings rows for the Settings pages.
 ///
-/// These live in the design system rather than in `SettingsPages.swift` because
+/// These live in the design system rather than in the `Settings*Page.swift` files because
 /// every settings page uses them and their shape — label, value, then a caption
 /// explaining the setting — is what makes the long panes scannable. Keeping the
 /// shape in one place is what stops a second page from inventing its own
