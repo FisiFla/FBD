@@ -30,7 +30,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             // Assigning a content view controller resizes the window to the view's fitting size;
             // keep the frame the user left it at.
             let frame = window.frame
-            window.contentViewController = NSHostingController(rootView: root)
+            window.contentViewController = Self.hostingController(root)
             window.setFrame(frame, display: false)
         } else {
             let w = NSWindow(
@@ -42,12 +42,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             w.toolbarStyle = .unified
             w.isReleasedWhenClosed = false
             w.setFrameAutosaveName("FBDSettingsWindow")
-            w.contentViewController = NSHostingController(rootView: root)
+            w.contentViewController = Self.hostingController(root)
             w.delegate = self
-            if !w.setFrameUsingName("FBDSettingsWindow") {
+            // A collapsed saved frame (an earlier build let the window shrink to its title bar)
+            // is discarded rather than restored.
+            if !w.setFrameUsingName("FBDSettingsWindow") || w.frame.height < Self.minimumSize.height / 2 {
                 w.setContentSize(NSSize(width: 760, height: 600))
                 w.center()
             }
+            w.contentMinSize = Self.minimumSize
             window = w
         }
         NSApplication.shared.activate(ignoringOtherApps: true)
@@ -55,6 +58,16 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func close() { window?.close() }
+
+    private static let minimumSize = NSSize(width: 640, height: 420)
+
+    /// The window keeps the size the user gives it. By default the hosting controller resizes
+    /// the window to SwiftUI's ideal size, which for this split view is the title bar alone.
+    private static func hostingController(_ root: SettingsView) -> NSHostingController<SettingsView> {
+        let controller = NSHostingController(rootView: root)
+        controller.sizingOptions = []
+        return controller
+    }
 
     // MARK: - NSWindowDelegate
 
