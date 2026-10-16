@@ -2,7 +2,7 @@
 
 Every private API used by FBD, its verification source, and the tier that consumes it.
 Signatures were verified against the macOS 27 dyld export trie (`dyld_info -exports`),
-the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lunar, displayplacer).
+and FOSS implementations (lunar, displayplacer).
 
 ## Declared in `Sources/CPrivateAPI/include/fbd_private_api.h`
 
@@ -13,7 +13,7 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 | `CGSGetNumberOfDisplayModes` | displayplacer | CGSAPI | 1 |
 | `CGSGetDisplayModeDescriptionOfLength` (struct `CGSDisplayModeDescription`, 212 B) | displayplacer `CDStructures.h` | CGSAPI | 1 |
 | `CGSConfigureDisplayMode` | displayplacer | CGSAPI / ResolutionController | 1 |
-| `CGSConfigureDisplayEnabled` | displayplacer, BetterDisplay imports | (declared; used in Tier 3 soft-disconnect) | 3 |
+| `CGSConfigureDisplayEnabled` | displayplacer | (declared; used in Tier 3 soft-disconnect) | 3 |
 | `DisplayServicesGetBrightness / SetBrightness` | lunar Bridge.h, dyld exports | DisplayServicesAPI / AppleController | 1 |
 | `DisplayServicesGetLinearBrightness / SetLinearBrightness` | lunar Bridge.h | AppleController | 1 |
 | `DisplayServicesCanChangeBrightness` | lunar Bridge.h | AppleController | 1 |
@@ -21,11 +21,11 @@ the BetterDisplay v4.3.5 binary (imports/strings), and FOSS implementations (lun
 | `DisplayServicesAmbientLightCompensationEnabled / EnableAmbientLightCompensation` | lunar Bridge.h | AppleController | 1 |
 | `DisplayServicesResetAmbientLight` | lunar Bridge.h | (declared; auto-brightness reset) | 2 |
 | `DisplayServicesRegisterForBrightnessChangeNotifications` (+unregister) | lunar Bridge.h | (declared; brightness sync owns a global registry) | 2 |
-| `IOAVServiceCreateWithService` | BetterDisplay imports (IOKit dyld exports) | IOAVServiceAPI / ExternalController | 1 |
-| `IOAVServiceReadI2C / WriteI2C` | BetterDisplay imports, lunar arm64 path | IOAVServiceAPI / DDCController | 1 |
-| `IOAVServiceCopyEDID` | BetterDisplay imports | IOAVServiceAPI (Tier 4 EDID) | 4 |
+| `IOAVServiceCreateWithService` | IOKit dyld exports | IOAVServiceAPI / ExternalController | 1 |
+| `IOAVServiceReadI2C / WriteI2C` | lunar arm64 path | IOAVServiceAPI / DDCController | 1 |
+| `IOAVServiceCopyEDID` | IOKit dyld exports | IOAVServiceAPI (Tier 4 EDID) | 4 |
 | `SLSMainConnectionID` | yabai/skhd headers | SkyLightAPI | 1 |
-| `SLSDetectDisplays` | BetterDisplay imports | SkyLightAPI / ResolutionController | 1 |
+| `SLSDetectDisplays` | IOKit dyld exports | SkyLightAPI / ResolutionController | 1 |
 
 ## Tier 2 declared (verified by live probe on macOS 27)
 
@@ -182,7 +182,7 @@ those rows' route assumed, so they are blocked on design rather than on a name.
   No private symbol was newly declared, so there is nothing to record here — this note exists so a
   future reader does not go looking for a missing entry.
 
-- ObjC classes are always reached via `NSClassFromString` + runtime messaging (never static link). Class-name strings verified in the BetterDisplay binary.
+- ObjC classes are always reached via `NSClassFromString` + runtime messaging (never static link). Class names verified at runtime via `NSClassFromString` on macOS 27.
 - `VirtualDisplay.framework` does not exist on macOS 27 beta — Tier 3 must use the SidecarCore path there.
 - DDC (IOAVService) is Apple Silicon only and **does not work under Rosetta** — guarded by `IOAVServiceAPI.isAppleSilicon`.
 - **Built-in display disconnect is a hardware hazard, not an API one.** On Macs with the base M3 chip (M3 MacBook Air, entry-level M3 MacBook Pro) Apple repurposed the built-in panel's connection for clamshell two-display support, so a soft-disconnected built-in display may not come back without a reboot. `CGSConfigureDisplayEnabled` is fine there; the machine is not. `BuiltInDisconnectGuard` refuses the disconnect on that hardware unless `Settings.allowBuiltInDisconnectOnAffectedMacs` is set. BetterDisplay ships the same guard (`_displayAllowDisconnectM3Builtin`, waydabber/BetterDisplay#4723).

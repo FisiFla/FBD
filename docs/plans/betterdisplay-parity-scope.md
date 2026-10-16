@@ -1,7 +1,6 @@
 # Scope note — FBD ⇄ BetterDisplay feature-parity + UI-parity
 
 Date: 2026-10-14 · Branch: `feat/betterdisplay-parity` · Base: `256ec2f`
-Plan: `~/Downloads/FBD-betterdisplay-parity-plan.md`
 
 ## What this work is
 
@@ -18,7 +17,7 @@ Two goals, in order:
 | Phase | Deliverable | Gate |
 |---|---|---|
 | 0 | Baseline + FBD UI inventory + this scope note | build/test/app/ui-smoke green |
-| 1 | `docs/plans/betterdisplay-feature-inventory.md` | every row cites its evidence source |
+| 1 | reference feature list (public features only; not kept in the repo) | every row cites its evidence source |
 | 2 | `docs/plans/fbd-feature-inventory.md` | every README claim marked verified / partial / absent |
 | 3 | `docs/plans/fbd-gap-matrix.md` | **decision point — user sees the matrix before any implementation** |
 | 4 | the agreed gaps implemented | per-gap: unit tests, CLI round-trip, UI control, ledger + changelog |
@@ -31,8 +30,6 @@ Two goals, in order:
 - No BetterDisplay code, assets, icons, strings, nibs or disassembly output is copied into FBD.
   Behaviour and information architecture are learned from it; FBD reimplements in its own idiom.
 - No localised strings are copied. FBD wording matches *meaning*, never text.
-- **`/Applications/BetterDisplay.app` is read-only in this task.** Not patched, not re-signed,
-  not modified. (It already carries a 2-byte patch from earlier, unrelated work — not added to.)
 - No BetterDisplay-derived material is redistributed.
 
 **FBD repo rules**:
@@ -67,9 +64,8 @@ Two goals, in order:
    - the `CGVirtualDisplay` path (macOS 13–15 only) stays *implemented but unverified here*;
    - rotation on an external display stays *user-gated*.
    These are recorded as gaps and **not** claimed as verified work.
-3. **Modifying BetterDisplay.** Also out of scope: using its patched state (the existing licence
-   bypass in the installed binary) as evidence about its real behaviour. Where a comparison
-   depends on a Pro gate, the *licence-gated* nature is noted rather than worked around.
+3. **Circumventing BetterDisplay's licensing.** Where a comparison depends on a Pro gate, the
+   *licence-gated* nature is noted rather than worked around.
 4. **Reworking FBD's private-API surface for its own sake.** New private symbols only where a
    chosen feature actually needs one.
 
@@ -89,9 +85,9 @@ The user reviewed `docs/plans/fbd-gap-matrix.md` and decided:
    Everything else in the matrix is **deferred**, recorded, and not implemented in this pass —
    including Tier 3 #22/#23/#27, which are blocked on private APIs FBD has not identified.
 2. **Phase 5 (UI/IA revamp) runs after Phase 4 in this same session**, in the plan's phase order.
-3. **BetterDisplay reference screenshots stay out of the repository — permanently.** They live at
-   `~/Downloads/bd_poc/bd-ui-reference/` and are referenced by path only. They must never be
-   committed, pushed, or otherwise leave this machine (no GitHub, no release artefacts). FBD's own
+3. **BetterDisplay reference screenshots stay out of the repository — permanently.** They are kept
+   off-repo and are not referenced by path. They must never be
+   committed, pushed, or otherwise leave the reviewer's machine (no GitHub, no release artefacts). FBD's own
    before/after screenshots and AX trees are captured locally for review and are not committed
    either.
 

@@ -113,6 +113,38 @@ final class CommandLineParserTests: XCTestCase {
         XCTAssertEqual(CLICommandLine.parse(["list", "--direct"]), .command(.list, raw: ["list"], direct: true))
     }
 
+    func testDirectInsideShellPayloadIsPreserved() {
+        let args = ["automation", "add", "any", "connect", "shell", "echo", "--direct"]
+        XCTAssertEqual(CLICommandLine.parse(args), .command(.automation, raw: args, direct: false))
+    }
+
+    func testDirectBeforeShellPayloadIsStrippedButPayloadKept() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["--direct", "automation", "add", "any", "connect", "shell", "run", "--direct"]),
+            .command(.automation, raw: ["automation", "add", "any", "connect", "shell", "run", "--direct"], direct: true)
+        )
+    }
+
+    func testDirectAfterAutomationNonAddIsStripped() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["automation", "list", "--direct"]),
+            .command(.automation, raw: ["automation", "list"], direct: true)
+        )
+    }
+
+    // MARK: - --json routing
+
+    func testJSONOnlyForcesDirectForListAndInfo() {
+        XCTAssertTrue(CLICommandLine.wantsDirectJSON(.list, raw: ["list", "--json"]))
+        XCTAssertTrue(CLICommandLine.wantsDirectJSON(.info, raw: ["info", "1", "--json"]))
+        XCTAssertFalse(CLICommandLine.wantsDirectJSON(.list, raw: ["list"]))
+    }
+
+    func testJSONDoesNotAffectRoutingOfOtherCommands() {
+        XCTAssertFalse(CLICommandLine.wantsDirectJSON(.brightness, raw: ["brightness", "1", "--json"]))
+        XCTAssertFalse(CLICommandLine.wantsDirectJSON(.filter, raw: ["filter", "1", "--lut", "--json"]))
+    }
+
     // MARK: - Unknown commands
 
     func testUnknownCommandCarriesRawWord() {

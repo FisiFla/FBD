@@ -2,7 +2,7 @@
 
 Target: **FBD**, commit `256ec2f`, branch `feat/betterdisplay-parity`. macOS 27, Apple silicon,
 one display connected (built-in Retina, XDR-capable).
-Companion documents: `betterdisplay-feature-inventory.md` (the reference), `fbd-parity-progress.md`.
+Companion documents: `fbd-gap-matrix.md`, `fbd-parity-progress.md`.
 
 Purpose: establish what FBD actually has, and **which seam owns it** — so the gap matrix
 (Phase 3) attributes every gap to a real controller rather than a guess.
@@ -21,7 +21,7 @@ Status vocabulary: **full** (implemented and verified here) · **partial** (impl
 documented limit applies) · **degrades** (implemented, deliberately unavailable on this macOS/hardware,
 surfaced honestly) · **absent** (not implemented).
 
-Test baseline: **477 tests, 0 failures** (`FBDCoreTests` 341 + `FBDCLIParserTests` 136).
+Test baseline at the time: all passing (counts go stale — run `swift test` for the current figure).
 
 ---
 
@@ -56,10 +56,10 @@ Every claim in `README.md`'s feature matrix and prose, checked against code and 
 | 23 | Shortcuts intents | **full (5 actions), app-level check user-gated** | `FBDIntents`: `SetDisplayBrightnessIntent`, `GetDisplayBrightnessIntent`, `SetDisplayVolumeIntent`, `ListDisplaysIntent`, `EnableXDRUpscalingIntent`; wired via `AppIntentsBridge`. `shortcuts list` cannot enumerate app intents, so the Shortcuts-app check stays user-gated (backlog P1). |
 | 24 | HTTP control API, 127.0.0.1 only, token-gated | **full** | `HTTPServer` + `HTTPRouter` + `HTTPExecutor`; token via `Settings.httpAPIToken` (`SecRandomCopyBytes`); `HTTPServerTests` (12), `HTTPRouterTests` (26), `HTTPExecutorTests` (13), `HTTPSystemRouteTests` (10); live `GET /api/displays` round-trip recorded in the backlog. |
 | 25 | `fbd://` URL scheme, with token gate on writes | **full** | `fbd://brightness/<id>/<value>?token=…`; commits `94281dc` and `712fa7a` hardened it |
-| 26 | CLI | **full** | `fbdcli` (routed through the app's HTTP API by default; `--direct` forces local); `FBDCLIParser` (136 tests) |
+| 26 | CLI | **full** | `fbdcli` (routed through the app's HTTP API by default; `--direct` forces local); `FBDCLIParser` (unit-tested) |
 | 27 | Media-key interception (off by default) | **full (real-keyboard check user-gated)** | `MediaKeyRouter` (+ `MediaKeyRouterTests` 7, `MediaKeySystemVolumeTests` 9); routing is unit-tested, a synthetic NX-event check does not reach the session tap → real hardware key press is backlog P1. |
 | 28 | Built-in-display disconnect refused on base-M3 Macs | **full** | `BuiltInDisconnectGuard` enforced at the single `DisconnectController.setEnabled` chokepoint; `BuiltInDisconnectGuardTests` (10); override ships off |
-| 29 | "477 unit tests, CI green per push" | **verified locally / not verified in CI** | 477 tests, 0 failures, measured in Phase 0. CI workflows exist (`.github/workflows/{ci,release,test-required}.yml`) but were not run from here. |
+| 29 | "N unit tests, CI green per push" (hard-coded count) | **verified locally / not verified in CI** | Suite passing locally in Phase 0. CI workflows exist (`.github/workflows/{ci,release,test-required}.yml`) but were not run from here. |
 | 30 | macOS 13–15 / 26 / 27 matrix | **not reproducible here** | Only macOS 27 is available. Columns for 13–15 and 26 are claims from earlier work, not re-verified in this task. |
 
 **Every README claim is accounted for.** No claim was found to be outright false; three are

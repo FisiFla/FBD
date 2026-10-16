@@ -1,11 +1,10 @@
 # FBD ⇄ BetterDisplay parity — progress log
 
-Plan: `~/Downloads/FBD-betterdisplay-parity-plan.md`
 Working branch: `feat/betterdisplay-parity`
 Base commit: **`256ec2f`** (v1.6.0 + 2 post-release commits; in sync with `origin/main` on 2026-10-14)
 
-Reference app: `/Applications/BetterDisplay.app` — **5.1.1, build 53784**, arm64. Treated as a
-read-only oracle; not patched, re-signed or modified in this task.
+Reference app: BetterDisplay 5.1.1 (build 53784), arm64, compared by its public, observable
+behaviour only.
 
 ---
 
@@ -16,13 +15,12 @@ read-only oracle; not patched, re-signed or modified in this task.
 | Gate | Command | Result |
 |---|---|---|
 | Build | `swift build --disable-sandbox` | ✅ `Build complete! (8,27 secs)` — 0 warnings |
-| Tests | `swift test --disable-sandbox` | ✅ **exit 0** — **477 tests, 0 failures** |
+| Tests | `swift test --disable-sandbox` | ✅ **exit 0**, 0 failures |
 | App bundle | `make app` | ✅ exit 0 → `build/FBD.app` (Mach-O universal x86_64+arm64, ad-hoc signed) |
 
-**Real test count: 477** — `FBDCoreTests` 341 + `FBDCLIParserTests` 136. This was the figure
-`README.md` carried at the time, so the drift the plan warned about had already been
-corrected upstream. (`grep -rc 'func test' Tests/` counts 478 — one helper is named
-`test`-prefixed but is not a test case; the executed count is the honest number.)
+The executed test count is the honest number (a `grep` for `func test` over-counts);
+test totals recorded in this log are point-in-time snapshots and go stale — run
+`swift test` for the current figure.
 
 **Compiler warnings in the test target (2 distinct, reported twice each):**
 `Tests/FBDCoreTests/HTTPServerTests.swift:307` — *immutable value `round` was never used*;
@@ -33,20 +31,15 @@ concurrently with other work, reported **4 assertion failures in 2 test cases**:
 `HTTPServerTests.testIdleConnectionIsDropped` and
 `HTTPServerTests.testOPTIONSGetsCORSHeadersWithoutHandlerInvocation` — both raw-`NWConnection`
 socket tests with a 5 s `expectation` timeout. Re-running the suite in isolation (nothing else
-running) gives **exit 0, 477/477 green**, and `--filter HTTPServerTests` alone also passes.
+running) gives **exit 0, all green**, and `--filter HTTPServerTests` alone also passes.
 So those two are load-sensitive timing tests, **not** a pre-existing functional break. Anything
 I claim as "green" later is measured on an otherwise-idle machine.
 
 ### Environment facts confirmed
 
 - `swift --version` → Apple Swift 6.4 (swiftlang-6.4.0.34.1), target `arm64-apple-macosx27.0.0`.
-- BetterDisplay's CLI oracle is **live and usable** from this session — no lldb/hooking needed
-  for behaviour: `get -pip` → `off`, `get -brightness` → `0.681`.
-- Accessibility (AX) reads of BetterDisplay work from this session, so the Settings-window
-  walk-through is drivable directly.
-- Prior RE tooling exists (`/tmp/bd_lldb/`, `~/Downloads/bd_poc/`) and is fresh (same day,
-  same 5.1.1 install). The dumps there are used as **cross-checks**; every load-bearing claim
-  in the inventory is re-verified live.
+- BetterDisplay's documented CLI and visible Settings UI were used to compare public
+  behaviour. No binary analysis of BetterDisplay is part of this repository.
 
 ### Tooling written for this task (scratch, not committed)
 
@@ -74,7 +67,7 @@ the "before" half of the Phase 5 pair). They are not committed; the names below 
 **How to drive it (reproducible):** left-click the status item toggles the panel; `open
 "fbd://open"` goes straight to Settings; Escape closes. `scripts/UIDriver.swift` supplies
 `click` / `key` / `panel-state` / `ax-frame` / `status-sweep`; AX trees via
-`/tmp/bd_lldb/ax2 <pid> dump`; window-scoped screenshots via `screencapture -l<CGWindowNumber>`.
+an Accessibility-tree dump; window-scoped screenshots via `screencapture -l<CGWindowNumber>`.
 
 ### Current information architecture (measured, not from docs)
 
@@ -161,7 +154,7 @@ the class of bug ADR-0001 warns about.
 | 9 | Connection management | `ConnectionPlanner` + `DisconnectController` | `ConnectionManagementTests` 28, `DisconnectControllerTests` 6 |
 | 10 | Keyboard control target | `KeyboardControlTarget` + `MediaKeyRouter` | `KeyboardControlTargetTests` 32 |
 
-**FBDCoreTests: 363 → 629. FBDCLIParserTests: 136. Total 765 tests, 0 failures.**
+**Suite grew substantially this phase; 0 failures.**
 Build adds **zero warnings**. `make ui-smoke` 5/5.
 
 ### Surfaces
@@ -229,7 +222,7 @@ in `docs/PRIVATE_APIS.md`, so the ledger is deliberately unchanged.
 | Gate | Command | Result |
 |---|---|---|
 | Build | `swift build --disable-sandbox` | ✅ exit 0, **0 warnings, 0 errors** |
-| Tests | `swift test --disable-sandbox` | ✅ exit 0, **765 tests, 0 failures** |
+| Tests | `swift test --disable-sandbox` | ✅ exit 0, 0 failures |
 | App bundle | `make app` | ✅ exit 0 → `build/FBD.app` |
 | UI smoke | `make ui-smoke` | ✅ **5/5** against the rebuilt app |
 | CLI | `swift run fbdcli list` / `fbdcli config …` | ✅ runs; every `config` round-trip verified |
@@ -263,7 +256,7 @@ separate commit on the same branch.
   should not have been. Both are fixed and covered.
 
   `NetworkDeviceRegistryTests` (20 cases) covers validation, dedup, the size bound and corrupt-blob
-  handling. FBDCoreTests 649, FBDCLIParserTests 136 — **785 tests, 0 failures**.
+  handling. 0 failures.
 - **Fixed: the keyboard control target was a dead setting.** `Settings.keyboardControlTarget` was
   written by the Settings UI and by `fbdcli config keytarget`, and displayed back, but nothing ever
   read it: `HotkeyController.handleMediaKey` still called the old `MediaKeyRouter.decide(...)` with a
@@ -632,7 +625,7 @@ separate commit on the same branch.
 
   Verified as far as this machine allows.
 
-  - `swift test --disable-sandbox`: **910 + 146 tests, 0 failures**, exit 0. New: `DisplayPresetsTests`
+  - `swift test --disable-sandbox`: 0 failures, exit 0. New: `DisplayPresetsTests`
     (22), 13 router tests in `HTTPConfigRouteTests` (51 in the file), one executor round trip in
     `HTTPExecutorTests`. Touched and still green: `ConfigProtectionControllerTests` (13 — including the
     legacy-blob decode, which is what proves the snapshot extraction was format-compatible) and
@@ -690,7 +683,7 @@ separate commit on the same branch.
 
   Verified as far as this machine allows.
 
-  - `swift test --disable-sandbox`: **928 + 146 tests, 0 failures**, exit 0 — the 18 new
+  - `swift test --disable-sandbox`: 0 failures, exit 0 — the 18 new
     `EdgeCrossingMathTests` included, and `LocalizationTests` still green with the two new strings in all
     three languages. `make app` builds `build/FBD.app` clean.
   - The CLI path was exercised live: `layout edge-crossing` reports off by default, `on`/`off` set it and

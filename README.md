@@ -9,25 +9,28 @@ on-screen HUD and Dock behaviour, saved TV/AVR control over the network, display
 with sync policies, resolution favourites, named display presets, pointer crossing
 between misaligned displays, lock-dim, and more.
 
-**Goal: full feature parity with BetterDisplay — no Pro tier, no licensing, no telemetry.
-Updates via Sparkle (optional).**
+**Status: beta.** The goal is BetterDisplay-class functionality — no Pro tier, no licensing,
+no telemetry — and most of the surface is implemented, but parts are not yet verified on real
+hardware (see the matrix below). Updates via Sparkle (optional).
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-All feature tiers are implemented (CI green on every push). Apple locks down
-private display APIs differently per macOS release; FBD degrades gracefully (feature off,
-UI notes it) when a path is unavailable.
+Every planned feature tier has code and unit tests (CI runs build + tests on every push),
+but CI cannot exercise real displays. Apple locks down private display APIs differently per
+macOS release; FBD degrades gracefully (feature off, UI notes it) when a path is unavailable.
 
 ## Feature matrix by macOS version
 
 | Feature | macOS 13–15 | macOS 26 | macOS 27 |
 |---|---|---|---|
 | Apple brightness / resolution | ✅ | ✅ | ✅ |
-| DDC/CI (external displays, Apple Silicon) | ✅ | ✅ | ✅ |
-| Virtual displays | ✅ `CGVirtualDisplay` (dlopen) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
+| DDC/CI (external displays, Apple Silicon) | ⚠️ implemented, not yet verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
+| Virtual displays | ⚠️ `CGVirtualDisplay` (dlopen; implemented, unverified) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
 | XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
+
+Screen rotation on an external display is likewise implemented but unverified.
 
 \* The software boost overlay needs **Screen Recording** permission and combined
 brightness mode enabled — with both in place, XDR upscaling works on macOS 27.
@@ -39,6 +42,28 @@ soft-disconnected built-in display may then not come back without a reboot. FBD
 refuses to disconnect the built-in display on those Macs unless you set the
 explicit override in Settings → Displays. BetterDisplay ships the same guard
 (waydabber/BetterDisplay#4723).
+
+## Install
+
+Releases are on the [GitHub Releases](https://github.com/FisiFla/FBD/releases) page. A
+release asset named `FBD-unsigned.zip` (marked prerelease) is **not** signed or notarized:
+macOS Gatekeeper will refuse to open it at first. Either right-click `FBD.app` →
+**Open** → **Open**, or clear the quarantine flag:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/FBD.app
+```
+
+Signed, notarized builds (`FBD.zip`) open normally. FBD asks for these permissions, each only
+for the feature that needs it:
+
+| Permission | Needed for |
+|---|---|
+| Screen Recording | software brightness boost (XDR fallback), full-screen filters, picture-in-picture and streaming (ScreenCaptureKit) |
+| Accessibility | media-key interception (off by default) and `make ui-smoke` |
+| Local Network | controlling TVs/AVRs over the network (LG, Samsung, Philips, Yamaha) |
+
+Nothing is granted automatically; features whose permission is missing stay off.
 
 ## Requirements
 
@@ -129,10 +154,10 @@ supported on Intel Macs.
 
 Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 · Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
-· Releasing: [RELEASING.md](RELEASING.md)
+· Releasing: [RELEASING.md](RELEASING.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
 MIT — see [LICENSE](LICENSE). This project is an independent implementation based on
-public documentation and binary analysis; it is not affiliated with BetterDisplay or
+public documentation and observable behaviour; it is not affiliated with BetterDisplay or
 its author.

@@ -3,9 +3,13 @@
 SWIFT_FLAGS = --disable-sandbox
 
 CONFIG = release
+# CI/release set STRICT_UNIVERSAL=1 so a failed universal build fails the job
+# instead of silently shipping a native-only binary.
+STRICT_UNIVERSAL ?= 0
+UNIVERSAL_LOG ?= /tmp/fbd-universal.log
 APP_BUNDLE = build/FBD.app
 
-.PHONY: all build test app clean run
+.PHONY: all build test app clean run bump-version ui-smoke
 
 all: app
 
@@ -16,7 +20,8 @@ test:
 	swift test $(SWIFT_FLAGS)
 
 # Universal (arm64 + x86_64). On Apple Silicon the macOS SDK may not ship an
-# x86_64 slice; falls back to native arch with a warning.
+# x86_64 slice; falls back to native arch with a warning unless
+# STRICT_UNIVERSAL=1 (used by CI and releases), which makes it a hard error.
 # The built executable is located AFTER the build, inside the shell, by asking
 # SwiftPM where it actually put things (`--show-bin-path`). Hard-coded guesses
 # do not survive toolchain drift: `.build/release`, `.build/apple/Products/
@@ -27,10 +32,15 @@ test:
 app:
 	@rm -rf $(APP_BUNDLE)
 	@mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
-	@if swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 2>/tmp/fbd-universal.log; then \
+	@if swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 2>$(UNIVERSAL_LOG); then \
 		BIN="$$(swift build $(SWIFT_FLAGS) -c $(CONFIG) --arch arm64 --arch x86_64 --show-bin-path)/FBD"; \
 	else \
-		echo "Universal build failed (see /tmp/fbd-universal.log); building native arch only."; \
+		if [ "$(STRICT_UNIVERSAL)" = "1" ]; then \
+			echo "error: universal build failed (see $(UNIVERSAL_LOG)) and STRICT_UNIVERSAL=1"; \
+			tail -n 40 "$(UNIVERSAL_LOG)"; \
+			exit 1; \
+		fi; \
+		echo "Universal build failed (see $(UNIVERSAL_LOG)); building native arch only."; \
 		swift build $(SWIFT_FLAGS) -c $(CONFIG) || exit 1; \
 		BIN="$$(swift build $(SWIFT_FLAGS) -c $(CONFIG) --show-bin-path)/FBD"; \
 	fi; \
@@ -56,8 +66,12 @@ app:
 	@# Sign inside-out: nested code first, the bundle last. Signing the app and
 	@# then the framework invalidates the app's seal — `codesign --verify` then
 	@# reports "nested code is modified or invalid", and notarization would fail.
-	@codesign --force --sign - $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework >/dev/null 2>&1 || true
-	@codesign --force --sign - $(APP_BUNDLE) >/dev/null 2>&1 || true
+	@if [ -d $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework ]; then \
+		codesign --force --sign - $(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework >/dev/null 2>&1 \
+			|| echo "warning: ad-hoc codesign of Sparkle.framework failed"; \
+	fi
+	@codesign --force --sign - $(APP_BUNDLE) >/dev/null 2>&1 \
+		|| echo "warning: ad-hoc codesign of $(APP_BUNDLE) failed - the bundle may not launch"
 	@echo "Built $(APP_BUNDLE)"
 
 run: app

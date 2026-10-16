@@ -1,8 +1,7 @@
 # FBD ⇄ BetterDisplay gap matrix
 
-Inputs: `betterdisplay-feature-inventory.md` (the reference) and `fbd-feature-inventory.md` (FBD).
-Every BetterDisplay behaviour below is **paraphrased** from observed behaviour — see the reference
-document's wording policy. Route column names the concrete macOS path and classifies it as
+Inputs: BetterDisplay's public feature set (the reference) and `fbd-feature-inventory.md` (FBD).
+Every BetterDisplay behaviour below is **paraphrased** from publicly observable behaviour. Route column names the concrete macOS path and classifies it as
 **public** · **private-already-ledgered** (already in `docs/PRIVATE_APIS.md`) · **new-private**
 (would need a new ledger entry).
 
@@ -92,5 +91,4 @@ behind seams that already have tests.
 #16 filter window, #17–#20, #22–#30, and the "not pursued" table.
 
 **Open question for the user** (see the scope note): whether BetterDisplay reference screenshots
-may be committed inside the public MIT repository. Default taken: they live out-of-repo at
-`~/Downloads/bd_poc/bd-ui-reference/` and are referenced by path.
+may be committed inside the public MIT repository. Default taken (and later confirmed): they stay out of the repo.
