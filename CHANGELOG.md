@@ -16,6 +16,9 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - `fbdcli ddc-test` now reports the AV service and the DDC/CI reply separately.
 
 ### Changed
+- Scaled modes the system reports without the HiDPI flag (seen on an LG TV, "looks like
+  1920x1080" on a 4K backing) are now treated as HiDPI. The CLI labels non-HiDPI modes
+  `lodpi` instead of `sdr`, which is an HDR term.
 - EDID overrides are disabled on Apple Silicon. `IOAVServiceSetVirtualEDIDMode` was declared
   with the wrong arguments (disassembly shows a 32-bit mode plus raw EDID bytes), and its mode
   values are undocumented, so applying an override now fails instead of guessing.
