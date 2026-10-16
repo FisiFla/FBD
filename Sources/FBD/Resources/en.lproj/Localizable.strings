@@ -405,3 +405,24 @@
 "%lld ms" = "%lld ms";
 "Disable display?" = "Disable display?";
 "A wrong EDID can leave the display unusable until it is restored or FBD is launched in safe mode." = "A wrong EDID can leave the display unusable until it is restored or FBD is launched in safe mode.";
+
+/* App Intents (Shortcuts) errors and dialogs. */
+"The display could not be found. It may have been disconnected." = "The display could not be found. It may have been disconnected.";
+"The operation failed: %@" = "The operation failed: %@";
+"Brightness must be between 0 and 1." = "Brightness must be between 0 and 1.";
+"no brightness control path exists for this display." = "no brightness control path exists for this display.";
+"this display's brightness could not be read." = "this display's brightness could not be read.";
+"Volume must be between 0 and 1." = "Volume must be between 0 and 1.";
+"this display does not support DDC/CI volume control." = "this display does not support DDC/CI volume control.";
+"No displays found." = "No displays found.";
+"The upscaling target must be greater than 0 nits." = "The upscaling target must be greater than 0 nits.";
+"this display does not support XDR upscaling." = "this display does not support XDR upscaling.";
+"The target must be a percentage between 0 and 100." = "The target must be a percentage between 0 and 100.";
+"Unknown target '%@'. Valid targets: %@." = "Unknown target '%@'. Valid targets: %@.";
+"A display group name is required." = "A display group name is required.";
+"No display group is named '%@'." = "No display group is named '%@'.";
+"the group has no connected member with a readable brightness." = "the group has no connected member with a readable brightness.";
+"A preset name is required." = "A preset name is required.";
+"No preset is named '%@' on this display." = "No preset is named '%@' on this display.";
+"no part of '%@' applies to this display." = "no part of '%@' applies to this display.";
+"Applied preset '%@'." = "Applied preset '%@'.";

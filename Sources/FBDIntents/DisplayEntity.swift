@@ -4,8 +4,8 @@ import FBDCore
 /// App Intents entity representing a display known to FBD.
 ///
 /// Snapshots id/name/builtin-ness from the live `Display`; the current
-/// brightness is captured at query time (cached value first, live read only
-/// when the cache is empty).
+/// brightness is the cached value only — a query must not run synchronous DDC
+/// reads on the main actor.
 ///
 /// Note: `@Property`-exposed entity metadata is intentionally not used here.
 /// On this SDK the generic `EntityProperty.init(title:)` for Codable values
@@ -19,7 +19,10 @@ struct DisplayEntity: AppEntity {
 
     static var defaultQuery = DisplayEntityQuery()
 
-    /// Stable identifier: the CGDirectDisplayID as a string.
+    /// Stable identifier: `Display.identityKey` (vendor/model/serial by default).
+    /// The CGDirectDisplayID is reassigned across reboots and replugs, so a saved
+    /// shortcut keyed on it would silently target the wrong display. Two identical
+    /// monitors without serials share a key; resolution then picks the first online.
     var id: String
 
     /// Display name (e.g. "LG UltraFine").
@@ -47,20 +50,30 @@ struct DisplayEntity: AppEntity {
 
     /// Look up the live `Display` for this entity's id on the main actor.
     static func liveDisplay(id: String) async -> Display? {
-        await MainActor.run {
-            guard let numericID = UInt32(id) else { return nil }
-            return DisplayController.shared.display(withID: numericID)
+        await MainActor.run { resolve(id: id) }
+    }
+
+    /// Resolve an entity id to a live display: by identity key first, then — for
+    /// shortcuts saved when ids were raw CGDirectDisplayIDs — by numeric id.
+    @MainActor
+    static func resolve(id: String) -> Display? {
+        let displays = DisplayController.shared.displays
+        if let match = displays.first(where: { $0.isOnline && $0.identityKey == id })
+            ?? displays.first(where: { $0.identityKey == id }) {
+            return match
         }
+        guard let numericID = UInt32(id) else { return nil }
+        return DisplayController.shared.display(withID: numericID)
     }
 
     /// Snapshot from a live display. Main-actor only: touches `DisplayController`.
     @MainActor
     static func snapshot(from display: Display) -> DisplayEntity {
         DisplayEntity(
-            id: String(display.id),
+            id: display.identityKey,
             name: display.name,
             isBuiltin: display.isBuiltin,
-            currentBrightness: display.brightness ?? DisplayController.shared.getBrightness(for: display)
+            currentBrightness: display.brightness
         )
     }
 }
@@ -73,11 +86,8 @@ struct DisplayEntity: AppEntity {
 @available(macOS 13, *)
 struct DisplayEntityQuery: EntityQuery {
     func entities(for identifiers: [DisplayEntity.ID]) async throws -> [DisplayEntity] {
-        let wanted = Set(identifiers)
-        return await MainActor.run {
-            DisplayController.shared.displays
-                .filter { wanted.contains(String($0.id)) }
-                .map { DisplayEntity.snapshot(from: $0) }
+        await MainActor.run {
+            identifiers.compactMap { DisplayEntity.resolve(id: $0).map(DisplayEntity.snapshot(from:)) }
         }
     }
 

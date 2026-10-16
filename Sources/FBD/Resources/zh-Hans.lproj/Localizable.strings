@@ -400,3 +400,24 @@
 "%lld ms" = "%lld 毫秒";
 "Disable display?" = "要停用此显示器吗？";
 "A wrong EDID can leave the display unusable until it is restored or FBD is launched in safe mode." = "错误的 EDID 可能导致显示器无法使用，直到恢复原状或以安全模式启动 FBD。";
+
+/* App Intents (Shortcuts) errors and dialogs. */
+"The display could not be found. It may have been disconnected." = "找不到该显示器，它可能已断开连接。";
+"The operation failed: %@" = "操作失败：%@";
+"Brightness must be between 0 and 1." = "亮度必须介于 0 和 1 之间。";
+"no brightness control path exists for this display." = "这台显示器没有可用的亮度控制途径。";
+"this display's brightness could not be read." = "无法读取这台显示器的亮度。";
+"Volume must be between 0 and 1." = "音量必须介于 0 和 1 之间。";
+"this display does not support DDC/CI volume control." = "这台显示器不支持 DDC/CI 音量控制。";
+"No displays found." = "未找到显示器。";
+"The upscaling target must be greater than 0 nits." = "提升目标必须大于 0 尼特。";
+"this display does not support XDR upscaling." = "这台显示器不支持 XDR 提升。";
+"The target must be a percentage between 0 and 100." = "目标必须是 0 到 100 之间的百分比。";
+"Unknown target '%@'. Valid targets: %@." = "未知目标“%@”。有效目标：%@。";
+"A display group name is required." = "需要提供显示器分组名称。";
+"No display group is named '%@'." = "没有名为“%@”的显示器分组。";
+"the group has no connected member with a readable brightness." = "该分组中没有可读取亮度的已连接成员。";
+"A preset name is required." = "需要提供预设名称。";
+"No preset is named '%@' on this display." = "这台显示器上没有名为“%@”的预设。";
+"no part of '%@' applies to this display." = "“%@”中没有任何内容适用于这台显示器。";
+"Applied preset '%@'." = "已应用预设“%@”。";
