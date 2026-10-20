@@ -5,6 +5,16 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Fixed
+- The app could freeze solid when macOS asked for Keychain access. Reading the HTTP API token
+  touches the login Keychain, and `SecItemCopyMatching` blocks on the modal "allow access?"
+  prompt when the running binary is not in the item's access control list — which is exactly what
+  happens after an update, because an unsigned build's identity is its code hash. The read ran on
+  the main actor, so the prompt froze the menu bar, the settings window and every HTTP request
+  (they all wait for the main actor) until it was answered. The token is now read off the main
+  actor, cached, and served from memory afterwards; the prompt can still appear once per unsigned
+  update, but the app stays usable while it is on screen.
+
 ## [2.1.1] - 2026-10-20
 
 ### Changed

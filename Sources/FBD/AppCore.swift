@@ -13,6 +13,14 @@ final class AppCore {
     private var observers: [NSObjectProtocol] = []
     /// Keeps the SIGTERM dispatch source alive for the app's lifetime.
     private var sigtermSource: DispatchSourceSignal?
+    /// The HTTP API token, resolved off the main actor.
+    ///
+    /// Reading the token touches the login Keychain, and a Keychain access
+    /// prompt blocks until the user answers it. On the main actor that prompt
+    /// froze the whole app — the menu bar, the settings window and every HTTP
+    /// request (they all wait for the main actor). The cache keeps the Keychain
+    /// read off the main actor and out of the request path.
+    private let apiTokenCache = APITokenCache()
 
     init() {
         statusItemController = StatusItemController()
@@ -211,6 +219,13 @@ final class AppCore {
             let published = port != 0 ? port : Int(self.httpServer.port)
             Settings.httpServerActivePort = published
             log.info("HTTP API listening on 127.0.0.1:\(self.httpServer.port)")
+            // Resolve the token now, on a background thread. The first read of
+            // the Keychain item may raise the "allow access?" prompt, and the
+            // user should see it while they are switching the API on — not
+            // have the first request time out because the prompt was blocking
+            // the main actor.
+            let cache = self.apiTokenCache
+            Task.detached(priority: .utility) { cache.resolve() }
         } else {
             Settings.httpServerActivePort = 0
             log.error("HTTP API failed to start on port \(port)")
@@ -267,10 +282,6 @@ final class AppCore {
         // without the user's consent. Supply it as ?token=<httpAPIToken>.
         let suppliedToken = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "token" })?.value
-        guard APIToken.matches(suppliedToken, Settings.httpAPIToken) else {
-            log.error("fbd://brightness: missing or invalid token")
-            return
-        }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.count == 2,
               let id = UInt32(parts[0]),
@@ -282,8 +293,29 @@ final class AppCore {
             log.error("fbd://brightness: no display with id \(id)")
             return
         }
-        displayController.setBrightness(value, on: display)
-        log.info("Set brightness to \(value) for display \(id)")
+        // The token is read OFF the main actor: a Keychain access prompt
+        // blocks until the user answers it, and blocking the main actor
+        // freezes the app. The write itself still runs on the main actor.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let expectedToken = await self.resolveTokenOffMain()
+            guard APIToken.matches(suppliedToken, expectedToken) else {
+                self.log.error("fbd://brightness: missing or invalid token")
+                return
+            }
+            self.displayController.setBrightness(value, on: display)
+            self.log.info("Set brightness to \(value) for display \(id)")
+        }
+    }
+
+    /// Read the HTTP API token on a background thread.
+    ///
+    /// `SecItemCopyMatching` blocks on the modal Keychain access prompt when
+    /// the binary is not in the item's access control list, so this must never
+    /// run on the main actor.
+    private func resolveTokenOffMain() async -> String {
+        let cache = apiTokenCache
+        return await Task.detached(priority: .userInitiated) { cache.resolve() }.value
     }
 
     // MARK: - Observers
@@ -362,6 +394,11 @@ final class AppCore {
     /// (off the main actor): parsing is pure, then the main-actor routing is
     /// awaited with a semaphore so the synchronous handler API still replies.
     nonisolated private func handleHTTP(method: String, path: String, body: String?, headers: [String: String]) -> (Int, String) {
+        // The token is resolved HERE, on the HTTP server's own queue — never on
+        // the main actor. A Keychain access prompt blocks until the user
+        // answers it, and blocking the main actor would freeze the app (every
+        // request waits for the main actor, so they would all time out too).
+        let expectedToken = apiTokenCache.resolve()
         let semaphore = DispatchSemaphore(value: 0)
         var response: (Int, String) = (500, HTTPJSON.error("internal error"))
         Task { @MainActor [weak self] in
@@ -370,11 +407,16 @@ final class AppCore {
                 semaphore.signal()
                 return
             }
-            response = self.routeHTTP(method: method, path: path, body: body, headers: headers)
+            response = self.routeHTTP(method: method, path: path, body: body, headers: headers, expectedToken: expectedToken)
             semaphore.signal()
         }
         if semaphore.wait(timeout: .now() + 5) == .timedOut {
             return (503, #"{"error":"main actor busy"}"#)
+        }
+        // A rejected token means the item was rotated or deleted behind our
+        // back: drop the cached copy so the next request reads the new one.
+        if response.0 == 401 {
+            apiTokenCache.invalidate()
         }
         return response
     }
@@ -382,13 +424,13 @@ final class AppCore {
     /// Pure routing (auth, method, path, body validation) lives in
     /// HTTPRouter (FBDCore, unit-tested); this method only executes the
     /// typed route against the controllers.
-    @MainActor private func routeHTTP(method: String, path: String, body: String?, headers: [String: String]) -> (Int, String) {
+    @MainActor private func routeHTTP(method: String, path: String, body: String?, headers: [String: String], expectedToken: String) -> (Int, String) {
         switch HTTPRouter.route(
             method: method,
             path: path,
             body: body,
             headers: headers,
-            expectedToken: Settings.httpAPIToken
+            expectedToken: expectedToken
         ) {
         case .error(let status, let message):
             return (status, HTTPJSON.error(message))
