@@ -6,6 +6,10 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 ## [Unreleased]
 
 ### Added
+- `fbdcli skill install claude|codex` writes an agent-ready `SKILL.md`: the command grammar, the
+  token model (the token is never echoed), a read-back command for every state-changing command
+  and the write contract. The document is compiled in and version-stamped, so a re-install updates
+  it cleanly; `--print` writes exactly the file's bytes to stdout (issue #31).
 - The capabilities the other issues added are now reachable from all three surfaces. The HTTP API
   grew a per-display `disconnect`/`reconnect` action (with `remember`), a `hidpi` action
   (`install`, `remove`, `status`) and a `gamma-floor` action (`enabled`, optional `threshold`).
@@ -52,6 +56,10 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   more often than its controller can answer (issue #25).
 
 ### Changed
+- A write whose reply is lost now says so instead of inviting a blind retry: the CLI reports
+  "the command may have applied", names the command that reads the state back, and exits 75
+  (`EX_TEMPFAIL`). A refused write exits 2. Every state-changing command — routed and direct —
+  was audited for retry-inviting wording (issue #31).
 - The software boost no longer overwrites the display's own picture settings: the overlay
   keeps the user's filter and composes the boost into it, so applying and removing a boost
   leaves the screen as it was (issue #29).
