@@ -42,6 +42,13 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   matching. Each divergence is either aligned — with the commit that aligned it — or recorded
   with the reason the equivalence still holds. The claim it supports is *code-verified
   equivalence*, never hardware verification (issue #24).
+- `scripts/ddc-smoke.sh` is a non-destructive DDC/CI smoke harness: it enumerates the
+  displays through the app's own matching layer, then per display parses the EDID, parses the
+  capabilities string and reads brightness, contrast and volume. `--write-test` adds one
+  set-and-read-back round trip per feature with the original value restored afterwards,
+  `--json` prints the machine-readable evidence, and `--ledger` appends a timestamped
+  evidence block to `docs/PRIVATE_APIS.md`. With no DDC display attached, every check is
+  skipped and the script exits 0 (issue #26).
 
 ## [2.0.0] - 2026-10-16
 

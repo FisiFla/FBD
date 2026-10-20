@@ -125,3 +125,26 @@ main thread).
   declared `Content-Length` above 1 MB is rejected with 413 before
   buffering; idle connections are dropped after 10 s.
 - **`/api/health` is the only unauthenticated endpoint** (uptime checks).
+
+## Diagnostics
+
+Two smoke harnesses live in `scripts/`. Both drive the real code paths — the app's own
+controllers, not a reimplementation — and both are manual: they need hardware or an
+Accessibility grant, so neither runs in CI.
+
+- **`scripts/ui-smoke.sh`** — drives the popover through Accessibility and CGEvent: opens the
+  panel, moves a brightness slider, walks into a display page and back, opens and closes
+  Settings. Needs Accessibility permission for the calling terminal.
+- **`scripts/ddc-smoke.sh`** — exercises the DDC/CI path against an attached display. It
+  enumerates the displays through the app's own matching layer (`fbdcli list --json` →
+  `DisplayController` → `ExternalController` → `IOAVServiceAPI`), so a display paired to the
+  wrong DDC channel shows up as a wrong answer rather than as a missing row, and then per
+  display parses the EDID, parses the capabilities string and reads brightness, contrast and
+  volume. Read-only by default.
+
+  `--write-test` adds one set-and-read-back round trip per feature (one step, then the
+  original value restored — and restored again if the script is interrupted); `--write-all`
+  extends it to contrast and volume. `--json` prints the machine-readable evidence format
+  (the same shape the `--ledger` block is written in), and `--ledger` appends a timestamped
+  evidence block to `docs/PRIVATE_APIS.md`. With no DDC-capable display attached, every check
+  is skipped and the script exits 0.
