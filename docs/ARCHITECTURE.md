@@ -151,3 +151,19 @@ Accessibility grant, so neither runs in CI.
   (the same shape the `--ledger` block is written in), and `--ledger` appends a timestamped
   evidence block to `docs/PRIVATE_APIS.md`. With no DDC-capable display attached, every check
   is skipped and the script exits 0.
+
+## Provenance
+
+Some of FBD's behaviour was designed against a reference implementation rather than
+invented here: **[didriksg/Crisp](https://github.com/didriksg/Crisp)** (MIT, © 2026 Didrik
+Galteland), a FreeDisplay fork, is hardware-proven on thousands of monitors and drives the
+same private-framework surface FBD does. The techniques FBD took from it — the DDC/CI reply
+validation, the read cache and quarantine, the topology hold, the below-floor brightness
+blend, the scaled-mode ladder and the display-override command — were reimplemented
+independently from the described behaviour; no code, string or asset was copied. The
+component-by-component audit lives in `docs/ddc-equivalence.md`, and the reference survey in
+`docs/plans/reference-projects-freedisplay-crisp.md`.
+
+Crisp is itself derived from [huberdf/FreeDisplay](https://github.com/huberdf/FreeDisplay)
+(MIT). BetterDisplay, the proprietary app FBD is compared against in some places, was read
+for behaviour only and contributed no code.
