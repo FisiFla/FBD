@@ -1,7 +1,7 @@
 import XCTest
 @testable import FBDCore
 
-/// Attaching a saved network device to a display (gap-matrix row #17).
+/// Attaching a saved network device to a display.
 ///
 /// The registry and the volume mapping are pure, so the whole routing decision is
 /// assertable without a device, a network or a display.

@@ -67,9 +67,9 @@ and FOSS implementations (lunar, displayplacer).
 
 | `SLSSetDisplayRotation(cid, displayID, rotation)` + `SLDisplayRotation` | ⚠️ **declared + wired (UI + `fbdcli rotate`), returns status 1001 for the built-in on macOS 27** — graceful failure; external-display check pending | SkyLightAPI / DisplayController / rotation submenu |
 
-## DisplayPort link / DPCD / DSC — located 2026-10-14 (gap-matrix row #24, reports row #30)
+## DisplayPort link / DPCD / DSC — located 2026-10-14
 
-Row #24 was blocked on *identifying* these symbols. They are **all exported by the public
+Finding these symbols was blocked on *identifying* them. They are **all exported by the public
 `IOKit.framework`**, so they are reached exactly like the `IOAVService*` set already declared
 above — the same linkage, no `dlopen`, no ObjC runtime.
 
@@ -291,8 +291,7 @@ display re-enumeration.
 
 ## Notes
 
-- **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch
-  `feat/betterdisplay-parity` → see `docs/plans/fbd-parity-progress.md`). Every new controller seam
+- **Nothing new was added to this ledger by the BetterDisplay-parity work.** Every new controller seam
   in that change is built on public APIs plus symbols already listed above: the brightness model
   uses the existing `DisplayServices`/`SkyLight` paths through `CombinedBrightness` and
   `XDRBoostPlanner`, configuration protection re-applies through `ResolutionController`,

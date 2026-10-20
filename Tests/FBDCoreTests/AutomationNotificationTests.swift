@@ -1,7 +1,7 @@
 import XCTest
 @testable import FBDCore
 
-/// Manual controls and the notification action (gap-matrix row #18).
+/// Manual controls and the notification action.
 ///
 /// The manual-invocation event exists to be run by the user, and the notification
 /// action starts nothing — both are properties worth locking, because each is a

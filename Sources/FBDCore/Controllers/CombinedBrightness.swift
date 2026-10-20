@@ -428,7 +428,7 @@ public final class CombinedBrightness {
     /// Only the boost path takes it. The curve's *dimming* zone wants a software dim (a
     /// hardware ramp plus an overlay dim), and this process does not track software
     /// brightness — `get` would then report a value the screen is not showing, which is the
-    /// read-back disagreement this class exists to fix. See the gap-matrix row.
+    /// read-back disagreement this class exists to fix.
     private func boostFactor(from plannerFactor: Double, value: Double, ceiling: Double) -> Double {
         let profile = effectivePreferences.clamped()
         let standard = BrightnessPreferences.standard

@@ -222,8 +222,8 @@ same private-framework surface FBD does. The techniques FBD took from it — the
 validation, the read cache and quarantine, the topology hold, the below-floor brightness
 blend, the scaled-mode ladder and the display-override command — were reimplemented
 independently from the described behaviour; no code, string or asset was copied. The
-component-by-component audit lives in `docs/ddc-equivalence.md`, and the reference survey in
-`docs/plans/reference-projects-freedisplay-crisp.md`.
+component-by-component audit lives in `docs/ddc-equivalence.md`, and the attribution notes in
+[`ACKNOWLEDGMENTS.md`](../ACKNOWLEDGMENTS.md).
 
 Crisp is itself derived from [huberdf/FreeDisplay](https://github.com/huberdf/FreeDisplay)
 (MIT). BetterDisplay, the proprietary app FBD is compared against in some places, was read

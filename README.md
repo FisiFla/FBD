@@ -1,164 +1,92 @@
 # FBD — Free Better Display
 
-A free, MIT-licensed macOS menu-bar app for display control: brightness (Apple + DDC/CI),
-volume, contrast, input switching, resolution/refresh-rate control, virtual displays,
-XDR/HDR brightness upscaling, full-screen software filters (contrast, saturation,
-gamma, color temperature, invert, sharpening, zoom/pan, 3D LUT), screen rotation,
-EDID overrides, per-display event automation (shell, URL or notification), a configurable
-on-screen HUD and Dock behaviour, saved TV/AVR control over the network, display groups
-with sync policies, resolution favourites, named display presets, pointer crossing
-between misaligned displays, lock-dim, and more.
+A free, MIT-licensed macOS menu-bar app for display control. Brightness,
+contrast, volume, input switching, resolution and refresh rate, virtual
+displays, HDR and XDR, full-screen software filters, screen rotation, EDID,
+per-display automation, a command-line client and a local HTTP API — with no
+Pro tier, no licensing and no telemetry.
 
-**Status: beta.** The goal is BetterDisplay-class functionality — no Pro tier, no licensing,
-no telemetry — and most of the surface is implemented, but parts are not yet verified on real
-hardware (see the matrix below). Updates via Sparkle (optional).
+**Status: beta.** Most of the surface is implemented and unit-tested; some
+paths are not yet verified against real hardware, and the app says so where
+that applies. Apple locks down private display APIs differently on every macOS
+release, so FBD degrades gracefully — the feature turns off and the UI says
+why — instead of guessing.
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
-Every planned feature tier has code and unit tests (CI runs build + tests on every push),
-but CI cannot exercise real displays. Apple locks down private display APIs differently per
-macOS release; FBD degrades gracefully (feature off, UI notes it) when a path is unavailable.
-
-## Screenshots
-
-<img src="docs/plans/fbd-ui-revamp/home-dark.png" alt="FBD's menu-bar panel: brightness slider, quick toggles, presets and navigation rows" width="386">
-
-The panel on macOS 27 (Liquid Glass). More, including each display's page, All Modes, Settings,
-light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/plans/fbd-ui-revamp/).
-
-## Feature matrix by macOS version
-
-| Feature | macOS 13–15 | macOS 26 | macOS 27 |
-|---|---|---|---|
-| Apple brightness / resolution | ✅ | ✅ | ✅ live-verified |
-| DDC/CI (external displays, Apple Silicon) | ⚠️ implemented, not yet verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
-| Virtual displays | ⚠️ `CGVirtualDisplay` (dlopen; implemented, unverified) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
-| XDR upscaling (native preset rewrite) | ✅ | ⚠️ rewrite write-protected → software boost* | ⚠️ rewrite write-protected → software boost*; preset switching ✅ live-verified |
-| True Tone toggle | ✅ | ✅ | ✅ live-verified (macOS 27.0.1) |
-| Night Shift / OSD / PiP / display profiles | ✅ | ✅ | ✅ live-verified |
-| EDID | ⚠️ implemented; the built-in panel exposes none | ⚠️ same | ⚠️ none on the built-in panel (macOS 27); external displays untested |
-| Below-floor brightness blend (DDC floor reached in software) | ⚠️ needs Screen Recording; not yet verified on hardware | ⚠️ same | ⚠️ same |
-| HiDPI smooth scaling (scaled-mode ladder) | ⚠️ the install mechanism is live-verified; the privileged write is not | ⚠️ same | ⚠️ same |
-| Remembered disconnects · docked built-in display · ambient auto-brightness sync | ⚠️ implemented, not yet verified on hardware | ⚠️ same | ⚠️ same |
-
-Screen rotation on an external display is likewise implemented but unverified.
-
-**True Tone works on macOS 27.** The matrix used to say the toggle *degrades*
-there, on the strength of a note in Lunar's `CBTrueToneClient.h` that True Tone
-stopped being controllable from third parties in macOS 26.3. Measured on
-macOS 27.0.1 (built-in XDR panel, 2026-10-20): `available` is true, `enabled`
-reads back, and `setEnabled:` round-trips — off reads back off, on reads back
-on. FBD's toggle therefore works there. The macOS 26 cell follows: the True
-Tone path has no version gate, so it takes the same code.
-
-\* The software boost overlay needs **Screen Recording** permission and combined
-brightness mode enabled — with both in place, XDR upscaling works on macOS 27.
-The native preset rewrite is refused on macOS 26 and later (the controller's
-own self-test detects the rejected write), so both columns point at the
-software boost. The boost lives in an overlay, and an overlay does not outlive
-a one-shot `fbdcli` run — from the app, or through its HTTP API, it does.
-
-### What was measured on macOS 27.0.1 (2026-10-20)
-
-Every cell that says *live-verified* was measured on this machine (M1 Max,
-built-in XDR panel), not taken from a header comment:
-
-- **Apple brightness** — read 46.7 %, wrote 60 %, read 60 %, restored 46.7 %.
-- **Resolution** — 132 modes enumerated; the current mode re-applied through
-  the mode write path.
-- **Night Shift** — strength 50 % → 0 % → 50 %, read back after each write.
-- **Display presets** — the built-in XDR panel switched preset 0 → 1 → 0, read
-  back after each switch.
-- **Virtual screens** — the app created a virtual screen from a persisted
-  config at launch (`SLVirtualDisplay`). A one-shot `fbdcli virtual create`
-  writes the config, but its screen dies with the command; the app owns the
-  screen.
-- **Software overlay** — a full-screen filter applied and cleared (the same
-  overlay the below-floor blend and the software boost ride on).
-- **OSD** — the transient HUD showed.
-- **PiP** — ScreenCaptureKit enumerated the displays, windows and apps (the
-  stream itself was not started).
-- **True Tone** — `available` true, `enabled` read back, `setEnabled:`
-  round-trip (off → on).
-- **HiDPI override** — the generated install script ran against a temporary
-  root: the plist is written, `plutil -lint` accepts it, a repeated install is
-  byte-identical and leaves no staging file behind, and the removal takes
-  exactly that file away.
-
-Still unverified, because this machine cannot show it: DDC/CI on an external
-monitor ([#7](https://github.com/FisiFla/FBD/issues/7)); EDID on the built-in
-panel (macOS 27 exposes none); the below-floor blend's DDC floor (it needs an
-external monitor with a high floor); the remembered-disconnect, docked-built-in
-and ambient-sync behaviours (they need an external display — disconnecting the
-built-in panel is not a safe test); the privileged HiDPI write to
-`/Library/Displays` and the display re-enumeration; and the app's own Screen
-Recording grant (the CLI's overlay had it; the app's could not be read from a
-shell).
-
-**A monitor's DDC brightness scale rarely reaches black.** The bottom of the
-slider is usually a dead zone: the knob moves, the screen does not. The
-below-floor blend splits the slider in two — above the threshold the hardware
-carries the brightness exactly as before, below it the hardware is pinned at
-the threshold and the software layer carries the rest as a multiplicative dim,
-so the screen reaches what you asked for instead of stopping at the panel's
-floor. The read-back reports the position you asked for, not the floor. It is
-off by default, needs **Screen Recording** permission, and is applied per
-display (Settings → the display's page).
-
-**Built-in display disconnect is refused on base-M3 MacBooks.** On Macs with the
-base M3 chip (M3 MacBook Air, entry-level M3 MacBook Pro) Apple repurposed the
-built-in panel's connection to drive two external displays in clamshell mode; a
-soft-disconnected built-in display may then not come back without a reboot. FBD
-refuses to disconnect the built-in display on those Macs unless you set the
-explicit override in Settings → Displays. BetterDisplay ships the same guard
-(waydabber/BetterDisplay#4723).
-
-**A disconnect can be remembered, and the built-in display can be parked.** Three
-new behaviours, each off by default or opt-in per display:
-
-- *Remembered disconnects* — a display you ask to keep off is disconnected again
-  every time it comes back, after a reboot or a replug. Re-enabling it forgets
-  the request.
-- *Turn off the built-in display while an external display is attached* — the
-  panel goes off so you work on the external screen. On a base-M3 MacBook this
-  is refused before any call to the display API is made at all, because the
-  panel may not come back without a reboot.
-- *Follow the built-in display's auto-brightness* — an external monitor has no
-  ambient sensor, so it can follow the built-in panel's, mapped through nits
-  rather than by raw slider position.
-
-None of the three has been exercised on real hardware yet: the machine this was
-built on has no external display attached, so only the decisions they make are
-tested — the hardware paths are not.
+<img src="docs/screenshot.png" alt="FBD's menu-bar panel: a brightness slider, quick toggles, presets and navigation rows" width="386">
 
 ## Install
 
-Releases are on the [GitHub Releases](https://github.com/FisiFla/FBD/releases) page. A
-release asset named `FBD-unsigned.zip` (marked prerelease) is **not** signed or notarized:
-macOS Gatekeeper will refuse to open it at first. Either right-click `FBD.app` →
-**Open** → **Open**, or clear the quarantine flag:
+Releases are on the [GitHub Releases](https://github.com/FisiFla/FBD/releases)
+page. The current asset is `FBD-unsigned.zip`: **not** signed and **not**
+notarised, so Gatekeeper refuses it on first open. Either right-click
+`FBD.app` → **Open** → **Open**, or clear the quarantine flag:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/FBD.app
 ```
 
-Signed, notarized builds (`FBD.zip`) open normally. FBD asks for these permissions, each only
-for the feature that needs it:
+Signed, notarised builds are not published yet — they need a Developer ID
+certificate ([#6](https://github.com/FisiFla/FBD/issues/6)).
+
+## What it does
+
+- **Displays** — brightness (Apple and DDC/CI), contrast, volume, mute, input
+  source, resolution and refresh rate, rotation, ICC profiles, EDID export, a
+  per-display page with protected properties, display groups with sync
+  policies, and pointer crossing between misaligned screens.
+- **Screens** — virtual displays, full-screen software filters (contrast,
+  saturation, gamma, colour temperature, invert, sharpen, zoom, 3D LUT),
+  picture-in-picture and streaming, HDR mode, XDR upscaling, Night Shift,
+  True Tone and Dark Mode.
+- **Behaviour** — per-display event automation (shell, URL or notification), a
+  configurable on-screen HUD, Dock and menu-bar preferences, lock-dim, saved
+  TV/AVR control over the network, and disconnects that can be remembered
+  across reboots.
+- **Surfaces** — the menu-bar panel, the Settings window, `fbdcli`, a local
+  HTTP API and Shortcuts actions. They all drive the same controller, so they
+  cannot drift apart.
+
+## Requirements and permissions
+
+macOS 13.2+ (Apple Silicon preferred — DDC needs native arm64); Xcode 15+ /
+Swift 5.9+ to build from source.
+
+Permissions are asked for one at a time, each only for the feature that needs
+it. Nothing is granted automatically, and a feature whose permission is
+missing stays off.
 
 | Permission | Needed for |
 |---|---|
-| Screen Recording | software brightness boost (XDR fallback), full-screen filters, picture-in-picture and streaming (ScreenCaptureKit) |
-| Accessibility | media-key interception (off by default) and `make ui-smoke` |
-| Local Network | controlling TVs/AVRs over the network (LG, Samsung, Philips, Yamaha) |
+| Screen Recording | software brightness boost (XDR fallback), full-screen filters, picture-in-picture, streaming |
+| Accessibility | media-key interception (off by default) and the UI smoke test |
+| Local Network | controlling TVs and AVRs over the network (LG, Samsung, Philips, Yamaha) |
 
-Nothing is granted automatically; features whose permission is missing stay off.
+## What works where
 
-## Requirements
+| Feature | macOS 13–15 | macOS 26 | macOS 27 |
+|---|---|---|---|
+| Apple brightness / resolution | ✅ | ✅ | ✅ live-verified |
+| DDC/CI (external displays, Apple Silicon) | ⚠️ not verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
+| Virtual displays | ⚠️ `CGVirtualDisplay`, unverified | ✅ `SLVirtualDisplay` | ✅ live-verified |
+| XDR upscaling (native preset rewrite) | ✅ | ⚠️ write-protected → software boost | ⚠️ write-protected → software boost; preset switching ✅ |
+| Night Shift / Dark Mode / True Tone / OSD / PiP / profiles | ✅ | ✅ | ✅ live-verified |
+| EDID | ⚠️ the built-in panel exposes none | ⚠️ same | ⚠️ none on the built-in panel; external displays untested |
+| Below-floor brightness blend | ⚠️ needs Screen Recording; not verified on hardware | ⚠️ same | ⚠️ same |
+| HiDPI smooth scaling | ⚠️ the install mechanism is verified; the privileged write is not | ⚠️ same | ⚠️ same |
+| Remembered disconnects · docked built-in · ambient sync | ⚠️ implemented, not verified on hardware | ⚠️ same | ⚠️ same |
 
-- macOS 13.2+ (Apple Silicon preferred; DDC requires native arm64)
-- Xcode 15+ (Swift 5.9+)
+*Live-verified* means it was measured on a real machine, not merely
+implemented; the evidence is in [`docs/PRIVATE_APIS.md`](docs/PRIVATE_APIS.md).
+Screen rotation on an external display is implemented but unverified.
 
-## Build & run
+Two safety notes. The built-in display is **not** disconnected on base-M3
+MacBooks, where Apple repurposed the panel's connection for clamshell mode —
+the disconnect is refused before any call is made. And DDC/CI does not work
+under Rosetta.
+
+## Build and run
 
 ```bash
 make build        # debug, native arch
@@ -167,125 +95,50 @@ make app          # release universal FBD.app → build/FBD.app
 open build/FBD.app
 ```
 
-`make ui-smoke` drives the real panel via Accessibility/CGEvent (status-item
-click → brightness slider → Settings → Back → close); needs Accessibility
-permission for your terminal.
-
-`fbdcli` (command-line interface) is built alongside:
+## fbdcli
 
 ```bash
-swift run fbdcli list                 # displays
-swift run fbdcli brightness 1 60      # set display 1 to 60%
+swift run fbdcli list                 # the displays
+swift run fbdcli brightness 1 60      # set display 1 to 60 %
 swift run fbdcli filter 1 1 0 1 1     # full-screen filter (contrast sat gamma temp)
-swift run fbdcli filter 1 1 1 1 1 --sharpness 2 --zoom 1.5   # sharpen + zoom
-swift run fbdcli filter 1 1 1 1 1 --lut ~/LUTs/grade.cube     # custom 3D LUT
 swift run fbdcli rotate 3 90          # rotate an external display
-swift run fbdcli settings             # masked settings dump (for bug reports)
+swift run fbdcli hidpi 3 install      # scaled-mode ladder (macOS asks for an admin password)
+swift run fbdcli gamma-floor 3 on 15  # reach the bottom of the slider in software
 swift run fbdcli report               # detailed per-display report (for bug reports)
 swift run fbdcli config show          # lock dim, keyboard target, groups, brightness model…
-swift run fbdcli config device add "Living room TV" lg 192.168.0.50
-swift run fbdcli hidpi 3 status        # scaled-mode ladder for display 3
-swift run fbdcli hidpi 3 install       # install it (macOS asks for an admin password)
-swift run fbdcli gamma-floor 3 on 15   # reach the bottom of the slider in software
-swift run fbdcli display 3 disconnect --remember   # keep it off when it comes back
 ```
 
-`fbdcli help` lists all commands; `--direct` forces local execution instead of routing
-through the app's HTTP API.
+`fbdcli help` lists everything. Writes go through the running app's local HTTP
+API (single driver, so the CLI never races the DDC bus); `--direct` forces
+local execution. When an answer is lost the CLI says *the command may have
+applied* and names the command that reads the state back — a write that was
+not confirmed is not a failed write.
 
-## Shell completion (zsh)
+`fbdcli skill install claude` writes an agent-ready `SKILL.md` (the grammar,
+the token model and the read-back contract) to `~/.claude/skills/fbd/`; `codex`
+is also supported, and `--print` dumps it instead of writing it.
 
-```sh
-mkdir -p ~/.zfunc
-cp completions/_fbdcli ~/.zfunc/
-echo 'fpath=(~/.zfunc $fpath); autoload -Uz compinit && compinit' >> ~/.zshrc
-```
+## HTTP API and URL scheme
 
-## Agent skill
+The app can serve a JSON API on `127.0.0.1` only (`fbdcli http on <port>`,
+default 8765, applied live). Every request carries the local API token, which
+lives in the login Keychain and is never printed unless you ask for it:
+`fbdcli auth-token --reveal`. `GET /api/health` is the only unauthenticated
+endpoint.
 
-`fbdcli` ships an agent-ready skill: a `SKILL.md` that teaches an agent the CLI's grammar, the
-token model and the read-back contract.
-
-```sh
-fbdcli skill install claude            # ~/.claude/skills/fbd/SKILL.md
-fbdcli skill install codex              # ~/.codex/skills/fbd/SKILL.md
-fbdcli skill install claude --path DIR # a directory of your choice
-fbdcli skill install claude --print    # dump the file to stdout instead of writing it
-```
-
-The document is compiled into the binary — it is never assembled by running the CLI and reading
-its help output — so `--print` and the installed file are byte-for-byte the same. The install
-overwrites the file, so re-running it after an upgrade refreshes the skill in place.
-
-Two rules the skill teaches an agent:
-
-- **the token is a secret** — `fbdcli auth-token` explains how to obtain it and `--reveal`
-  prints it; an agent never needs it, because `fbdcli` sends it itself.
-- **a write that was not confirmed is not a failed write** — when the app's answer is lost the
-  CLI prints *the command may have applied* and names the command that reads the state back
-  (exit code `75`). Repeating such a write blindly would apply the change twice.
-
-## HTTP control API
-
-The app exposes a JSON API on `127.0.0.1` only (`fbdcli http on <port>`, default 8765 —
-applies live, no restart). All requests must send the local API token:
-
-```sh
-fbdcli auth-token --reveal  # print the token (a secret — keep it out of logs and chats)
-TOKEN=$(fbdcli auth-token --reveal)
-curl -H "X-FBD-Token: $TOKEN" http://127.0.0.1:8765/api/displays
-# or: curl -H "Authorization: Bearer $TOKEN" ...
-```
-
-Without `--reveal`, `fbdcli auth-token` only explains how to obtain the token — it never
-prints the secret itself.
-
-`fbdcli` sends the token automatically (single driver — writes go through the app so the
-CLI never races the DDC bus). CORS is enabled for web clients (`OPTIONS` → 204);
-`GET /api/health` is the one unauthenticated endpoint.
-
-Alongside `/api/displays`, `/api/virtual` and `/api/system`, a `/api/config` namespace
-covers the settings surfaces: lock-dim, the keyboard control target, connection management,
-per-display protection, resolution favourites, named display presets and the saved device
-registry. `GET
-/api/config` reports them all; writes are `POST /api/config/<what>` with a JSON body, and a
-refusal names the valid values rather than ignoring the request.
-
-A display's own settings are written with `POST /api/displays/<id>/<action>` and a JSON body:
-`brightness`, `contrast`, `volume`, `mute`, `input`, `mode`, `xdr`, `rotate` and `filter`, plus
-`disconnect` / `reconnect` (with `{"remember": true}` to keep a display off when it comes
-back), `hidpi` (`{"operation": "install" | "remove" | "status"}`) and `gamma-floor`
-(`{"enabled": true, "threshold": 0.15}`). The CLI, the HTTP API and the Shortcuts actions all
-drive the same controller, so they cannot drift apart.
-
-## DDC on Apple Silicon
-
-DDC/CI uses the private IOKit `IOAVService` I2C transport, which exists only on Apple
-Silicon — **DDC does not work under Rosetta** (disabled with a warning) and is not
-supported on Intel Macs.
-
-## URL scheme & media keys
-
-- `fbd://open` opens the settings panel (handy for Shortcuts / quick-launch
-  tools; `fbd://open` is also what the CLI's `http` status hints at).
-- `fbd://close` closes the settings panel that `fbd://open` shows.
-- `fbd://brightness/<displayID>/<value>` (0…1) changes brightness, but now
-  requires the local API token as `?token=<httpAPIToken>` (see above). Writes
-  without a matching token are refused.
-- Media-key interception (F1/F2, F10–F12 mapped to external-display
-  brightness/volume) is **off by default** — enable it explicitly in
-  Settings → General ("Intercept media keys"). It requires Accessibility
-  permission and only affects keys when FBD is running.
+`fbd://open` opens the settings panel and `fbd://close` closes it; the
+`fbd://brightness/<displayID>/<value>` form exists and requires the token.
 
 ## Docs
 
-Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-· Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md) · DDC audit: [docs/ddc-equivalence.md](docs/ddc-equivalence.md)
-· Changes: [CHANGELOG.md](CHANGELOG.md)
-· Releasing: [RELEASING.md](RELEASING.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Private APIs](docs/PRIVATE_APIS.md) ·
+  [DDC audit](docs/ddc-equivalence.md) · [Roadmap](docs/ROADMAP.md) ·
+  [Domain glossary](CONTEXT.md)
+- [Contributing](CONTRIBUTING.md) · [Releasing](RELEASING.md) ·
+  [Security](SECURITY.md) · [Acknowledgments](ACKNOWLEDGMENTS.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE). This project is an independent implementation based on
-public documentation and observable behaviour; it is not affiliated with BetterDisplay or
-its author.
+MIT — see [LICENSE](LICENSE). FBD is an independent implementation; it is not
+affiliated with BetterDisplay or its author.

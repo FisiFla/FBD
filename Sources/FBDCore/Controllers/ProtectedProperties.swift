@@ -13,8 +13,8 @@ import Foundation
 /// but not **read** — so those two are restored from the value FBD itself last
 /// applied (`Settings.storedRotation` / `Settings.storedColourProfile`), and one set
 /// by another tool is invisible to it. The SDR/HDR *colour mode* pair is still not
-/// represented, because FBD has no connection-mode/colour-mode path at all (see
-/// `docs/plans/fbd-gap-matrix.md` #23 — new-private, not identified). Each gap is
+/// represented, because FBD has no connection-mode/colour-mode path at all (a private
+/// API that was never identified — see `docs/PRIVATE_APIS.md`). Each gap is
 /// deliberate and visible rather than silently collapsed into another flag.
 public struct ProtectedProperties: OptionSet, Codable, Equatable {
     public let rawValue: Int

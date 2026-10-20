@@ -1,94 +1,55 @@
 # FBD — Roadmap
 
-Status: **All five tiers have code and unit tests; some paths are not verified on
-real hardware.** Green CI means the build and unit tests pass, not that DDC or
-virtual displays were exercised on a device. Hardening since the tiers: HTTP API
-auth + router extraction, EDID validation, virtual-display registry, DDC retries,
-parser fuzz, a11y, NSPanel glass UI, Sparkle release prep, XDR software boost
-(live-verified on macOS 27), UI regression harness, named display presets, pointer
-crossing between misaligned displays. Newer items include per-property configuration
-protection, group sync policies, resolution favourites, startup safe mode, lock-dim,
-saved TV/AVR devices, DPCD reads, system-volume control and zh-Hans/zh-Hant
-localisation. See CHANGELOG.md for the per-cycle record.
+Short and current: what FBD does today, what is not yet proven, and what is
+next. The per-release record is in [CHANGELOG.md](../CHANGELOG.md).
 
-**Unverified (implemented, never run on the real thing):**
-- **DDC/CI on an external monitor** (Tier 1 stop condition; issue #7) — needs an
-  Apple Silicon Mac with a DDC-capable display.
-- **Legacy `CGVirtualDisplay` virtual displays** on macOS 13-15 (the macOS 26+
-  `SLVirtualDisplay` path is live-verified).
-- **Screen rotation on an external display** (the built-in returns 1001 on macOS 27).
+## Shipped
 
-Other open items:
-- macOS 27 caveats (docs/PRIVATE_APIS.md): `SLSDisplaySetPresetData` is
-  write-protected (native XDR upscaling self-tests and falls back to the
-  software method — preset SWITCHING works, verified live); the direct
-  IOMobileFramebuffer color-table method is entitlement-gated.
-- Distribution: signing + notarization + appcast host (user resources;
-  RELEASING.md has the full path).
+- The menu-bar panel, the Settings window, `fbdcli`, a local HTTP API and
+  Shortcuts actions — all driving the same controller.
+- Apple brightness, resolution and refresh rate, Night Shift, Dark Mode, True
+  Tone, virtual displays (`SLVirtualDisplay` on macOS 26+), HDR mode, the XDR
+  software boost, full-screen filters, picture-in-picture and streaming, the
+  on-screen HUD, display groups, per-display automation, network TV/AVR
+  control, EDID export and saved devices.
+- English, 简体中文 and 繁體中文 throughout the panel and the Settings pages.
 
-## Tier 1 — Core ✅ (DDC unverified on hardware)
+## Not proven on hardware
 
-- [x] SwiftPM scaffold: `FBDCore` library, `FBD` app, `fbdcli`, `CPrivateAPI`, tests
-- [x] Menu-bar app (LSUIElement, `fbd://` scheme) with popover UI: display list, brightness sliders, DDC controls, resolution picker, settings
-- [x] Display enumeration (CG public APIs) + reconfiguration callbacks + `NSScreen` names
-- [x] Apple brightness via `DisplayServices` (read/set/linear/ambient-light)
-- [x] DDC/CI: VCP read/write, brightness/contrast/volume/mute/input, capabilities (VCP 0xF3) + auto-config, per-display cooldown + debounce
-- [x] CGS mode listing + apply (resolution picker, refresh rates), SLS rescan
-- [x] Rosetta detection + graceful degradation; UserDefaults persistence
-- [x] Unit tests: DDC wire format, capabilities parser (hex VCP), mode mapping, settings
-- [x] Docs: README, ARCHITECTURE.md, PRIVATE_APIS.md, ROADMAP.md
+- **DDC/CI on an external monitor** (issue #7) — needs an Apple Silicon Mac
+  with a DDC-capable display. The transport is audited component by component
+  in [ddc-equivalence.md](ddc-equivalence.md); the hardware leg is open, and
+  `scripts/ddc-smoke.sh` is the harness for it.
+- **Legacy `CGVirtualDisplay` virtual displays** on macOS 13–15 (the macOS
+  26+ `SLVirtualDisplay` path is live-verified).
+- **Screen rotation on an external display** — the built-in returns 1001 on
+  macOS 27.
+- **The below-floor brightness blend** against a real monitor with a high
+  brightness floor, and the three display-connection behaviours (remembered
+  disconnects, the docked built-in display, the ambient sync) — they need an
+  external display attached.
+- **The privileged HiDPI write** to `/Library/Displays` and the display
+  re-enumeration that follows it.
+- **Signed, notarised distribution** — blocked on a Developer ID certificate
+  (issue #6). Until then the release asset is `FBD-unsigned.zip`, Gatekeeper
+  asks the user to open it by hand, and the appcast cannot be regenerated.
 
-## Tier 2 — XDR/HDR ✅ (shipped)
+## macOS caveats
 
-- [x] Native XDR upscaling: SkyLight preset rewrite (preset enumeration, `SLSDisplaySetPresetData` + `SetActivePresetIndex`, factory restore). **macOS 13–15**: works. **macOS 27**: preset writes are write-protected (verified by probe) → runtime self-test + automatic software fallback
-- [ ] Direct built-in XDR: `IOMobileFramebufferOpen` — **entitlement-gated on macOS 27** (kIOReturnNotPrivileged); wrappers ship probe-only, degrade gracefully. Open item: private entitlement or older-OS support
-- [x] Software XDR: Metal overlay at `CGShieldingWindowLevel` with ScreenCaptureKit capture + brightness shader (the working upscale method on macOS 27; live-verified with luma measurements: 0.118 -> 0.185 boost on, exact return off, zero leaked windows)
-- [x] Full-screen software filters (same overlay): contrast / saturation / gamma / color temperature / invert — live-verified (saturation 0 -> measured colorfulness 0.0000, exact reset); `fbdcli filter` + routed HTTP
-- [x] Screen rotation 0/90/180/270 via `SLSSetDisplayRotation` (SkyLight): wired in the UI + `fbdcli rotate`; **returns 1001 for the built-in on macOS 27** — graceful failure, **external-display rotation unverified**
-- [x] Combined brightness controller: nits-based curve (hardware 0…100 % → native XDR → software boost), maxNits/hardwareMaxNits helpers
-- [x] Dim-to-black overlay · forced HDR mode (`SLSDisplaySetHDRModeEnabled`) · XDR preset selector (live-verified preset switching) · brightness-change notifications (DisplayServices registry, lunar pattern)
-- [x] fbdcli: `xdr`, `preset`, `hdr` commands · menu-bar UI: XDR/HDR section (upscale toggle, nits slider, preset picker, HDR toggle) + settings toggles
+- `SLSDisplaySetPresetData` is write-protected on macOS 26 and later, so the
+  native XDR upscaling self-tests and falls back to the software boost.
+  Preset *switching* works and is live-verified.
+- The direct `IOMobileFramebuffer` colour-table method is entitlement-gated.
+- The built-in panel exposes no EDID on macOS 27; FBD reports that honestly
+  rather than inventing a value.
+- Disconnecting the built-in display is refused on base-M3 MacBooks, where the
+  panel may not come back without a reboot.
 
-## Tier 3 — Virtual displays & layout ✅ (CG path unverified)
+## Next
 
-- [x] Virtual screens: `SLVirtualDisplay*` (SkyLight) on macOS 26+ — live-verified
-      create/destroy/label via app + CLI; `CGVirtualDisplay*` via dlopen on
-      macOS 13–15 (untestable here — awaits 13–15 hardware)
-- [x] HDR-capable / high-refresh virtual modes · lock/wake connect-disconnect · auto-connect
-- [x] Soft disconnect (`CGSConfigureDisplayEnabled`) · auto-disconnect built-in on external
-- [x] Display groups (cross-process shared state) · layout protection · mirrored sets
-
-## Tier 4 — EDID & advanced config ✅ (shipped)
-
-- [x] EDID export/parse (pure parser + 6 tests; checksum bug caught by tests) · override via `IOAVServiceSetVirtualEDIDMode` (AS) / Intel chunked I2C write documented as unsupported (needs framebuffer I2C)
-- [x] Color profiles (`ColorSyncDeviceSetCustomProfiles`; `CGDisplayCreateUUIDFromDisplayID` is public in ColorSyncDevice.h) · underscan (`SLSDisplaySetUnderscan`, user-initiated) · config protection (mode+brightness+preset re-apply on reconnect)
-- [ ] Flexible scaling — realized via virtual screens + mirroring (Tier 3); custom CGS mode creation needs the private mode-list API (future)
-- [ ] Built-in panel EDID: not exposed by macOS 27 (no IODisplayConnect service, no IODisplayEDID key) — export reports unavailable honestly
-
-## Tier 5 — Streaming & integrations ✅ (shipped)
-
-- [x] PiP with video filters (ScreenCaptureKit + Metal: brightness/contrast/saturation shader, draggable floating window)
-- [x] Custom OSD (SwiftUI HUD following brightness changes) · Night Shift (CBBlueLightClient — LIVE-VERIFIED: read/set 0–100 %) · True Tone (CBTrueToneClient, unavailable on macOS 26.3+ per lunar)
-- [x] Network TV/AVR: LG webOS (WebSocket ssap://), Samsung Tizen (WebSocket + pairing token), Philips (HTTP jointSPACE), Yamaha (YXC XML)
-- [x] Local HTTP API (127.0.0.1 only) — LIVE-VERIFIED: GET /api/displays, POST brightness {"ok":true} round-trip through the app
-- [x] App Intents: Set/GetBrightness, SetVolume, ListDisplays, EnableXDRUpscaling (FBDIntents target, package wired in the app)
-- [x] Sparkle updates (2.9.5 via SPM; SUFeedURL + Ed25519 keys configured — requires a signed release + appcast host decision)
-- [x] CLI: http/pip/osd/nightshift/truetone/tv commands; Settings: Integrations section
-- [x] fbdcli routes every control command through the app's local HTTP API
-      when the app is running (single-driver; --direct forces local)
-
-## Hardware verification checklist (Tier 1)
-
-On a Mac with an external monitor (Apple Silicon):
-
-```bash
-make app && open build/FBD.app
-swift run fbdcli list                          # external display shows ddc:yes
-swift run fbdcli caps <external-id>            # capabilities string + parsed VCP codes
-swift run fbdcli brightness <external-id> 60   # monitor brightness changes
-swift run fbdcli volume <external-id> 30       # monitor volume (if supported)
-swift run fbdcli set-mode <external-id> 1920x1080@60
-```
-Expected: brightness/volume sliders in the menu-bar popover work on the external
-monitor; `ddc-test` reports success steps. Monitors with no DDC/CI support (most
-TVs) will report unavailable — that is correct behavior.
+1. A Developer ID certificate, so releases are signed and notarised and the
+   appcast can be regenerated (issue #6).
+2. Hardware verification on an Apple Silicon Mac with an external monitor
+   (issue #7).
+3. The privileged helper for system-level display overrides, which needs the
+   signed release first (issue #23).

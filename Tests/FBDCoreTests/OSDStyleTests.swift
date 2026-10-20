@@ -1,7 +1,7 @@
 import XCTest
 @testable import FBDCore
 
-/// The HUD's style (gap-matrix row #29).
+/// The HUD's style.
 ///
 /// Every field is persisted JSON, so the tests are mostly about what a *stored*
 /// value may do: the defaults have to reproduce the look FBD shipped before this
