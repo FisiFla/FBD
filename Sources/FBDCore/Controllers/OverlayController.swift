@@ -258,6 +258,15 @@ public final class OverlayController {
     /// and vanish inside the same command. See `OverlayControlling.softwareDimPersists`.
     public let softwareDimPersists: Bool
 
+    /// Called when the session for a display ends — torn down, or the capture
+    /// failed.
+    ///
+    /// The session is what puts the brightness on screen: when it is gone the
+    /// display is not boosted any more, and whatever claimed otherwise has to
+    /// let go. The overlay has no display reference, so it reports the
+    /// display id and the owner clears the claim.
+    public var onSessionEnded: ((CGDirectDisplayID) -> Void)?
+
     public init(softwareDimPersists: Bool = true) {
         self.softwareDimPersists = softwareDimPersists
         // Keep overlays glued to their display when the desktop reconfigured
@@ -615,7 +624,12 @@ public final class OverlayController {
 
     /// Remove only the boost overlay for a display (dim overlay untouched).
     fileprivate func teardownBoost(for displayID: CGDirectDisplayID) {
-        guard let session = boostSessions.removeValue(forKey: displayID) else { return }
+        // The session goes first: it is what puts the brightness on screen,
+        // and the owner has to be able to see that it is gone — otherwise
+        // the claim that mirrored the session would outlive it.
+        let session = boostSessions.removeValue(forKey: displayID)
+        onSessionEnded?(displayID)
+        guard let session else { return }
         // Hide synchronously (this runs on the main actor): stop()'s async
         // teardown can race the session's deallocation and leave the last
         // Metal frame composited on-screen.

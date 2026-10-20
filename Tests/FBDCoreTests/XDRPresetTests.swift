@@ -143,10 +143,50 @@ final class XDRPresetTests: XCTestCase {
 
     // MARK: - isSoftwareBoostActive
 
+    /// The live session is the only honest third answer.
+    ///
+    /// This used to ask the display model whether the display was flagged
+    /// upscaled — the very state the boost itself wrote. A flag that is
+    /// true could therefore never clear itself: every refresh concluded
+    /// that a boost was active and wrote the flag back as true, and the
+    /// model claimed an upscale that was not on screen.
     func testSoftwareBoostActiveOnlyWithoutNativePresetOrTrackedSlot() {
-        XCTAssertTrue(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: false, displayUpscaled: true))
-        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: true, trackedNativeSlot: false, displayUpscaled: true))
-        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: true, displayUpscaled: true))
-        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: false, displayUpscaled: false))
+        XCTAssertTrue(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: false, softwareBoostLive: true))
+        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: true, trackedNativeSlot: false, softwareBoostLive: true))
+        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: true, softwareBoostLive: true))
+        XCTAssertFalse(XDRNativeController.isSoftwareBoostActive(presetUpscaled: false, trackedNativeSlot: false, softwareBoostLive: false))
+    }
+
+    /// The live sessions come from the overlay — the surface that owns the
+    /// session, and therefore the only one that knows when it is gone.
+    func testTheLiveSessionsComeFromTheProvider() {
+        let controller = XDRNativeController()
+        let display = Display(
+            id: 42,
+            name: "Test",
+            isBuiltin: false,
+            vendorNumber: 1,
+            modelNumber: 2,
+            serialNumber: 3,
+            bounds: .zero,
+            isOnline: true,
+            isActive: true
+        )
+        let other = Display(
+            id: 43,
+            name: "Other",
+            isBuiltin: false,
+            vendorNumber: 1,
+            modelNumber: 2,
+            serialNumber: 4,
+            bounds: .zero,
+            isOnline: true,
+            isActive: true
+        )
+
+        controller.setSoftwareBoostProvider { [42] }
+
+        XCTAssertTrue(controller.isSoftwareBoostLive(for: display))
+        XCTAssertFalse(controller.isSoftwareBoostLive(for: other))
     }
 }

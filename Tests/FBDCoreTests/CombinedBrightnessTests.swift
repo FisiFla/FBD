@@ -43,6 +43,9 @@ private final class FakeXDR: XDRUpscaling {
     var disableCalls = 0
     private(set) var lastTarget: Int?
     var currentTarget: Int?
+    /// Where the live software-boost sessions come from — wired in by
+    /// `CombinedBrightness`.
+    private(set) var softwareBoostProvider: () -> [CGDirectDisplayID] = { [] }
 
     func isAvailable(for display: Display) -> Bool { available }
 
@@ -53,7 +56,9 @@ private final class FakeXDR: XDRUpscaling {
         let ok = writeOutcomes.isEmpty ? true : writeOutcomes[min(writeCalls - 1, writeOutcomes.count - 1)]
         if ok {
             currentTarget = nits
-            display.updateSoftwareBoost(true, targetNits: nits)
+            // The native path's claim: the preset is on screen, not the
+            // software boost.
+            updateNativeState(display, upscaled: true, targetNits: nits)
         }
         return ok
     }
@@ -62,11 +67,29 @@ private final class FakeXDR: XDRUpscaling {
     func disableUpscaling(for display: Display) -> Bool {
         disableCalls += 1
         currentTarget = nil
-        display.updateSoftwareBoost(false, targetNits: nil)
+        updateNativeState(display, upscaled: false, targetNits: nil)
         return true
     }
 
     func upscaleTarget(for display: Display) -> Int? { currentTarget }
+
+    func setSoftwareBoostProvider(_ provider: @escaping () -> [CGDirectDisplayID]) {
+        softwareBoostProvider = provider
+    }
+
+    /// The native controller's state update — the claim belongs to the
+    /// preset, not to the software boost.
+    private func updateNativeState(_ display: Display, upscaled: Bool, targetNits: Int?) {
+        display.updateXDRState(
+            presets: display.presets,
+            isXDRCapable: display.isXDRCapable,
+            activePresetIndex: display.activePresetIndex,
+            isXDRUpscaled: upscaled,
+            xdrUpscaleTargetNits: targetNits,
+            isHDRModeCapable: display.isHDRModeCapable,
+            isHDRModeEnabled: display.isHDRModeEnabled
+        )
+    }
 }
 
 @MainActor
@@ -79,11 +102,25 @@ private final class FakeOverlay: OverlayControlling {
     /// Whether the surface claims a dim set here would outlive the call. The app's overlay does;
     /// a one-shot CLI's does not, which is the case worth testing.
     var softwareDimPersists = true
+    /// The displays with a live session — the overlay's own answer to "is a
+    /// boost on screen right now?".
+    var activeSessions: [CGDirectDisplayID] = []
+    /// Called when a session ends.
+    var onSessionEnded: ((CGDirectDisplayID) -> Void)?
 
     @discardableResult
     func setSoftwareBoost(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         boostCalls.append((factor, displayID))
-        return accepts
+        guard accepts else { return false }
+        if factor > 1 {
+            if !activeSessions.contains(displayID) { activeSessions.append(displayID) }
+        } else if let index = activeSessions.firstIndex(of: displayID) {
+            // Releasing the boost ends the session: the overlay says so, so
+            // the claim that mirrored it can go with it.
+            activeSessions.remove(at: index)
+            onSessionEnded?(displayID)
+        }
+        return true
     }
 
     @discardableResult
@@ -97,6 +134,8 @@ private final class FakeOverlay: OverlayControlling {
         blendCalls.append((factor, displayID))
         return accepts
     }
+
+    func activeBoostDisplayIDs() -> [CGDirectDisplayID] { activeSessions }
 }
 
 // MARK: - Fixture
@@ -846,5 +885,114 @@ final class CombinedBrightnessTests: XCTestCase {
         display.updateBrightness(0.5)
         XCTAssertEqual(display.brightness ?? -1, 0.5, accuracy: 1e-9,
                        "and the model follows the hardware again")
+    }
+
+    // MARK: - The upscale claim (the live session decides)
+
+    /// A live boost session claims the upscale — that is what puts the
+    /// brightness on screen.
+    func testALiveBoostSessionClaimsTheUpscale() {
+        Settings.combinedBrightnessEnabled = false
+        xdr.available = false
+
+        XCTAssertTrue(module.setTarget(800, on: display))
+
+        XCTAssertTrue(display.isXDRUpscaled, "a live session claims the upscale")
+        XCTAssertEqual(display.xdrUpscaleTargetNits, 800)
+        XCTAssertTrue(display.isSoftwareUpscaled, "and the claim says which mechanism made it")
+    }
+
+    /// The claim has to go with its session. The session is what puts the
+    /// brightness on screen, and it dies with the process that owned it (a
+    /// one-shot CLI run) or when the capture fails — a claim that outlives
+    /// it claims an upscale that is not on screen.
+    func testTheClaimGoesWhenTheBoostSessionEnds() {
+        Settings.combinedBrightnessEnabled = false
+        xdr.available = false
+
+        XCTAssertTrue(module.setTarget(800, on: display))
+        XCTAssertTrue(display.isXDRUpscaled)
+
+        // The session ends.
+        overlay.activeSessions = []
+        overlay.onSessionEnded?(display.id)
+
+        XCTAssertFalse(display.isXDRUpscaled, "a claim without a session is a claim about nothing")
+        XCTAssertNil(display.xdrUpscaleTargetNits)
+        XCTAssertFalse(display.isSoftwareUpscaled)
+    }
+
+    /// The read-back has to follow the live state, not the stale flag: a
+    /// claim that outlived its session would report a brightness the screen
+    /// is not showing.
+    func testTheReadBackFollowsTheLiveStateNotTheStaleFlag() {
+        Settings.combinedBrightnessEnabled = true
+        xdr.available = false
+        apple.read = 0.4
+
+        XCTAssertTrue(module.setTarget(800, on: display))
+        // The session is live: the read-back is the upscale target.
+        XCTAssertEqual(module.get(for: display) ?? -1, 800.0 / 1600.0, accuracy: 1e-9)
+
+        // The session is gone but the claim is still there (no refresh has
+        // run yet): the read-back must be the hardware brightness.
+        overlay.activeSessions = []
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.4, accuracy: 1e-9,
+                       "a stale claim must not decide the read-back")
+    }
+
+    /// A live session is never cleared: the claim stays as long as the
+    /// boost is on screen.
+    func testALiveSessionIsNeverCleared() {
+        Settings.combinedBrightnessEnabled = false
+        xdr.available = false
+
+        XCTAssertTrue(module.setTarget(800, on: display))
+        XCTAssertTrue(display.isXDRUpscaled)
+
+        // Something else ends (a filter being stopped, for instance) — the
+        // session is still live, so the claim stands.
+        overlay.onSessionEnded?(display.id)
+
+        XCTAssertTrue(display.isXDRUpscaled, "the claim follows the live session")
+    }
+
+    /// The native controller re-asserts the upscale state on every refresh,
+    /// so it has to ask the overlay — not the model's own flag, which is
+    /// what the boost wrote and can therefore never clear itself.
+    func testTheNativeControllerIsWiredToTheLiveSessions() {
+        overlay.activeSessions = [display.id]
+
+        XCTAssertEqual(xdr.softwareBoostProvider(), [display.id],
+                       "the native controller asks the overlay, not the model")
+    }
+
+    /// Releasing the boost ends the session — and the claim has to go with
+    /// it.
+    func testReleasingTheBoostClearsTheClaim() {
+        Settings.combinedBrightnessEnabled = false
+        xdr.available = false
+
+        XCTAssertTrue(module.setTarget(800, on: display))
+        XCTAssertTrue(display.isXDRUpscaled)
+
+        // The boost is released — the route moved back to the hardware.
+        overlay.setSoftwareBoost(1, displayID: display.id)
+
+        XCTAssertFalse(display.isXDRUpscaled, "the claim follows its session")
+    }
+
+    /// The native preset path owns its own claim: a software session ending
+    /// must not clear it — the preset is on screen as long as it is active.
+    func testTheNativeClaimSurvivesASessionEnd() {
+        Settings.combinedBrightnessEnabled = true
+        xdr.available = true
+
+        XCTAssertTrue(module.set(0.5, on: display))
+        XCTAssertTrue(display.isXDRUpscaled, "the native preset claims the upscale")
+
+        overlay.onSessionEnded?(display.id)
+
+        XCTAssertTrue(display.isXDRUpscaled, "the preset is still on screen")
     }
 }

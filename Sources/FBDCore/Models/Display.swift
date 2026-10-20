@@ -101,7 +101,19 @@ public final class Display: ObservableObject, Identifiable {
     public func updateSoftwareBoost(_ active: Bool, targetNits: Int?) {
         isXDRUpscaled = active
         xdrUpscaleTargetNits = active ? targetNits : nil
+        isSoftwareUpscaled = active
     }
+
+    /// Whether the upscale this display claims comes from the software
+    /// overlay rather than from an FBD preset.
+    ///
+    /// The two are different things: an FBD preset stays on screen as long
+    /// as it is active, while the software boost is only on screen while
+    /// its overlay session lives — and that session lives in the process
+    /// that created it, so a one-shot CLI run leaves the claim behind when
+    /// it exits. A claim therefore has to be checked against the live
+    /// session, never against a flag the boost itself wrote.
+    public private(set) var isSoftwareUpscaled: Bool = false
 
     /// The software dim in force, 1 = undimmed (0 = fully dimmed).
     ///
@@ -161,7 +173,8 @@ public final class Display: ObservableObject, Identifiable {
         isXDRUpscaled: Bool,
         xdrUpscaleTargetNits: Int?,
         isHDRModeCapable: Bool,
-        isHDRModeEnabled: Bool
+        isHDRModeEnabled: Bool,
+        softwareUpscaled: Bool = false
     ) {
         self.presets = presets
         self.isXDRCapable = isXDRCapable
@@ -170,6 +183,9 @@ public final class Display: ObservableObject, Identifiable {
         self.xdrUpscaleTargetNits = xdrUpscaleTargetNits
         self.isHDRModeCapable = isHDRModeCapable
         self.isHDRModeEnabled = isHDRModeEnabled
+        // Which mechanism the claim comes from — the native preset path
+        // owns the claim, the software path only mirrors it.
+        self.isSoftwareUpscaled = softwareUpscaled
     }
 
     public func updateAppleBrightnessStatus(available: Bool) {

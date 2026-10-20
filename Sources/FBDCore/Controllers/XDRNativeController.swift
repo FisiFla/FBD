@@ -32,6 +32,15 @@ public final class XDRNativeController {
     /// is unavailable there, so `isAvailable` says so and callers use the software boost.
     private var writeRejected: Set<String> = []
 
+    /// Where the live software-boost sessions come from.
+    ///
+    /// The overlay owns the session, so it is the only honest answer to
+    /// "is a software boost active?": the display model's own flag is what
+    /// the boost wrote, so a flag that is true can never clear itself — it
+    /// would latch forever, and the model would claim an upscale that is not
+    /// on screen.
+    private var softwareBoostProvider: () -> [CGDirectDisplayID] = { [] }
+
     private struct SlotState {
         let index: Int
         /// The slot's dict before FBD overwrote it (blank for factory slots).
@@ -43,6 +52,15 @@ public final class XDRNativeController {
     public init() {}
 
     // MARK: - Public API
+
+    /// Where the live software-boost sessions come from.
+    ///
+    /// The overlay owns the session: it knows when the boost is gone (the
+    /// process that owned it exited, the capture failed). The model's own
+    /// flag cannot say — it is what the boost wrote.
+    public func setSoftwareBoostProvider(_ provider: @escaping () -> [CGDirectDisplayID]) {
+        softwareBoostProvider = provider
+    }
 
     /// Populate XDR state on `display` and re-apply a persisted upscale target
     /// after an app restart. Does not post `.fbdDisplayUpdated` (the mutation
@@ -58,10 +76,13 @@ public final class XDRNativeController {
         let presetUpscaled = activePreset.map { Self.isFBDSlotName($0.name) } ?? false
         // A software boost leaves the active preset factory-named, so the name alone would
         // clobber its state on every reconfiguration while the overlay is still running.
+        // Whether it is running at all is the overlay's answer, not the model's: the flag
+        // the boost wrote is what this question used to ask, and a flag that is true can
+        // never clear itself.
         let softwareBoostActive = Self.isSoftwareBoostActive(
             presetUpscaled: presetUpscaled,
             trackedNativeSlot: slotStates[display.identityKey] != nil,
-            displayUpscaled: display.isXDRUpscaled
+            softwareBoostLive: isSoftwareBoostLive(for: display)
         )
         let isUpscaled = presetUpscaled || softwareBoostActive
         var targetNits = activePreset.flatMap { Self.upscaleNits(fromPresetName: $0.name) }
@@ -93,7 +114,8 @@ public final class XDRNativeController {
             isXDRUpscaled: isUpscaled,
             xdrUpscaleTargetNits: targetNits,
             isHDRModeCapable: SkyLightAPI.supportsHDRMode(display.id),
-            isHDRModeEnabled: SkyLightAPI.isHDRModeEnabled(display.id)
+            isHDRModeEnabled: SkyLightAPI.isHDRModeEnabled(display.id),
+            softwareUpscaled: softwareBoostActive
         )
     }
 
@@ -259,7 +281,8 @@ public final class XDRNativeController {
             isXDRUpscaled: display.isXDRUpscaled,
             xdrUpscaleTargetNits: display.xdrUpscaleTargetNits,
             isHDRModeCapable: true,
-            isHDRModeEnabled: enabled
+            isHDRModeEnabled: enabled,
+            softwareUpscaled: display.isSoftwareUpscaled
         )
         NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": display.id])
         return true
@@ -273,9 +296,26 @@ public final class XDRNativeController {
     // MARK: - Pure helpers (unit-tested, no SkyLight)
 
     /// Whether a software boost (not a preset) is what upscales the display: the preset isn't
-    /// FBD-named, no native slot is tracked, yet the display is flagged upscaled.
-    static func isSoftwareBoostActive(presetUpscaled: Bool, trackedNativeSlot: Bool, displayUpscaled: Bool) -> Bool {
-        !presetUpscaled && !trackedNativeSlot && displayUpscaled
+    /// FBD-named, no native slot is tracked, and a boost session is live.
+    ///
+    /// The live session is the only honest third answer. Asking the display model instead
+    /// meant asking the state the boost itself wrote — so once the flag was true every
+    /// refresh concluded that a boost was active, and the claim could never be cleared.
+    static func isSoftwareBoostActive(
+        presetUpscaled: Bool,
+        trackedNativeSlot: Bool,
+        softwareBoostLive: Bool
+    ) -> Bool {
+        !presetUpscaled && !trackedNativeSlot && softwareBoostLive
+    }
+
+    /// Whether a software boost session is live for the display.
+    ///
+    /// The overlay owns the session: it dies with the process that created it
+    /// (a one-shot CLI run) or when the capture fails, and in both cases
+    /// nothing is boosted on screen any more.
+    func isSoftwareBoostLive(for display: Display) -> Bool {
+        softwareBoostProvider().contains(display.id)
     }
 
     /// Clamp an upscale target to the preset's slider range.

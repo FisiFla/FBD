@@ -10,6 +10,7 @@ import XCTest
 /// decisions that decide what the user sees: which windows the capture
 /// excludes, the level the overlay windows sit at, and the rule that keeps
 /// the window invisible until there is a real frame to show.
+@MainActor
 final class OverlayCaptureFilterTests: XCTestCase {
     // MARK: - The exclusion
 
@@ -225,6 +226,26 @@ final class OverlayCaptureFilterTests: XCTestCase {
         }
 
         XCTAssertNil(CapturedFrame.averageColor(of: buffer))
+    }
+
+    // MARK: - The session's end
+
+    /// A display id that has no bounds — the capture pipeline stays out of
+    /// the way, so the test never touches the screen.
+    private static let fakeDisplayID: CGDirectDisplayID = 99
+
+    /// The session is what puts the brightness on screen: when it ends — torn
+    /// down, or the capture failed — the owner has to be told, so the claim
+    /// that mirrored it can be cleared with it.
+    func testTheOverlayReportsWhenASessionEnds() {
+        let overlay = OverlayController()
+        var ended: [CGDirectDisplayID] = []
+        overlay.onSessionEnded = { ended.append($0) }
+
+        overlay.stopScreenFilter(displayID: Self.fakeDisplayID)
+
+        XCTAssertEqual(ended, [Self.fakeDisplayID],
+                       "the owner has to learn that the session is gone")
     }
 
     // MARK: - Helpers

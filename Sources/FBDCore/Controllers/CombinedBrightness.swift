@@ -26,6 +26,15 @@ public protocol XDRUpscaling: AnyObject {
     @discardableResult func setUpscaleTarget(_ nits: Int, for display: Display) -> Bool
     @discardableResult func disableUpscaling(for display: Display) -> Bool
     func upscaleTarget(for display: Display) -> Int?
+
+    /// Where the live software-boost sessions come from.
+    ///
+    /// The overlay owns the session, so it is the only honest answer to
+    /// "is a software boost active?": the display model's own flag is what
+    /// the boost wrote, so a flag that is true can never clear itself — it
+    /// would latch forever and the model would claim an upscale that is not
+    /// on screen.
+    func setSoftwareBoostProvider(_ provider: @escaping () -> [CGDirectDisplayID])
 }
 
 extension XDRNativeController: XDRUpscaling {}
@@ -48,6 +57,22 @@ public protocol OverlayControlling: AnyObject {
     /// leave the hardware pinned at the panel's floor, which is the exact failure the
     /// blend exists to avoid.
     @discardableResult func setBrightnessBlendFactor(_ factor: Double, displayID: CGDirectDisplayID) -> Bool
+
+    /// The displays with a live boost session.
+    ///
+    /// The overlay owns the session, so it is the only one that knows whether
+    /// the boost is still on screen: the session dies with the process that
+    /// created it, and a display boosted by a one-shot CLI run is not boosted
+    /// any more once that run ends.
+    func activeBoostDisplayIDs() -> [CGDirectDisplayID]
+
+    /// Called when the session for a display ends — torn down, or the capture
+    /// failed.
+    ///
+    /// The session is what puts the brightness on screen; when it is gone the
+    /// display is not boosted any more, and whatever claimed otherwise has to
+    /// let go.
+    var onSessionEnded: ((CGDirectDisplayID) -> Void)? { get set }
 
     /// Whether a dim set through this surface is still in force afterwards.
     ///
@@ -89,6 +114,12 @@ public final class CombinedBrightness {
     /// Optional injected brightness-model profile. `nil` (the default) means
     /// "use the stored global preferences" — see `effectivePreferences`.
     private let injectedPreferences: BrightnessPreferences?
+    /// The displays this module has boosted.
+    ///
+    /// Weak: the display list belongs to `DisplayController`. It is what
+    /// lets a session that ends — the process that owned it exited, the
+    /// capture failed — clear the claim it made.
+    private var boostedDisplays: [CGDirectDisplayID: () -> Display?] = [:]
     private let log = Logger(subsystem: "dev.fisifla.fbd", category: "CombinedBrightness")
 
     /// The brightness-model profile the route decision runs under: the
@@ -111,6 +142,20 @@ public final class CombinedBrightness {
         self.xdr = xdr
         self.overlay = overlay
         self.injectedPreferences = preferences
+        // The native controller re-asserts the upscale state on every
+        // refresh, and for the software boost the only honest answer is the
+        // live overlay session: the model's own flag is what the boost
+        // wrote, so it can never clear itself.
+        xdr.setSoftwareBoostProvider { [weak self] in
+            self?.liveBoostDisplayIDs() ?? []
+        }
+        // A session that ends leaves nothing on screen: whatever claimed an
+        // upscale has to let go.
+        withOverlay { overlay in
+            overlay.onSessionEnded = { [weak self] displayID in
+                self?.clearBoostClaim(for: displayID)
+            }
+        }
     }
 
     // MARK: - Interface
@@ -127,7 +172,7 @@ public final class CombinedBrightness {
     /// Nil still means "no control path", exactly as before.
     public func get(for display: Display) -> Double? {
         let dim = min(max(display.softwareDim, 0), 1)
-        if isCombinedCapable(for: display), display.isXDRUpscaled,
+        if isCombinedCapable(for: display), isUpscaledOnScreen(for: display),
            let target = display.xdrUpscaleTargetNits ?? xdr.upscaleTarget(for: display) {
             let top = maxNits(for: display)
             guard top > 0 else { return nil }
@@ -229,22 +274,14 @@ public final class CombinedBrightness {
             }
             log.warning("set: native XDR write failed for \(display.id); using software boost")
             let factor = boostFactor(from: Double(target) / Double(hardwareMax), value: clamped, ceiling: Double(hardwareMax))
-            let ok = withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
-            if ok {
-                display.updateSoftwareBoost(true, targetNits: target)
-            }
-            return ok
+            return applySoftwareBoost(factor, targetNits: target, on: display)
         case .softwareBoost(let factor):
             log.warning("set: native XDR upscaling unavailable for \(display.id); using software boost")
             // A boost brightens and a dim darkens: they would fight, so the dim goes.
             applySoftwareDim(1, on: display)
             releaseFloorBlend(on: display)
             let boost = boostFactor(from: factor, value: clamped, ceiling: Double(hardwareMax))
-            let ok = withOverlay { $0.setSoftwareBoost(boost, displayID: display.id) }
-            if ok {
-                display.updateSoftwareBoost(true, targetNits: Int((Double(top) * clamped).rounded()))
-            }
-            return ok
+            return applySoftwareBoost(boost, targetNits: Int((Double(top) * clamped).rounded()), on: display)
         case .fail:
             return false
         }
@@ -287,16 +324,13 @@ public final class CombinedBrightness {
             let ok = withOverlay { $0.setSoftwareBoost(Double(target) / Double(hardwareMax), displayID: display.id) }
             if ok {
                 display.updateSoftwareBoost(true, targetNits: target)
+                rememberBoosted(display)
             }
             return ok
         case .softwareBoost(let factor):
             // Requires Screen Recording permission (logged by the overlay).
             releaseFloorBlend(on: display)
-            let ok = withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
-            if ok {
-                display.updateSoftwareBoost(true, targetNits: nits)
-            }
-            return ok
+            return applySoftwareBoost(factor, targetNits: nits, on: display)
         case .hardware, .fail:
             return false
         }
@@ -337,6 +371,68 @@ public final class CombinedBrightness {
     }
 
     // MARK: - Private helpers
+
+    /// Apply a software boost through the overlay and record what it claims.
+    ///
+    /// The claim is the model's mirror of the session: the session is what
+    /// puts the brightness on screen, so when it ends the overlay says so and
+    /// the claim goes with it. A claim that outlives its session is a claim
+    /// about nothing — and it makes the brightness read-back report a
+    /// brightness the screen is not showing.
+    @discardableResult
+    private func applySoftwareBoost(_ factor: Double, targetNits: Int?, on display: Display) -> Bool {
+        let ok = withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
+        guard ok else {
+            // The overlay refused the boost, so nothing is on screen: the
+            // factor must not stay behind, or a later composition would
+            // brighten the display nobody asked for.
+            _ = withOverlay { $0.setSoftwareBoost(1, displayID: display.id) }
+            return false
+        }
+        display.updateSoftwareBoost(true, targetNits: targetNits)
+        rememberBoosted(display)
+        return true
+    }
+
+    /// Remember a display this module boosted, so a session that ends can
+    /// clear the claim it made.
+    private func rememberBoosted(_ display: Display) {
+        boostedDisplays[display.id] = { [weak display] in display }
+    }
+
+    /// Whether the display is really upscaled on screen.
+    ///
+    /// The model's claim is what the boost wrote, so it cannot answer this
+    /// on its own: a software boost is on screen only while its overlay
+    /// session lives, and that session dies with the process that owned it
+    /// (a one-shot `fbdcli xdr` run, for instance). The overlay knows — it
+    /// owns the session.
+    private func isUpscaledOnScreen(for display: Display) -> Bool {
+        guard display.isXDRUpscaled else { return false }
+        // The native path: the FBD preset is active on the display, so the
+        // upscale is on screen as long as the preset is.
+        guard display.isSoftwareUpscaled else { return true }
+        return liveBoostDisplayIDs().contains(display.id)
+    }
+
+    /// The displays with a live boost session.
+    private func liveBoostDisplayIDs() -> [CGDirectDisplayID] {
+        withOverlay { $0.activeBoostDisplayIDs() }
+    }
+
+    /// Clear the upscale claim of a display whose boost session ended.
+    ///
+    /// The session is what put the brightness on screen; when it is gone the
+    /// display is not boosted any more, and the model must not claim it is.
+    private func clearBoostClaim(for displayID: CGDirectDisplayID) {
+        // Never clear a claim while a session is live: the boost is on
+        // screen, so the claim is true.
+        guard !liveBoostDisplayIDs().contains(displayID) else { return }
+        guard let display = boostedDisplays[displayID]?() else { return }
+        // Only the software claim: the native preset path owns its own.
+        guard display.isSoftwareUpscaled else { return }
+        display.updateSoftwareBoost(false, targetNits: nil)
+    }
 
     /// Combined mode requires the setting plus an XDR-capable display.
     private func isCombinedCapable(for display: Display) -> Bool {
