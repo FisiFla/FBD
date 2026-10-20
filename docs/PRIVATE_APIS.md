@@ -161,6 +161,62 @@ the same `IOService` the DDC path already finds. **Nothing has been called.** Th
 removes the "signatures unknown" blocker; it does not remove the caution around a write
 to the only attached display.
 
+## The DisplayPort link-data path — located, and deliberately not called (issue #19)
+
+BetterDisplay 5 reads the DisplayPort link data (DPCD / DSC / link bandwidth / tiling)
+through a pair of IOKit entry points that BetterDisplay 4.3.5 did not use. Both are
+exported by the **public** `IOKit.framework`, so they are reached the same way as the
+`IOAVService*` set above — the same `dlopen`/`dlsym` pattern, no ObjC runtime.
+
+| Symbol | Measured on macOS 27.0.1 | What it is |
+|---|---|---|
+| `IOAVVideoInterfaceCreateWithService` | resolves (`dlsym`) | the video-interface wrapper for a display's service |
+| `IOAVVideoInterfaceGetLinkData` | resolves (`dlsym`) | the link-data read — **structure not publicly described** |
+| `IOAVVideoInterfaceGetLinkDataWithSource` | resolves (`dlsym`) | the same, with the source |
+| `IOAVServiceGetLinkData` / `WithSource` | resolve (`dlsym`) | the service-level equivalent |
+| `IOAVVideoInterfaceCopyProperties` / `CopyDisplayAttributes` | resolve (`dlsym`) | the video-interface property dictionaries |
+| `IOAVServiceCopyProperties` / `CopyProperty` | resolve (`dlsym`) | the service property dictionaries |
+
+**Resolved is not called.** Three things stopped the call, and all three are measured:
+
+1. **The return structure of `IOAVVideoInterfaceGetLinkData` is not statically visible.**
+   No public header describes it, and the framework lives in the dyld shared cache, so a
+   field could only be guessed at. A guessed bandwidth or DSC flag in a bug report is
+   worse than no number at all, so FBD reports those fields as unavailable.
+2. **`IOAVVideoInterfaceCreateWithService` raised a kernel trap (SIGTRAP)** when handed
+   this repository's machine's only display node (`AppleCLCD2` / `DCPAVServiceProxy`).
+   `IOAVServiceCreateWithService` traps on the same nodes. Creating an interface is
+   therefore not free, and the machine has no external display attached to try it on.
+3. **The supporting keys are not in the CoreDisplay info dictionary.** Measured on the
+   built-in panel: `CoreDisplay_DisplayCreateInfoDictionary` returns 40+ keys, and none
+   of `_connectionMode`, `_connectionTypeDescription`, `_connectionStatusActiveProbe`,
+   `_tunnelControlDescription`, `_lastCECReport`, `_hdmiInputCount` or `_macInputNumber`
+   is among them. They belong to the AV video-interface / service property dictionary,
+   which is exactly the dictionary the unreachable entry point would produce.
+
+So FBD declares a **probe only** — `FBDVideoLinkDataAvailable()` in
+`Sources/CPrivateAPI/fbd_linkdata.c`, wrapped by `VideoLinkDataAPI` in
+`Sources/FBDCore/PrivateAPI/`. It answers one question safely: *is the entry point present
+on this macOS at all?* A report can then say "present here, but its result cannot be
+read", which is a very different statement from "this feature does not exist".
+
+| API | How verified | macOS versions |
+|---|---|---|
+| `IOAVVideoInterfaceCreateWithService` / `IOAVVideoInterfaceGetLinkData` | `dlsym` against a live `dlopen` of `IOKit.framework` — **resolution only, never called** | 27.0.1 |
+
+The link facts therefore appear in every report as **unavailable, with the reason**:
+"IOAVVideoInterfaceGetLinkData resolves here but returns a structure that no public
+header describes, so its fields cannot be read safely". The connection facts
+(`_connectionMode` and friends) appear as unavailable for the related reason that the
+dictionary holding them is never read.
+
+What the report *does* carry is what can be measured: the DPCD capability block read
+over AUX through `IODPDeviceReadDPCD` (already declared above, and already the subject of
+`fbdcli dpcd`), the DSC block inside it, the lane-status registers, and the
+**capability bandwidth** computed from the sink's maximum link rate and lane count. Tiling
+has no symbol at all and FBD does not decode the DPCD tiling registers, so tiling is
+reported as unavailable too.
+
 ## Mode creation does not exist (rows #22, #27)
 
 Those rows were carried as "symbol unsettled". Settled: **absent**. `SLSAddDisplayMode`,

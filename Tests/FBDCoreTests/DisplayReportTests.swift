@@ -61,7 +61,7 @@ final class DisplayReportTests: XCTestCase {
         )
         XCTAssertEqual(DisplayReport.render(snapshot), """
         Display 1: Built-in Retina Display
-          identity    1552-41040-4251086178
+          identity    1552-41040-****
           kind        built-in, online, active, main
           geometry    0,0 · 1728 × 1117 pt
           mode        3456x2234@120.00 hidpi safe encoding=rgb

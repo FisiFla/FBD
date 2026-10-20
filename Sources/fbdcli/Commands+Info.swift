@@ -161,24 +161,54 @@ func cmdReport(_ controller: DisplayController, args: [String]) -> Int32 {
     // the only way to exercise the decoders until the read path exists.
     if let exitCode = cmdReportDPCD(args) { return exitCode }
 
-    let snapshots = controller.displays.map { display in
-        DisplayReport.Snapshot(display: display, isMain: CGDisplayIsMain(display.id) != 0)
+    let wantsJSON = args.contains("--json")
+    let positional = args.filter { !$0.hasPrefix("-") }
+
+    // A positional argument that names a display is a display id; anything else is
+    // the file to write. `fbdcli report 1` is a report of display 1, `fbdcli report
+    // out.txt` is a file — and a number that does not name a display stays a file,
+    // so an existing `fbdcli report 1` writing a file called "1" only changes
+    // meaning when a display 1 actually exists. A second positional argument is
+    // always the file.
+    var target: Display?
+    var outputPath: String?
+    if let first = positional.first {
+        if let id = parseDisplayID(first), let display = controller.display(withID: id) {
+            target = display
+            outputPath = positional.dropFirst().first
+        } else {
+            outputPath = first
+        }
     }
+
+    // A report for one display asks for the whole story, including a live read of
+    // the sink's DPCD over AUX. The overview of every display stays free of bus
+    // traffic: an AUX transaction per display is not something to do behind the
+    // user's back when they asked for a summary.
+    let profileController = DisplayProfileController()
+    let displays = target.map { [$0] } ?? controller.displays
+    let snapshots = displays.map { display in
+        DisplayReport.Snapshot(
+            display: display,
+            isMain: CGDisplayIsMain(display.id) != 0,
+            profile: profileController.profile(for: display, readDPCD: target != nil)
+        )
+    }
+
     // This is the *app's* version when the CLI has a bundle and "unknown" when it
     // is a bare binary, which is honest rather than invented. The macOS line in
     // the header is the one that matters for diagnosing display behaviour.
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-    let text = DisplayReport.render(
-        snapshots,
-        version: version,
-        platform: ProcessInfo.processInfo.operatingSystemVersionString
-    )
+    let platform = ProcessInfo.processInfo.operatingSystemVersionString
+    let text = wantsJSON
+        ? DisplayReport.renderJSON(snapshots, version: version, platform: platform)
+        : DisplayReport.render(snapshots, version: version, platform: platform)
 
-    guard let path = args.first(where: { !$0.hasPrefix("-") }) else {
+    guard let outputPath else {
         print(text)
         return 0
     }
-    let expanded = (path as NSString).expandingTildeInPath
+    let expanded = (outputPath as NSString).expandingTildeInPath
     do {
         try text.write(toFile: expanded, atomically: true, encoding: .utf8)
     } catch {
@@ -194,10 +224,17 @@ func cmdReport(_ controller: DisplayController, args: [String]) -> Int32 {
 /// `fbdcli info <id>` — full detail for one display.
 @MainActor
 func cmdInfo(_ display: Display, args: [String]) -> Int32 {
+    // The hardware facts (EDID, panel, DPCD, link, connection) are collected the
+    // same way a report collects them, so `info` and `report` never disagree about
+    // what a display is. One display is the case where the DPCD read is worth its
+    // AUX transaction.
+    let profile = DisplayProfileController().profile(for: display, readDPCD: true)
+
     if args.contains("--json") {
         // Machine-readable output (same serializer as the app's HTTP API).
         var info = HTTPJSON.display(display)
         info["modes"] = display.modes.map { HTTPJSON.mode($0) }
+        info["profile"] = DisplayReport.profileJSON(profile)
         print(HTTPJSON.encode(info))
         return 0
     }
@@ -239,7 +276,7 @@ func cmdInfo(_ display: Display, args: [String]) -> Int32 {
     print("  virtual: \(yesno(display.isVirtual))")
     print(String(format: "  vendor: 0x%04X (%d)", display.vendorNumber, display.vendorNumber))
     print(String(format: "  model: 0x%04X (%d)", display.modelNumber, display.modelNumber))
-    print("  serial: \(display.serialNumber)")
+    print("  serial: \(ReportRedaction.serial(display.serialNumber))")
     print("  bounds: \(Int(bounds.origin.x)),\(Int(bounds.origin.y)) \(Int(bounds.width))x\(Int(bounds.height))")
     print("  online: \(yesno(display.isOnline))")
     print("  active: \(yesno(display.isActive))")
@@ -249,5 +286,11 @@ func cmdInfo(_ display: Display, args: [String]) -> Int32 {
     print("  appleBrightnessAvailable: \(yesno(display.appleBrightnessAvailable))")
     print("  capabilities: \(capabilities)")
     print("  refresh: \(refreshLabel)")
+    // The hardware facts, one line per group. A group that could not be read says
+    // so and why — the report is the point of this command, so it does not stop at
+    // the window server's view of the display.
+    for entry in DisplayReport.profileSummary(profile) {
+        print("  \(entry.label): \(entry.value)")
+    }
     return 0
 }

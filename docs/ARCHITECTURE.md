@@ -196,6 +196,23 @@ Accessibility grant, so neither runs in CI.
   evidence block to `docs/PRIVATE_APIS.md`. With no DDC-capable display attached, every check
   is skipped and the script exits 0.
 
+## The display report
+
+`fbdcli report [<id>][file] [--json]` is the paste-ready report for a bug report. Its
+shape is deliberate and worth keeping:
+
+- **The facts come from three layers, gathered by one controller.** `DisplayProfileController`
+  reads the CoreDisplay info dictionary (`CoreDisplayInfoAPI`), the panel's EDID
+  (`EDIDController`) and — for a single-display report — the sink's DPCD over AUX
+  (`IODPAPI`). The report code itself only consumes values, so it stays pure and
+  testable.
+- **A fact is either a value or it is absent with a reason.** `DiagnosticField` cannot hold
+  both, so a field can never claim a measurement and an excuse at once. The link and
+  connection facets are reported as unavailable on this macOS because the structure behind
+  them is not publicly described (see `docs/PRIVATE_APIS.md`) — not because they are zero.
+- **A report is public.** `ReportRedaction` masks serials and shortens home-directory
+  paths, on the same precedent as the masked settings dump.
+
 ## Provenance
 
 Some of FBD's behaviour was designed against a reference implementation rather than
