@@ -467,3 +467,13 @@
 "Reconnect All" = "全部重新连接";
 "Target Nits" = "目标尼特";
 "Group" = "显示器组";
+
+/* Remembered disconnects, docked built-in, ambient sync (#30) */
+"Could not disconnect this display." = "无法断开此显示器。";
+"Disconnects the display now, and again every time it comes back — after a reboot or a replug. Re-enabling it forgets this." = "立即断开此显示器，并在它每次回来时再次断开——重启或重新插拔后也是如此。重新启用它会清除此设置。";
+"Display behaviour" = "显示器行为";
+"Follow the built-in display's auto-brightness" = "跟随内建显示器的自动亮度";
+"Keep this display disconnected" = "保持此显示器断开连接";
+"Keeps this display's brightness in step with the built-in display's ambient sensor." = "让此显示器的亮度与内建显示器的环境光传感器保持一致。";
+"Turn off the built-in display while an external display is attached" = "连接外部显示器时关闭内建显示器";
+"Turns the built-in display off while an external display is attached, so you work on the external screen. Refused on Macs where the built-in display may not come back without a reboot." = "连接外部显示器时关闭内建显示器，让你在外接屏幕上工作。在内建显示器可能无法在重启前恢复的 Mac 上会被拒绝。";

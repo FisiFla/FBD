@@ -472,3 +472,13 @@
 "Reconnect All" = "Reconnect All";
 "Target Nits" = "Target Nits";
 "Group" = "Group";
+
+/* Remembered disconnects, docked built-in, ambient sync (#30) */
+"Could not disconnect this display." = "Could not disconnect this display.";
+"Disconnects the display now, and again every time it comes back — after a reboot or a replug. Re-enabling it forgets this." = "Disconnects the display now, and again every time it comes back — after a reboot or a replug. Re-enabling it forgets this.";
+"Display behaviour" = "Display behaviour";
+"Follow the built-in display's auto-brightness" = "Follow the built-in display's auto-brightness";
+"Keep this display disconnected" = "Keep this display disconnected";
+"Keeps this display's brightness in step with the built-in display's ambient sensor." = "Keeps this display's brightness in step with the built-in display's ambient sensor.";
+"Turn off the built-in display while an external display is attached" = "Turn off the built-in display while an external display is attached";
+"Turns the built-in display off while an external display is attached, so you work on the external screen. Refused on Macs where the built-in display may not come back without a reboot." = "Turns the built-in display off while an external display is attached, so you work on the external screen. Refused on Macs where the built-in display may not come back without a reboot.";

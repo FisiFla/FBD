@@ -33,6 +33,9 @@ public enum Settings {
         add("disconnectVirtualScreensOnLock", disconnectVirtualScreensOnLock)
         add("autoDisconnectBuiltInOnExternal", autoDisconnectBuiltInOnExternal)
         add("allowBuiltInDisconnectOnAffectedMacs", allowBuiltInDisconnectOnAffectedMacs)
+        add("dockedBuiltInOffEnabled", dockedBuiltInOffEnabled)
+        add("ambientBrightnessSyncFollowers", ambientSyncFollowers().count)
+        add("rememberedDisconnects", UserDefaultsDisconnectMemoryStore(defaults: defaults).rememberedIdentities().count)
         add("layoutProtectionEnabled", layoutProtectionEnabled)
         add("edgeCrossingEnabled", edgeCrossingEnabled)
         add("showOfflineDisplays", showOfflineDisplays)
@@ -233,6 +236,82 @@ public enum Settings {
     /// `BuiltInDisconnectGuard`.
     @Storage(key: "allowBuiltInDisconnectOnAffectedMacs", defaultValue: false)
     public static var allowBuiltInDisconnectOnAffectedMacs: Bool
+
+    /// Turn the built-in display off while an external display is attached, so
+    /// the user works on the external screen.
+    ///
+    /// Off by default: switching a panel off without being asked is never
+    /// silent. The decision itself lives in `DockedBuiltInPolicy`, which
+    /// refuses on the Macs whose built-in panel may not come back without a
+    /// reboot (see `BuiltInDisconnectGuard`).
+    ///
+    /// This is a *different* setting from `autoDisconnectBuiltInOnExternal`:
+    /// that one keys on an external display becoming **active**, this one on
+    /// an external display being **attached**.
+    @Storage(key: "dockedBuiltInOffEnabled", defaultValue: false)
+    public static var dockedBuiltInOffEnabled: Bool
+
+    /// The displays whose brightness follows the built-in display's
+    /// auto-brightness (the ambient sensor), as identity keys.
+    ///
+    /// An external monitor has no ambient sensor, so the only way for it to
+    /// follow the room's light is to follow the built-in panel, which does.
+    /// The list is a setting rather than a per-display flag because the
+    /// *source* is the built-in display: what the user picks is the set of
+    /// displays that follow it.
+    ///
+    /// Stored as one JSON array under `ambientBrightnessSyncFollowers.v1`.
+    private static let ambientSyncFollowersKey = "ambientBrightnessSyncFollowers.v1"
+
+    /// The identity keys of the displays that follow the built-in display's
+    /// auto-brightness.
+    public static func ambientSyncFollowers(
+        in defaults: UserDefaults = Settings.defaults
+    ) -> [String] {
+        guard let data = defaults.data(forKey: ambientSyncFollowersKey),
+              let identities = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return identities
+    }
+
+    /// Replace the list of displays that follow the built-in display's
+    /// auto-brightness.
+    public static func setAmbientSyncFollowers(
+        _ identities: [String],
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        guard !identities.isEmpty else {
+            defaults.removeObject(forKey: ambientSyncFollowersKey)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(identities) else { return }
+        defaults.set(data, forKey: ambientSyncFollowersKey)
+    }
+
+    /// Whether this display follows the built-in display's auto-brightness.
+    public static func isAmbientSyncFollower(
+        _ identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) -> Bool {
+        ambientSyncFollowers(in: defaults).contains(identity)
+    }
+
+    /// Turn the "follows the built-in display's auto-brightness" behaviour on
+    /// or off for one display.
+    public static func setAmbientSyncFollower(
+        _ follows: Bool,
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        var identities = ambientSyncFollowers(in: defaults)
+        if follows {
+            if !identities.contains(identity) { identities.append(identity) }
+        } else {
+            identities.removeAll { $0 == identity }
+        }
+        setAmbientSyncFollowers(identities, in: defaults)
+    }
 
     /// Re-apply the saved display arrangement when the layout changes.
     @Storage(key: "layoutProtectionEnabled", defaultValue: false)

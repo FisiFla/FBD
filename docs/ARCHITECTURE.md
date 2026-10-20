@@ -62,6 +62,9 @@ off `AppCore`. Each owns its own state and its own timer and is started once fro
 - **Brightness layering**: the brightness of a display is carried by up to three layers — the hardware (Apple or DDC), the native XDR upscale, and the software overlay (a dim or a boost). `CombinedBrightness` picks the route through `XDRBoostPlanner` and keeps the layers from fighting each other: a boost and a dim cancel out, so a route that needs one releases the other.
 - **The below-floor blend** (`BrightnessFloorBlend`) is the one layer that deliberately splits a request in two. A monitor's brightness scale rarely reaches black, so below a threshold the hardware is pinned at the threshold and the software layer carries the rest as a multiplicative dim — the same effect Crisp gets from a transfer table, expressed through FBD's existing screen-filter path (`ScreenFilterParams.brightness`) rather than a new shader. The threshold is a fraction of the *hardware* scale, never below a measured floor. While the blend is in force the hardware read-back reports the floor, so `reconstructSlider` rebuilds the logical position from the software factor: the slider must report what the user asked for, not what the panel can do. In HDR the DDC scale says nothing about the panel's luminance, so the whole range goes to the software layer and the hardware is left alone. The blend is off by default and needs Screen Recording permission; without a surface that outlives the call (a one-shot `fbdcli` run) it does not engage at all, because a pinned hardware with nothing left to dim it would leave the screen brighter than the slider says.
 - **The HiDPI ladder** (`HiDPILadder`, `HiDPIOverrideCommand`, `HiDPIOverrideService`) is split the same way the DDC work is: the *command model* is pure and unit-tested (which ladder, which path, whether the file on disk already says that, the exact command), and the *executor* (`PrivilegedCommandExecuting`) is the only part that knows about privilege escalation. Today the executor is a one-shot `do shell script "…" with administrator privileges`; the privileged helper (ADR 0005) replaces just that one type when it can be signed. Only numbers and Base64 ever reach the shell — the vendor/product identifiers, the serial and the ladder — and the plist is staged next to its destination and moved into place, so a failed write never leaves a half-written override behind.
+- **A disconnect is a setting, not an event** (`DisconnectMemoryStore`). The identity keys of the displays the user asked to keep off are stored per display (`disconnectMemory.<identity>`, a JSON value, the same shape as the other per-display settings), and `DisconnectController` disconnects them again every time they come back online — after a replug, after a reboot. Re-enabling a display forgets the request, which is how the user says "not this time". The store, the topology (`DisplayTopology`: what is online, what is active, which panel is the built-in one, and each display's identity key) and the enable/disable action (`DisplayEnabling`) are all injected, so the whole behaviour is provable without a display attached.
+- **The docked built-in** (`DockedBuiltInPolicy`). With an external display attached, the built-in panel is turned off so the user works on the external screen. It is off by default — switching a panel off without being asked is never silent — and it is a *separate* setting from `autoDisconnectBuiltInOnExternal`: that one keys on an external display becoming **active**, this one on an external display being **attached**. The decision is a pure function of (the setting, an external attached, the panel on, the guard's answer), which is what lets the base-M3 refusal happen *before* any SkyLight/CGS call goes out: the answer decides whether a call is made at all, rather than a call being made and then refused. The two policies arbitrate through one question ("does anything want the built-in off?"), so neither can switch the panel back on behind the other's back. Both count an "external" as a display that is neither the built-in panel nor one of FBD's own virtual screens — a virtual screen is not something the user plugged in.
+- **The ambient sync** (`AmbientBrightnessSync`). An external display has no ambient sensor, so it follows the built-in display's auto-brightness. The mapping goes through **nits** — the source's fraction times its ceiling is the luminance being asked for, and dividing that by the target's ceiling re-expresses it as the target's own fraction — because a slider fraction means nothing across two panels with different ceilings. The ceilings are the ones `CombinedBrightness.hardwareCeilingNits(for:)` reports, the same pair the group sync uses; a DDC monitor does not report its luminance, so its ceiling is the model's fallback and the mapping is approximate for external displays. The write goes through `CombinedBrightness`, so it inherits the DDC write cooldown and the read quarantine, and it cannot race the slider path: that path drives the same route. Only the displays the user opted in are driven, and never the source itself.
 
 ## OS-version differences
 
@@ -106,7 +109,8 @@ main thread).
 1. `PrivateAPI/` wrappers only talk to C/ObjC; they throw `PrivateAPIError` or return nil.
 2. `Controllers/` consume `PrivateAPI/` + `Models/` + `Settings`. Most are AppKit-free; the ones
    that must touch it import it and are deliberately few — `DisplayController` (for `NSScreen`
-   names), `OverlayController`, `PipStreamController`, `HotkeyController`, `CustomOSD`,
+   names), `DisplayTopology` (for the same names, so the identity keys match on both paths),
+   `OverlayController`, `PipStreamController`, `HotkeyController`, `CustomOSD`,
    `OSDGlass`, `DisplayAutomationController`, `EDIDController`, `VirtualScreenController`,
    `EdgeCrossingController`. Anything that does not need a window or an event stays testable
    without a running app.
@@ -116,6 +120,19 @@ main thread).
 ## Settings
 
 `Settings` enum in FBDCore — UserDefaults-backed (`Storage` property wrapper), domain `dev.fisifla.fbd`. Per-display state (DDC feature sets) keyed by `Display.identityKey` (`vendor-model-serial`).
+
+Two of the newer per-display settings do not follow the "one key per family" shape, and both say
+so here rather than leaving it to be discovered:
+
+- the **remembered disconnects** are one JSON value per display, under `disconnectMemory.<identity>`
+  (see `DisconnectMemoryStore`);
+- the **ambient-sync followers** are one shared JSON list of identity keys, under
+  `ambientBrightnessSyncFollowers.v1` — the source is the built-in display, so what the user picks
+  is the *set* of displays that follow it.
+
+Neither family is in `DisplaySettingsTransfer`'s key list, so changing the identity method
+(Settings → Displays) orphans them, like the other per-display settings that are not in that list
+(`storedBrightness`, `floorBlend`, `storedRotation`).
 
 ## HTTP API design decisions
 

@@ -10,6 +10,15 @@ public final class BrightnessChangeObserver {
     private let lock = NSLock()
     private var observed: [CGDirectDisplayID: Display] = [:]
 
+    /// Called when a display's hardware brightness changed, with the display
+    /// and its new value (0…1).
+    ///
+    /// This is the seam the ambient-light sync hangs on: the built-in
+    /// panel's ambient sensor drives its backlight, and this is where that
+    /// shows up. Called on the **main queue**, right after the display model
+    /// has been updated.
+    public var onChange: ((Display, Double) -> Void)?
+
     public init() {}
 
     /// Register for hardware brightness-change notifications on `display`.
@@ -68,6 +77,10 @@ public final class BrightnessChangeObserver {
         DispatchQueue.main.async {
             display.updateBrightness(clamped)
             NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": id])
+            // The ambient-light sync hangs on this: the built-in panel's
+            // ambient sensor drives its backlight, and this is where that
+            // change arrives.
+            self.onChange?(display, clamped)
         }
     }
 }

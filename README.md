@@ -37,6 +37,7 @@ light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/p
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
 | Below-floor brightness blend (DDC floor reached in software) | ⚠️ needs Screen Recording; not yet verified on hardware | ⚠️ same | ⚠️ same |
 | HiDPI smooth scaling (scaled-mode ladder) | ⚠️ implemented, not yet verified on hardware; asks for an administrator password | ⚠️ same | ⚠️ same |
+| Remembered disconnects · docked built-in display · ambient auto-brightness sync | ⚠️ implemented, not yet verified on hardware | ⚠️ same | ⚠️ same |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 
 Screen rotation on an external display is likewise implemented but unverified.
@@ -61,6 +62,24 @@ soft-disconnected built-in display may then not come back without a reboot. FBD
 refuses to disconnect the built-in display on those Macs unless you set the
 explicit override in Settings → Displays. BetterDisplay ships the same guard
 (waydabber/BetterDisplay#4723).
+
+**A disconnect can be remembered, and the built-in display can be parked.** Three
+new behaviours, each off by default or opt-in per display:
+
+- *Remembered disconnects* — a display you ask to keep off is disconnected again
+  every time it comes back, after a reboot or a replug. Re-enabling it forgets
+  the request.
+- *Turn off the built-in display while an external display is attached* — the
+  panel goes off so you work on the external screen. On a base-M3 MacBook this
+  is refused before any call to the display API is made at all, because the
+  panel may not come back without a reboot.
+- *Follow the built-in display's auto-brightness* — an external monitor has no
+  ambient sensor, so it can follow the built-in panel's, mapped through nits
+  rather than by raw slider position.
+
+None of the three has been exercised on real hardware yet: the machine this was
+built on has no external display attached, so only the decisions they make are
+tested — the hardware paths are not.
 
 ## Install
 

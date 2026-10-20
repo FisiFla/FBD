@@ -100,6 +100,10 @@ struct ApplicationSettingsPage: View {
                 Text("Apple Silicon; experimental — screen goes dark while the external is connected.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Toggle("Turn off the built-in display while an external display is attached", isOn: dockedBuiltInBinding)
+                Text("Turns the built-in display off while an external display is attached, so you work on the external screen. Refused on Macs where the built-in display may not come back without a reboot.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if BuiltInDisconnectGuard.isAffectedHardware {
                     Text("This Mac (base M3) may not reconnect its built-in display without a reboot.")
                         .font(.caption)
@@ -341,6 +345,25 @@ struct ApplicationSettingsPage: View {
         Binding(
             get: { trueTone.isEnabled() ?? false },
             set: { _ = trueTone.setEnabled($0) }
+        )
+    }
+
+    /// The docked built-in display.
+    ///
+    /// Its own binding, because turning it on can be refused: on a base-M3
+    /// MacBook the built-in panel may not come back without a reboot, and the
+    /// refusal is said out loud rather than leaving a switch that does
+    /// nothing.
+    private var dockedBuiltInBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.dockedBuiltInOffEnabled },
+            set: { on in
+                Settings.dockedBuiltInOffEnabled = on
+                guard on, !BuiltInDisconnectGuard.builtInDisconnectAllowed else { return }
+                FBDNotice.shared.report(
+                    String(localized: "This Mac (base M3) may not reconnect its built-in display without a reboot.")
+                )
+            }
         )
     }
 
