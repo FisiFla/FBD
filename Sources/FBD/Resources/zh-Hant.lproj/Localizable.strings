@@ -5,6 +5,10 @@
    例如「顯示器」「設定」「鏡像」「重新整理頻率」。 */
 
 /* 顯示器列表 */
+"Failed: %@" = "失敗：%@";
+"Install smooth scaling" = "安裝平滑縮放";
+"Installs %lld scaled modes between the native size and half of it." = "在原生尺寸到其一半之間安裝 %lld 個縮放模式。";
+"Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password." = "在原生尺寸到其一半之間安裝 %lld 個縮放模式。macOS 會要求輸入管理員密碼。";
 "No displays" = "沒有顯示器";
 
 /* 單一顯示器的選單 */
@@ -12,6 +16,7 @@
 "Display Mode" = "顯示模式";
 "Refresh Rate" = "重新整理頻率";
 "Color Mode" = "色彩模式";
+"Remove smooth scaling" = "移除平滑縮放";
 "Resolution Favourites" = "解析度收藏";
 "Display Presets" = "顯示器預設";
 "Screen Rotation" = "螢幕旋轉";
@@ -24,6 +29,11 @@
 
 /* 區段 */
 "Display Groups" = "顯示器群組";
+"Smooth scaling installed." = "已安裝平滑縮放。";
+"Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes." = "已安裝平滑縮放（%lld 個縮放模式）。移除後會還原顯示器自身的模式。";
+"Smooth scaling removed." = "已移除平滑縮放。";
+"The administrator password was not entered — nothing was changed." = "未輸入管理員密碼——沒有任何變更。";
+"This display cannot carry a smooth-scaling override." = "此顯示器不支援平滑縮放覆寫。";
 "Virtual Screens" = "虛擬螢幕";
 "Stream to" = "串流至";
 "Apple Display Preset" = "Apple 顯示器預設組";

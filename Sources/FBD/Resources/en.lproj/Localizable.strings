@@ -5,6 +5,10 @@
    will refuse them. */
 
 /* Display list */
+"Failed: %@" = "Failed: %@";
+"Install smooth scaling" = "Install smooth scaling";
+"Installs %lld scaled modes between the native size and half of it." = "Installs %lld scaled modes between the native size and half of it.";
+"Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password." = "Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password.";
 "No displays" = "No displays";
 
 /* Per-display menu */
@@ -12,6 +16,7 @@
 "Display Mode" = "Display Mode";
 "Refresh Rate" = "Refresh Rate";
 "Color Mode" = "Color Mode";
+"Remove smooth scaling" = "Remove smooth scaling";
 "Resolution Favourites" = "Resolution Favourites";
 "Display Presets" = "Display Presets";
 "Screen Rotation" = "Screen Rotation";
@@ -24,6 +29,11 @@
 
 /* Sections */
 "Display Groups" = "Display Groups";
+"Smooth scaling installed." = "Smooth scaling installed.";
+"Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes." = "Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes.";
+"Smooth scaling removed." = "Smooth scaling removed.";
+"The administrator password was not entered — nothing was changed." = "The administrator password was not entered — nothing was changed.";
+"This display cannot carry a smooth-scaling override." = "This display cannot carry a smooth-scaling override.";
 "Virtual Screens" = "Virtual Screens";
 "Stream to" = "Stream to";
 "Apple Display Preset" = "Apple Display Preset";

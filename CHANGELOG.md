@@ -14,6 +14,14 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   position that was asked for rather than the floor, and in HDR the whole range goes to the
   software layer — the DDC scale says nothing about the panel's luminance there. Off by
   default, per display, and it needs Screen Recording permission (issue #29).
+- A per-display **HiDPI smooth scaling** section: FBD generates a dense scaled-mode ladder
+  (the native size stepped down in 16-point increments, the aspect held, down to half the
+  native size) and installs it as a display override, so macOS offers scaled resolutions
+  between the panel's native size and half of it instead of a single HiDPI step. The ladder
+  is written to the display's own override folder and the display is re-enumerated
+  afterwards. The section is hidden on displays that cannot carry an override, and it says
+  plainly whether macOS will ask for an administrator password — it only says so when a
+  prompt is really coming (issue #27).
 - DDC/CI replies are validated before any of their numbers are used: a reply has to carry the
   DDC/CI signature, echo the VCP code that was asked for, report no error, and pass its
   checksum. A monitor that acknowledges an I2C read but answers with stale EDID bytes or a NULL
@@ -47,6 +55,10 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   (issue #25).
 
 ### Documentation
+- ADR 0005 records why the HiDPI override is a *command model* rather than a script: the
+  ladder, the path and the idempotency check are pure and unit-tested, and only the
+  executor knows about privilege escalation — so the privileged helper (issue #23) replaces
+  one type instead of the feature (issue #27).
 - `docs/ddc-equivalence.md` audits FBD's DDC/CI transport against didriksg/Crisp v1.7.1,
   component by component: the private symbol, the wire framing, the reply validation, the read
   cache, the read quarantine, the write cadence, the bus contention and the display↔channel

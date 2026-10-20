@@ -36,6 +36,7 @@ light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/p
 | XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
 | Below-floor brightness blend (DDC floor reached in software) | ⚠️ needs Screen Recording; not yet verified on hardware | ⚠️ same | ⚠️ same |
+| HiDPI smooth scaling (scaled-mode ladder) | ⚠️ implemented, not yet verified on hardware; asks for an administrator password | ⚠️ same | ⚠️ same |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 
 Screen rotation on an external display is likewise implemented but unverified.

@@ -5,6 +5,10 @@
    例如「显示器」「设置」「镜像」「刷新率」。 */
 
 /* 显示器列表 */
+"Failed: %@" = "失败：%@";
+"Install smooth scaling" = "安装平滑缩放";
+"Installs %lld scaled modes between the native size and half of it." = "在原生尺寸到其一半之间安装 %lld 个缩放模式。";
+"Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password." = "在原生尺寸到其一半之间安装 %lld 个缩放模式。macOS 会要求输入管理员密码。";
 "No displays" = "没有显示器";
 
 /* 单个显示器的菜单 */
@@ -12,6 +16,7 @@
 "Display Mode" = "显示模式";
 "Refresh Rate" = "刷新率";
 "Color Mode" = "色彩模式";
+"Remove smooth scaling" = "移除平滑缩放";
 "Resolution Favourites" = "分辨率收藏";
 "Display Presets" = "显示器预设";
 "Screen Rotation" = "屏幕旋转";
@@ -24,6 +29,11 @@
 
 /* 分区 */
 "Display Groups" = "显示器组";
+"Smooth scaling installed." = "已安装平滑缩放。";
+"Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes." = "已安装平滑缩放（%lld 个缩放模式）。移除后会恢复显示器自身的模式。";
+"Smooth scaling removed." = "已移除平滑缩放。";
+"The administrator password was not entered — nothing was changed." = "未输入管理员密码——没有任何改动。";
+"This display cannot carry a smooth-scaling override." = "此显示器不支持平滑缩放覆盖。";
 "Virtual Screens" = "虚拟屏幕";
 "Stream to" = "串流到";
 "Apple Display Preset" = "Apple 显示器预设";

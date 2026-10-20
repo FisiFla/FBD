@@ -182,6 +182,24 @@ The symbols it relies on are the ones already listed above — `IOAVServiceCreat
 `IOAVServiceReadI2C`, `IOAVServiceWriteI2C` — and no new private symbol was declared for the
 hardening work (issue #25).
 
+## HiDPI override — the re-enumeration needs no private symbol
+
+The HiDPI ladder feature (issue #27) writes a `scale-resolutions` override and then asks the
+window server to re-read the display. That last step needs `IOServiceRequestProbe`, which
+looked like a private symbol when the work was scoped. It is not: it is declared in the
+public SDK (`IOKit/IOKitLib.h`), next to `IODisplayCreateInfoDictionary`
+(`IOKit/graphics/IOGraphicsLib.h`) and `kIODisplayOnlyPreferredName`. FBD calls both
+directly from `Sources/FBDCore/PrivateAPI/IOServiceProbeAPI.swift` — the folder name is
+about the layer, not about the symbols.
+
+So the HiDPI ladder adds **no** entry to the table above. The privileged part of the feature
+(`do shell script "…" with administrator privileges`) is not a private API either: it is the
+documented, user-visible administrator prompt. ADR 0005 records why the command model is
+kept separate from that executor.
+
+The claim this feature supports is *implemented, not yet verified on hardware*: no display
+with a HiDPI ladder has been re-enumerated through this path in this repository.
+
 ## Notes
 
 - **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch

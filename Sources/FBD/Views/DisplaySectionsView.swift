@@ -54,6 +54,19 @@ struct DisplaySectionsView: View {
     @State private var colorProfiles: [ColorProfile] = []
     @State private var colorProfilesLoaded = false
 
+    // MARK: HiDPI smooth scaling
+
+    /// The HiDPI override service. Held in @State like the EDID controller so
+    /// the per-display state survives body evaluations.
+    @State private var hiDPIService = HiDPIOverrideService.shared
+    /// Whether a smooth-scaling override is installed for this display.
+    @State private var hiDPIInstalled = false
+    /// Last HiDPI action result for inline feedback.
+    @State private var hiDPIStatus: String?
+    @State private var hiDPIStatusIsError = false
+    /// The number of scaled modes the ladder carries, shown as the status.
+    @State private var hiDPIModeCount = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: FBDTheme.spacingL) {
             if showsResolutions && !display.modes.isEmpty {
@@ -66,10 +79,16 @@ struct DisplaySectionsView: View {
             if !display.isBuiltin {
                 TitledSection("EDID") { edidControls }
             }
+            // Hidden, not greyed: a display that cannot carry an override has
+            // nothing to offer here.
+            if hiDPIService.isSupported(for: display) {
+                TitledSection("HiDPI") { hiDPIControls }
+            }
         }
         .onAppear {
             syncUpscaleTarget()
             loadColorProfilesIfNeeded()
+            refreshHiDPIState()
         }
         .onChange(of: display.isXDRUpscaled) { upscaled in
             if upscaled { syncUpscaleTarget() }
@@ -200,6 +219,90 @@ struct DisplaySectionsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    // MARK: - HiDPI smooth scaling
+
+    private var hiDPIControls: some View {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            VStack(alignment: .leading, spacing: 0) {
+                FBDListRow(symbol: "arrow.up.left.and.arrow.down.right", title: "Install smooth scaling") {
+                    installSmoothScaling()
+                }
+                if hiDPIInstalled {
+                    FBDListRow(symbol: "arrow.uturn.backward", title: "Remove smooth scaling", role: .destructive) {
+                        removeSmoothScaling()
+                    }
+                }
+            }
+
+            Text(hiDPIExplanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let hiDPIStatus {
+                Text(hiDPIStatus)
+                    .font(.caption)
+                    .foregroundStyle(hiDPIStatusIsError ? Color.red : Color.secondary)
+            }
+        }
+    }
+
+    /// What installing will do, said plainly.
+    ///
+    /// The password is mentioned only when one is really asked for: a button
+    /// that claims it will prompt and then does not is a small lie, and one
+    /// that prompts when it has nothing to write is a worse one.
+    private var hiDPIExplanation: String {
+        let count = hiDPIModeCount
+        if hiDPIInstalled {
+            return String(localized: "Smooth scaling is installed (\(count) scaled modes). Removing it restores the display's own modes.")
+        }
+        if hiDPIService.smoothScalingWouldPrompt(for: display) {
+            return String(localized: "Installs \(count) scaled modes between the native size and half of it. macOS will ask for an administrator password.")
+        }
+        return String(localized: "Installs \(count) scaled modes between the native size and half of it.")
+    }
+
+    private func refreshHiDPIState() {
+        guard hiDPIService.isSupported(for: display) else { return }
+        hiDPIInstalled = hiDPIService.isInstalled(for: display)
+        hiDPIModeCount = hiDPIService.ladder(for: display)?.count ?? 0
+    }
+
+    private func installSmoothScaling() {
+        switch hiDPIService.installSmoothScaling(for: display) {
+        case .success:
+            hiDPIStatusIsError = false
+            hiDPIStatus = String(localized: "Smooth scaling installed.")
+        case .failure(let error):
+            hiDPIStatusIsError = true
+            hiDPIStatus = hiDPIMessage(for: error)
+        }
+        refreshHiDPIState()
+    }
+
+    private func removeSmoothScaling() {
+        switch hiDPIService.removeSmoothScaling(for: display) {
+        case .success:
+            hiDPIStatusIsError = false
+            hiDPIStatus = String(localized: "Smooth scaling removed.")
+        case .failure(let error):
+            hiDPIStatusIsError = true
+            hiDPIStatus = hiDPIMessage(for: error)
+        }
+        refreshHiDPIState()
+    }
+
+    private func hiDPIMessage(for error: HiDPIOverrideError) -> String {
+        switch error {
+        case .privilegeDeclined:
+            return String(localized: "The administrator password was not entered — nothing was changed.")
+        case .executionFailed(let message):
+            return String(localized: "Failed: \(message)")
+        case .unsupportedDisplay:
+            return String(localized: "This display cannot carry a smooth-scaling override.")
         }
     }
 
