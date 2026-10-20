@@ -22,9 +22,11 @@ external secrets needed.
 3. **Appcast host** — the appcast is committed to the repo root and the feed
    URL in `Sources/FBD/Resources/Info.plist` points at
    `https://raw.githubusercontent.com/FisiFla/FBD/main/appcast.xml`.
-   **Note**: raw.githubusercontent 404s while the repo is private — decide
-   before the first release whether to make the repo public at release time
-   or host the appcast elsewhere.
+   **Note**: the feed URL points at the repository root, so the repository has
+   to be public for the appcast to be reachable. It is. The committed feed
+   still advertises 1.4.0 — the unsigned releases (2.0.0, 2.1.0) cannot
+   regenerate it, because `generate_appcast` refuses an ad-hoc-signed app. It
+   catches up with the next signed release.
 
 ## Release checklist
 
