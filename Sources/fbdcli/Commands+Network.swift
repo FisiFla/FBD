@@ -12,12 +12,26 @@ func cmdSettings() -> Int32 {
     return 0
 }
 
-/// `fbdcli auth-token` — print the local HTTP API token (generated on first
-/// access, shared with the app via the defaults domain).
+/// `fbdcli auth-token` — explain how to obtain the local HTTP API token.
+/// The token itself is a secret, so it is printed only with `--reveal`.
 @MainActor
-func cmdAuthToken() -> Int32 {
-    print(Settings.httpAPIToken)
-    return 0
+func cmdAuthToken(args: [String]) -> Int32 {
+    switch AuthTokenArgs.parse(args) {
+    case .invalid(let message):
+        print("fbdcli: auth-token: \(message)")
+        return 1
+    case .reveal:
+        let token = Settings.httpAPIToken
+        guard !token.isEmpty else {
+            print("fbdcli: auth-token: no token available (the keychain is unreadable)")
+            return 2
+        }
+        print(token)
+        return 0
+    case .instructions:
+        print(APIToken.revealInstructions)
+        return 0
+    }
 }
 
 /// `fbdcli http on [port]` / `http off` / `http status` — manage the app's

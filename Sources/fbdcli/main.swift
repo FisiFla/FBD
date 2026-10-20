@@ -79,8 +79,10 @@ Commands:
                                 served by the app — applied live, no restart
   http off                      Disable the HTTP control API
   http status                   Show HTTP API state and port
-  auth-token                    Print the local HTTP API token (needed for
-                                curl and other HTTP clients)
+  auth-token                    Explain how to obtain the local HTTP API token
+                                (needed for curl and other HTTP clients); the
+                                token is printed only with --reveal
+  auth-token --reveal            Print the local HTTP API token (a secret)
   settings                      Print a masked settings dump (for bug reports)
   pip <id> [b] [c] [s]          Stream a display in a picture-in-picture window
                                 (optional brightness/contrast/saturation, 1 =
@@ -239,7 +241,7 @@ func run(arguments: [String]) -> Int32 {
     case .http:
         return cmdHTTP(args: rest)
     case .authToken:
-        return cmdAuthToken()
+        return cmdAuthToken(args: rest)
     case .settings:
         return cmdSettings()
     case .pip:

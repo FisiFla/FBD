@@ -167,6 +167,34 @@ public enum TVCommandValidation {
     }
 }
 
+/// Parsed `fbdcli auth-token` arguments.
+///
+/// The local HTTP API token grants full control of the user's displays, so it
+/// is a secret: the command prints how to obtain it, never the token itself,
+/// unless `--reveal` is given explicitly.
+public enum AuthTokenArgs: Equatable {
+    /// Print guidance, not the token.
+    case instructions
+    /// Print the token itself.
+    case reveal
+    /// A usage error, with the message to show.
+    case invalid(String)
+
+    /// Parse the command's arguments. `--reveal` is the only accepted flag;
+    /// anything else is a usage error, so a typo can never silently change
+    /// what is printed.
+    public static func parse(_ args: [String]) -> AuthTokenArgs {
+        var reveal = false
+        for argument in args {
+            guard argument == "--reveal" else {
+                return .invalid("unknown argument '\(argument)' (expected --reveal)")
+            }
+            reveal = true
+        }
+        return reveal ? .reveal : .instructions
+    }
+}
+
 /// Parsed `WxH[@Hz]` display-mode spec (used by `set-mode` and
 /// `virtual create`). Width/height must be positive; the refresh rate is
 /// optional and must be positive when present.

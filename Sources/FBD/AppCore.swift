@@ -1,5 +1,4 @@
 import AppKit
-import CryptoKit
 import FBDCore
 import os
 
@@ -262,21 +261,13 @@ final class AppCore {
 
     /// `fbd://brightness/<displayID>/<value 0…1>`
 
-    /// Constant-time-ish token comparison matching HTTPRouter's.
-    private static func tokenMatches(_ provided: String?, _ expected: String) -> Bool {
-        guard let provided, !provided.isEmpty else { return false }
-        let providedDigest = SHA256.hash(data: Data(provided.utf8))
-        let expectedDigest = SHA256.hash(data: Data(expected.utf8))
-        return providedDigest == expectedDigest
-    }
-
     private func setBrightness(from url: URL) {
         // Brightness writes through the URL scheme require the same API token
         // as the HTTP surface, so a local drive-by cannot change displays
         // without the user's consent. Supply it as ?token=<httpAPIToken>.
         let suppliedToken = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "token" })?.value
-        guard Self.tokenMatches(suppliedToken, Settings.httpAPIToken) else {
+        guard APIToken.matches(suppliedToken, Settings.httpAPIToken) else {
             log.error("fbd://brightness: missing or invalid token")
             return
         }

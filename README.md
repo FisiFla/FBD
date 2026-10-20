@@ -122,10 +122,14 @@ The app exposes a JSON API on `127.0.0.1` only (`fbdcli http on <port>`, default
 applies live, no restart). All requests must send the local API token:
 
 ```sh
-fbdcli auth-token          # print the token
+fbdcli auth-token --reveal  # print the token (a secret — keep it out of logs and chats)
+TOKEN=$(fbdcli auth-token --reveal)
 curl -H "X-FBD-Token: $TOKEN" http://127.0.0.1:8765/api/displays
 # or: curl -H "Authorization: Bearer $TOKEN" ...
 ```
+
+Without `--reveal`, `fbdcli auth-token` only explains how to obtain the token — it never
+prints the secret itself.
 
 `fbdcli` sends the token automatically (single driver — writes go through the app so the
 CLI never races the DDC bus). CORS is enabled for web clients (`OPTIONS` → 204);

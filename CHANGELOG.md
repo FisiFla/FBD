@@ -5,6 +5,18 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Changed
+- `fbdcli auth-token` no longer prints the API token to stdout. It now explains how to obtain
+  it; `--reveal` prints the token explicitly. The token grants full control of the user's
+  displays, so it is treated as a secret (issue #32).
+- The local API token comparison now has a single implementation (`APIToken`) shared by the
+  HTTP router and the `fbd://` URL handler, instead of two copies that had to be kept in
+  sync (issue #32).
+
+### Fixed
+- The HTTP server parsed every request's headers twice — once per received TCP segment. The
+  header block is now parsed exactly once per request (issue #32).
+
 ## [2.0.0] - 2026-10-16
 
 ### Changed

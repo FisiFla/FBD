@@ -26,7 +26,7 @@ enum HTTPRouting {
             break
         case .unauthorized:
             print("fbdcli: the app rejected the API token (HTTP 401). Not falling back to direct control; "
-                + "check the token with `fbdcli auth-token`, or pass --direct to bypass the app.")
+                + "check the token with `fbdcli auth-token --reveal`, or pass --direct to bypass the app.")
             return 2
         case .unresponsive(let reason):
             print("fbdcli: the app's HTTP API is up but not usable (\(reason)). Not falling back to direct "

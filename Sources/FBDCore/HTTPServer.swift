@@ -137,7 +137,7 @@ public final class HTTPServer {
     /// Cap request buffering so a local client cannot grow memory without bound.
     private static let maxRequestBytes = 1_048_576
 
-    private func receive(_ connection: NWConnection, buffer: Data, state: ConnectionState) {
+    private func receive(_ connection: NWConnection, buffer: Data, state: ConnectionState, head: RequestHead? = nil) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
             guard let self else { return }
             if data != nil {
@@ -160,9 +160,16 @@ public final class HTTPServer {
             }
             // Headers and body can arrive in separate TCP segments: only
             // respond once the full Content-Length body has been received.
+            var resolvedHead = head
             if let headerRange = accumulated.range(of: Data("\r\n\r\n".utf8)) {
-                let headerText = String(data: accumulated[..<headerRange.lowerBound], encoding: .utf8) ?? ""
-                let head = parseHead(headerText)
+                // Parse the header block exactly once and carry the result
+                // through the receive loop — a request split over several TCP
+                // segments must not re-parse the same headers per segment.
+                if resolvedHead == nil {
+                    let headerText = String(data: accumulated[..<headerRange.lowerBound], encoding: .utf8) ?? ""
+                    resolvedHead = parseHead(headerText)
+                }
+                let head = resolvedHead!
                 let receivedBody = accumulated.distance(from: headerRange.upperBound, to: accumulated.endIndex)
                 let bodyComplete = receivedBody >= head.contentLength || isComplete
 
@@ -182,21 +189,21 @@ public final class HTTPServer {
                         content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8),
                         completion: .contentProcessed { _ in
                             state.sentContinue = true
-                            self.receive(connection, buffer: accumulated, state: state)
+                            self.receive(connection, buffer: accumulated, state: state, head: head)
                         }
                     )
                     return
                 }
 
                 if bodyComplete {
-                    self.respond(connection, request: accumulated)
+                    self.respond(connection, request: accumulated, head: head)
                     return
                 }
             } else if isComplete {
-                self.respond(connection, request: accumulated)
+                self.respond(connection, request: accumulated, head: resolvedHead)
                 return
             }
-            self.receive(connection, buffer: accumulated, state: state)
+            self.receive(connection, buffer: accumulated, state: state, head: resolvedHead)
         }
     }
 
@@ -222,7 +229,7 @@ public final class HTTPServer {
         return RequestHead(headers: headers, contentLength: contentLength)
     }
 
-    private func respond(_ connection: NWConnection, request: Data) {
+    private func respond(_ connection: NWConnection, request: Data, head: RequestHead?) {
         guard let requestText = String(data: request, encoding: .utf8) else {
             connection.cancel()
             return
@@ -240,18 +247,12 @@ public final class HTTPServer {
         let method = String(parts[0])
         var path = String(parts[1])
         var body: String?
-        var headers: [String: String] = [:]
+        // The headers were parsed once by the receive loop (`head`); this
+        // function only reads the body out of the request text.
+        let headers = head?.headers ?? [:]
         if let headerEnd = requestText.range(of: "\r\n\r\n") {
             let bodyText = requestText[headerEnd.upperBound...]
             if !bodyText.isEmpty { body = String(bodyText) }
-            // Header lines: "Name: value" (lowercased names).
-            for line in requestText[..<headerEnd.lowerBound].split(separator: "\r\n").dropFirst() {
-                let pair = line.split(separator: ":", maxSplits: 1)
-                if pair.count == 2 {
-                    headers[String(pair[0]).trimmingCharacters(in: .whitespaces).lowercased()] =
-                        String(pair[1]).trimmingCharacters(in: .whitespaces)
-                }
-            }
         }
         // Strip query string.
         if let q = path.firstIndex(of: "?") {
