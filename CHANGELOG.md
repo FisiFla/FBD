@@ -6,6 +6,24 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 ## [Unreleased]
 
 ### Added
+- The capabilities the other issues added are now reachable from all three surfaces. The HTTP API
+  grew a per-display `disconnect`/`reconnect` action (with `remember`), a `hidpi` action
+  (`install`, `remove`, `status`) and a `gamma-floor` action (`enabled`, optional `threshold`).
+  Five new Shortcuts actions do the same through the controller seam the HTTP API drives: toggle
+  HDR mode, set the extra-brightness target, switch the input source, disconnect or reconnect a
+  display (remembering it if asked), and apply an image adjustment. The per-display page shows a
+  "Brightness blend" row and a "Connection" section — hidden rather than greyed where they do
+  not apply — and states what each of them needs (issue #28).
+- A display can now be kept disconnected across reboots: FBD remembers the choice and
+  re-disconnects the display when it comes back, until the user re-enables it. The memory is
+  filed per display identity, so it survives a restart (issue #30).
+- The built-in display can be turned off while an external display is attached and the lid is
+  open. It is a setting, never a silent action, and the existing base-M3 guard still refuses
+  the whole path before any call is made: on those Macs the built-in display may not come
+  back without a reboot, so nothing is attempted (issue #30).
+- An external display can follow the built-in panel's auto-brightness: the ambient sensor's
+  value is mapped through the nits ceilings and written through the usual brightness path, so
+  it inherits the write cooldown and the coalescing instead of racing the slider (issue #30).
 - A monitor's brightness scale rarely reaches black, so the bottom of the brightness slider
   was a dead zone: the knob moved, the screen did not. The new below-floor blend pins the
   hardware at a threshold and lets the software layer carry the rest as a multiplicative dim,

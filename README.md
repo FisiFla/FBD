@@ -134,6 +134,10 @@ swift run fbdcli settings             # masked settings dump (for bug reports)
 swift run fbdcli report               # detailed per-display report (for bug reports)
 swift run fbdcli config show          # lock dim, keyboard target, groups, brightness model…
 swift run fbdcli config device add "Living room TV" lg 192.168.0.50
+swift run fbdcli hidpi 3 status        # scaled-mode ladder for display 3
+swift run fbdcli hidpi 3 install       # install it (macOS asks for an admin password)
+swift run fbdcli gamma-floor 3 on 15   # reach the bottom of the slider in software
+swift run fbdcli display 3 disconnect --remember   # keep it off when it comes back
 ```
 
 `fbdcli help` lists all commands; `--direct` forces local execution instead of routing
@@ -172,6 +176,13 @@ per-display protection, resolution favourites, named display presets and the sav
 registry. `GET
 /api/config` reports them all; writes are `POST /api/config/<what>` with a JSON body, and a
 refusal names the valid values rather than ignoring the request.
+
+A display's own settings are written with `POST /api/displays/<id>/<action>` and a JSON body:
+`brightness`, `contrast`, `volume`, `mute`, `input`, `mode`, `xdr`, `rotate` and `filter`, plus
+`disconnect` / `reconnect` (with `{"remember": true}` to keep a display off when it comes
+back), `hidpi` (`{"operation": "install" | "remove" | "status"}`) and `gamma-floor`
+(`{"enabled": true, "threshold": 0.15}`). The CLI, the HTTP API and the Shortcuts actions all
+drive the same controller, so they cannot drift apart.
 
 ## DDC on Apple Silicon
 

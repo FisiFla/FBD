@@ -116,6 +116,7 @@ main thread).
    without a running app.
 3. UI/CLI consume only the controller public API.
 4. New private APIs: declare in `CPrivateAPI/include/fbd_private_api.h`, wrap in `PrivateAPI/`, document in `docs/PRIVATE_APIS.md`.
+5. **The three surfaces (CLI, HTTP API, Shortcuts) share one seam.** The HTTP API is executed by `HTTPExecutor` against the `DisplayControlling` protocol; `DisplayController` is its only conformer; the CLI drives the same controller (directly, or through the app's HTTP API); the App Intents call the same controller too. An intent never reaches a private API or a hardware call of its own, so the three surfaces cannot drift apart — a capability added for one of them is available to all of them, and a capability the HTTP API refuses is refused everywhere.
 
 ## Settings
 

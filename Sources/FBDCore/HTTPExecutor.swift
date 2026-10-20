@@ -34,6 +34,15 @@ public protocol DisplayControlling: AnyObject {
     func selectPreset(_ index: Int, on display: Display) -> Bool
     func setHDRMode(_ enabled: Bool, on display: Display) -> Bool
 
+    // The surfaces the newer capabilities answer on: the display's own
+    // connection, its smooth-scaling override and the below-floor brightness
+    // blend. They live on the seam so the HTTP API, the CLI and the intents
+    // all drive the same code.
+    func setDisplayConnected(_ connected: Bool, remember: Bool, for display: Display) -> Bool
+    func hiDPIOverrideState(for display: Display) -> HiDPIOverrideState
+    func setHiDPIOverride(_ install: Bool, for display: Display) -> Bool
+    func setFloorBlend(_ enabled: Bool, threshold: Double?, for display: Display) -> Bool
+
     // Virtual displays — routed through the single VirtualScreenController so
     // CLI, HTTP and UI share one surface.
     var virtualScreens: [VirtualScreenInstance] { get }
@@ -168,6 +177,35 @@ public enum HTTPExecutor {
             case .filterOff:
                 controller.stopScreenFilter(on: display)
                 return (200, HTTPJSON.encode(["ok": true]))
+            case .connection(let enabled, let remember):
+                guard controller.setDisplayConnected(enabled, remember: remember, for: display) else {
+                    return (500, HTTPJSON.error("the display was not changed"))
+                }
+                return (200, HTTPJSON.encode(["ok": true, "enabled": enabled, "remember": remember]))
+            case .hidpiInstall:
+                guard controller.setHiDPIOverride(true, for: display) else {
+                    return (500, HTTPJSON.error("the smooth-scaling override was not installed"))
+                }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .hidpiRemove:
+                guard controller.setHiDPIOverride(false, for: display) else {
+                    return (500, HTTPJSON.error("the smooth-scaling override was not removed"))
+                }
+                return (200, HTTPJSON.encode(["ok": true]))
+            case .hidpiStatus:
+                let state = controller.hiDPIOverrideState(for: display)
+                return (200, HTTPJSON.encode([
+                    "supported": state.isSupported,
+                    "installed": state.isInstalled,
+                    "modeCount": state.modeCount,
+                    "wouldPrompt": state.wouldPrompt,
+                    "path": state.path,
+                ]))
+            case .gammaFloor(let enabled, let threshold):
+                guard controller.setFloorBlend(enabled, threshold: threshold, for: display) else {
+                    return (500, HTTPJSON.error("the brightness blend was not changed"))
+                }
+                return (200, HTTPJSON.encode(["ok": true, "enabled": enabled]))
             }
         case .systemAudioDevices:
             let audio = SystemVolumeController.shared

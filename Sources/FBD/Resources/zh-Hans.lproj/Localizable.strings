@@ -5,17 +5,27 @@
    例如「显示器」「设置」「镜像」「刷新率」。 */
 
 /* 显示器列表 */
+"Below-floor blend" = "下限以下混合";
+"Brightness blend" = "亮度混合";
+"Connected" = "已连接";
+"Connection" = "连接";
+"Disconnect display" = "断开显示器";
 "Failed: %@" = "失败：%@";
 "Install smooth scaling" = "安装平滑缩放";
 "Installs %lld scaled modes between the native size and half of it." = "在原生尺寸到其一半之间安装 %lld 个缩放模式。";
 "Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password." = "在原生尺寸到其一半之间安装 %lld 个缩放模式。macOS 会要求输入管理员密码。";
+"Nits" = "尼特";
 "No displays" = "没有显示器";
 
 /* 单个显示器的菜单 */
 "Manage Display" = "管理显示器";
 "Display Mode" = "显示模式";
+"Reaches the bottom of the brightness slider in software. Needs Screen Recording permission." = "在软件层到达亮度滑块的底部。需要屏幕录制权限。";
+"Reconnect display" = "重新连接显示器";
 "Refresh Rate" = "刷新率";
 "Color Mode" = "色彩模式";
+"Remember" = "记住";
+"Remember this display as off" = "记住此显示器为关闭状态";
 "Remove smooth scaling" = "移除平滑缩放";
 "Resolution Favourites" = "分辨率收藏";
 "Display Presets" = "显示器预设";
@@ -32,8 +42,18 @@
 "Smooth scaling installed." = "已安装平滑缩放。";
 "Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes." = "已安装平滑缩放（%lld 个缩放模式）。移除后会恢复显示器自身的模式。";
 "Smooth scaling removed." = "已移除平滑缩放。";
+"Source" = "输入源";
+"Temperature" = "色温";
+"The adjustment values must be numbers." = "调整值必须是数字。";
 "The administrator password was not entered — nothing was changed." = "未输入管理员密码——没有任何改动。";
+"The brightness target must be a positive number of nits." = "亮度目标必须是正数的尼特值。";
+"the display could not be switched." = "无法切换该显示器。";
+"the image adjustment could not be applied." = "无法应用图像调整。";
+"The input source number is out of range." = "输入源编号超出范围。";
+"this display cannot be driven that bright." = "此显示器无法达到该亮度。";
 "This display cannot carry a smooth-scaling override." = "此显示器不支持平滑缩放覆盖。";
+"this display does not support HDR mode." = "此显示器不支持 HDR 模式。";
+"this display does not support input switching." = "此显示器不支持输入源切换。";
 "Virtual Screens" = "虚拟屏幕";
 "Stream to" = "串流到";
 "Apple Display Preset" = "Apple 显示器预设";

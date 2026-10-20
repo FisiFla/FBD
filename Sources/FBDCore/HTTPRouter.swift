@@ -88,6 +88,17 @@ public enum DisplayAction: Equatable {
     case rotate(Int)
     case filter(ScreenFilterParams)
     case filterOff
+    /// Enable or disable the display. `remember` keeps it off across a replug.
+    case connection(enabled: Bool, remember: Bool)
+    /// Install the smooth-scaling ladder for the display.
+    case hidpiInstall
+    /// Remove the smooth-scaling ladder.
+    case hidpiRemove
+    /// Report the smooth-scaling state of the display.
+    case hidpiStatus
+    /// Turn the below-floor brightness blend on or off, optionally with a
+    /// threshold.
+    case gammaFloor(enabled: Bool, threshold: Double?)
 }
 
 /// Validated virtual-display creation request.
@@ -292,6 +303,34 @@ public enum HTTPRouter {
                 offsetY: optional("offsetY") ?? 0,
                 lutPath: lutPath
             )))
+        case "disconnect":
+            // `remember` keeps the display off across a replug; without it the
+            // display comes back the next time it is attached.
+            let remember = (object["remember"] as? Bool) ?? false
+            return .action(.connection(enabled: false, remember: remember))
+        case "reconnect":
+            let remember = (object["remember"] as? Bool) ?? false
+            return .action(.connection(enabled: true, remember: remember))
+        case "hidpi":
+            switch object["operation"] as? String {
+            case "install": return .action(.hidpiInstall)
+            case "remove": return .action(.hidpiRemove)
+            case "status": return .action(.hidpiStatus)
+            default:
+                return .error(400, "expected operation install, remove or status")
+            }
+        case "gamma-floor":
+            guard let enabled = object["enabled"] as? Bool else {
+                return .error(400, "enabled must be a boolean")
+            }
+            var threshold: Double?
+            if let raw = (object["threshold"] as? NSNumber)?.doubleValue {
+                guard (0...1).contains(raw) else {
+                    return .error(400, "threshold must be a number between 0 and 1")
+                }
+                threshold = raw
+            }
+            return .action(.gammaFloor(enabled: enabled, threshold: threshold))
         default:
             return .error(404, "unknown action '\(action)'")
         }

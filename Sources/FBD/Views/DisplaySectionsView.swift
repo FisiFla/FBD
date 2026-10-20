@@ -84,6 +84,12 @@ struct DisplaySectionsView: View {
             if hiDPIService.isSupported(for: display) {
                 TitledSection("HiDPI") { hiDPIControls }
             }
+            // Hidden, not greyed: the built-in panel's brightness reaches zero
+            // on its own, so there is no floor for the blend to reach past.
+            if !display.isBuiltin {
+                TitledSection("Brightness blend") { floorBlendControls }
+                TitledSection("Connection") { connectionControls }
+            }
         }
         .onAppear {
             syncUpscaleTarget()
@@ -293,6 +299,97 @@ struct DisplaySectionsView: View {
             hiDPIStatus = hiDPIMessage(for: error)
         }
         refreshHiDPIState()
+    }
+
+    // MARK: - Below-floor brightness blend
+
+    /// Whether the below-floor blend is on for this display.
+    ///
+    /// The blend reaches past the panel's own floor in software, so it only
+    /// makes sense for a display that has one.
+    private var floorBlendEnabled: Bool {
+        Settings.floorBlend(for: display.identityKey).isEnabled
+    }
+
+    private var floorBlendControls: some View {
+        VStack(alignment: .leading, spacing: FBDTheme.spacingS) {
+            FBDListRow(
+                symbol: "circle.lefthalf.filled",
+                title: "Below-floor blend",
+                isChecked: floorBlendEnabled
+            ) {
+                toggleFloorBlend()
+            }
+
+            Text("Reaches the bottom of the brightness slider in software. Needs Screen Recording permission.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func toggleFloorBlend() {
+        var blend = Settings.floorBlend(for: display.identityKey)
+        blend.isEnabled.toggle()
+        Settings.setFloorBlend(blend, for: display.identityKey)
+        DisplayController.shared.setFloorBlend(blend.isEnabled, threshold: nil, for: display)
+    }
+
+    // MARK: - Connection
+
+    /// A controller for the remembered-disconnect memory.
+    ///
+    /// The memory is a store of its own, so a fresh controller reads and
+    /// writes the same defaults the app does.
+    private var disconnectMemory: DisconnectController {
+        DisconnectController()
+    }
+
+    /// Whether the display is currently in use.
+    private var isConnected: Bool {
+        display.isActive
+    }
+
+    /// Whether the display is remembered as "keep it off".
+    private var remembersDisconnect: Bool {
+        disconnectMemory.isDisconnectRemembered(for: display)
+    }
+
+    private var connectionControls: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            FBDListRow(
+                symbol: "display",
+                title: isConnected ? "Disconnect display" : "Reconnect display",
+                role: isConnected ? .destructive : nil
+            ) {
+                toggleConnection()
+            }
+            FBDListRow(
+                symbol: "pin",
+                title: "Remember this display as off",
+                isChecked: remembersDisconnect
+            ) {
+                toggleRememberDisconnect()
+            }
+        }
+    }
+
+    private func toggleConnection() {
+        if isConnected {
+            DisplayController.shared.setDisplayConnected(false, remember: remembersDisconnect, for: display)
+        } else {
+            // Reconnecting forgets the memory: the display is on, so there is
+            // nothing left to remember.
+            DisplayController.shared.setDisplayConnected(true, remember: false, for: display)
+        }
+    }
+
+    private func toggleRememberDisconnect() {
+        let controller = disconnectMemory
+        if controller.isDisconnectRemembered(for: display) {
+            controller.forgetDisconnect(for: display)
+        } else {
+            controller.rememberDisconnect(for: display)
+        }
     }
 
     private func hiDPIMessage(for error: HiDPIOverrideError) -> String {

@@ -85,6 +85,34 @@ private final class FakeDisplayController: DisplayControlling {
     @discardableResult
     func setHDRMode(_ enabled: Bool, on display: Display) -> Bool { hdrAccepts }
 
+    // The newer capabilities answer on the same seam.
+    var connectionAccepts = true
+    var overrideAccepts = true
+    var floorBlendAccepts = true
+    var overrideState = HiDPIOverrideState(
+        isSupported: true,
+        isInstalled: false,
+        modeCount: 12,
+        wouldPrompt: true,
+        path: "/Library/Displays/Contents/Resources/Default/Overrides/DisplayVendorID-610/DisplayProductID-abcd/Contents.json"
+    )
+
+    func setDisplayConnected(_ connected: Bool, remember: Bool, for display: Display) -> Bool {
+        connectionAccepts
+    }
+
+    func hiDPIOverrideState(for display: Display) -> HiDPIOverrideState {
+        overrideState
+    }
+
+    func setHiDPIOverride(_ install: Bool, for display: Display) -> Bool {
+        overrideAccepts
+    }
+
+    func setFloorBlend(_ enabled: Bool, threshold: Double?, for display: Display) -> Bool {
+        floorBlendAccepts
+    }
+
     var mainAccepts = true
     var presetAccepts = true
     var hdrAccepts = true

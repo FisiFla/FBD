@@ -428,6 +428,71 @@ public final class DisplayController {
         xdr.setHDRMode(enabled, for: display)
     }
 
+    /// Enable or disable a display, optionally remembering the choice across a
+    /// replug.
+    ///
+    /// The built-in display's guard runs inside `DisconnectController`, before
+    /// anything is touched: on the affected Macs a soft-disconnected built-in
+    /// panel may not come back without a reboot.
+    ///
+    /// Re-enabling a display forgets a remembered disconnect — the user asked
+    /// for it back, so the memory would only contradict them.
+    @discardableResult
+    public func setDisplayConnected(_ connected: Bool, remember: Bool, for display: Display) -> Bool {
+        let controller = DisconnectController()
+        guard controller.setEnabled(connected, displayID: display.id) else { return false }
+        if connected {
+            controller.forgetDisconnect(for: display)
+        } else if remember {
+            controller.rememberDisconnect(for: display)
+        }
+        return true
+    }
+
+    /// The smooth-scaling state of a display.
+    public func hiDPIOverrideState(for display: Display) -> HiDPIOverrideState {
+        HiDPIOverrideService.shared.state(for: display)
+    }
+
+    /// Install or remove the smooth-scaling ladder.
+    ///
+    /// Installing asks for an administrator password — the override folder
+    /// lives under /Library — so the caller can say so before the prompt
+    /// appears rather than after.
+    @discardableResult
+    public func setHiDPIOverride(_ install: Bool, for display: Display) -> Bool {
+        let service = HiDPIOverrideService.shared
+        let result = install
+            ? service.installSmoothScaling(for: display)
+            : service.removeSmoothScaling(for: display)
+        switch result {
+        case .success:
+            return true
+        case .failure(let error):
+            log.error("setHiDPIOverride(\(install)) failed for display \(display.id): \(String(describing: error))")
+            return false
+        }
+    }
+
+    /// Turn the below-floor brightness blend on or off for a display.
+    ///
+    /// A threshold of nil keeps the one that is configured. The current
+    /// brightness is re-applied afterwards, so the change is visible now
+    /// instead of at the next drag of the slider.
+    @discardableResult
+    public func setFloorBlend(_ enabled: Bool, threshold: Double?, for display: Display) -> Bool {
+        var blend = Settings.floorBlend(for: display.identityKey)
+        blend.isEnabled = enabled
+        if let threshold {
+            blend.threshold = min(max(threshold, 0), 1)
+        }
+        Settings.setFloorBlend(blend, for: display.identityKey)
+        if let current = getBrightness(for: display) {
+            _ = setBrightness(current, on: display)
+        }
+        return true
+    }
+
     /// Start (or update) the software brightness-boost overlay for a display;
     /// factor <= 1 stops the stream.
     @discardableResult

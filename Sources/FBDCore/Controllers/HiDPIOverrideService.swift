@@ -68,6 +68,38 @@ public struct AppleScriptPrivilegeExecutor: PrivilegedCommandExecuting {
 /// The service owns the *decision* — which ladder a display gets, whether an
 /// install would ask for a password, whether the ladder is already there —
 /// and leaves the *privilege* to the executor.
+/// What the override surface reports about a display.
+///
+/// The fields are the honest ones: whether a ladder is possible at all,
+/// whether one is installed, whether installing one would ask for a
+/// password, and where the override lives.
+public struct HiDPIOverrideState: Equatable, Sendable {
+    /// Whether this display can carry a ladder at all.
+    public let isSupported: Bool
+    /// Whether the ladder is installed right now.
+    public let isInstalled: Bool
+    /// How many scaled modes the ladder holds.
+    public let modeCount: Int
+    /// Whether installing it would ask for an administrator password.
+    public let wouldPrompt: Bool
+    /// Where the override file lives.
+    public let path: String
+
+    public init(
+        isSupported: Bool,
+        isInstalled: Bool,
+        modeCount: Int,
+        wouldPrompt: Bool,
+        path: String
+    ) {
+        self.isSupported = isSupported
+        self.isInstalled = isInstalled
+        self.modeCount = modeCount
+        self.wouldPrompt = wouldPrompt
+        self.path = path
+    }
+}
+
 public final class HiDPIOverrideService {
     /// The process-wide service.
     public static let shared = HiDPIOverrideService()
@@ -120,6 +152,18 @@ public final class HiDPIOverrideService {
     public func smoothScalingWouldPrompt(for display: Display) -> Bool {
         guard ladder(for: display) != nil else { return false }
         return !isInstalled(for: display)
+    }
+
+    /// Everything the UI, the CLI and the HTTP API report about a display.
+    public func state(for display: Display) -> HiDPIOverrideState {
+        let modes = ladder(for: display)
+        return HiDPIOverrideState(
+            isSupported: modes != nil,
+            isInstalled: isInstalled(for: display),
+            modeCount: modes?.count ?? 0,
+            wouldPrompt: smoothScalingWouldPrompt(for: display),
+            path: overridePath(for: display)
+        )
     }
 
     /// Install the ladder for a display.

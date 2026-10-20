@@ -5,17 +5,27 @@
    will refuse them. */
 
 /* Display list */
+"Below-floor blend" = "Below-floor blend";
+"Brightness blend" = "Brightness blend";
+"Connected" = "Connected";
+"Connection" = "Connection";
+"Disconnect display" = "Disconnect display";
 "Failed: %@" = "Failed: %@";
 "Install smooth scaling" = "Install smooth scaling";
 "Installs %lld scaled modes between the native size and half of it." = "Installs %lld scaled modes between the native size and half of it.";
 "Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password." = "Installs %lld scaled modes between the native size and half of it. macOS will ask for an administrator password.";
+"Nits" = "Nits";
 "No displays" = "No displays";
 
 /* Per-display menu */
 "Manage Display" = "Manage Display";
 "Display Mode" = "Display Mode";
+"Reaches the bottom of the brightness slider in software. Needs Screen Recording permission." = "Reaches the bottom of the brightness slider in software. Needs Screen Recording permission.";
+"Reconnect display" = "Reconnect display";
 "Refresh Rate" = "Refresh Rate";
 "Color Mode" = "Color Mode";
+"Remember" = "Remember";
+"Remember this display as off" = "Remember this display as off";
 "Remove smooth scaling" = "Remove smooth scaling";
 "Resolution Favourites" = "Resolution Favourites";
 "Display Presets" = "Display Presets";
@@ -32,8 +42,18 @@
 "Smooth scaling installed." = "Smooth scaling installed.";
 "Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes." = "Smooth scaling is installed (%lld scaled modes). Removing it restores the display's own modes.";
 "Smooth scaling removed." = "Smooth scaling removed.";
+"Source" = "Source";
+"Temperature" = "Temperature";
+"The adjustment values must be numbers." = "The adjustment values must be numbers.";
 "The administrator password was not entered — nothing was changed." = "The administrator password was not entered — nothing was changed.";
+"The brightness target must be a positive number of nits." = "The brightness target must be a positive number of nits.";
+"the display could not be switched." = "the display could not be switched.";
+"the image adjustment could not be applied." = "the image adjustment could not be applied.";
+"The input source number is out of range." = "The input source number is out of range.";
+"this display cannot be driven that bright." = "this display cannot be driven that bright.";
 "This display cannot carry a smooth-scaling override." = "This display cannot carry a smooth-scaling override.";
+"this display does not support HDR mode." = "this display does not support HDR mode.";
+"this display does not support input switching." = "this display does not support input switching.";
 "Virtual Screens" = "Virtual Screens";
 "Stream to" = "Stream to";
 "Apple Display Preset" = "Apple Display Preset";
