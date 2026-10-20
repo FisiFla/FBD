@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-20
+
 ### Added
 - `fbdcli report [<id>][file] [--json]` is a paste-ready report for a bug report: the display's
   identity (masked), its geometry and mode, the control paths, the EDID, the panel facts and the
