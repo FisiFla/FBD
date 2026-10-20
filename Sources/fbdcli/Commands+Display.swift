@@ -27,7 +27,19 @@ func cmdXDR(_ controller: DisplayController, display: Display, args: [String]) -
         }
         guard controller.setXDRUpscaleTarget(nits, on: display) else {
             return reportWriteFailure(
-                outcome: .failed(reason: "upscaling to \(nits) nits was not enabled (no blank preset slot?)"),
+                outcome: .failed(reason: "upscaling to \(nits) nits was not enabled (the native preset rewrite is refused on this macOS; the software boost needs Screen Recording permission)"),
+                command: "xdr \(display.id)",
+                readBack: readBackCommand(.xdr, String(display.id))
+            )
+        }
+        if controller.activeBoostDisplayIDs().contains(display.id) {
+            // The native preset rewrite was refused (write-protected on this
+            // macOS), so the upscaling ran through the software boost overlay.
+            // An overlay session does not outlive this command, so the
+            // brightening is gone the moment the CLI exits: say that instead
+            // of claiming a lasting change.
+            return reportWriteFailure(
+                outcome: .failed(reason: "the software boost does not outlive this command — run the upscaling from the app (or through its HTTP API) to keep it"),
                 command: "xdr \(display.id)",
                 readBack: readBackCommand(.xdr, String(display.id))
             )

@@ -5,6 +5,16 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Changed
+- The feature matrix now says what was measured rather than what was inherited. Every cell that
+  reads *live-verified* was measured on this machine (M1 Max, macOS 27.0.1, built-in XDR panel,
+  2026-10-20): the brightness write, the resolution write, Night Shift, the display presets, the
+  software overlay, the OSD, the PiP enumeration, True Tone and the HiDPI install script. The
+  README gained a "What was measured on macOS 27.0.1 (2026-10-20)" section that lists each
+  measurement and each thing this machine cannot show: DDC/CI on an external monitor, EDID on
+  the built-in panel, the below-floor blend's DDC floor, the three display-connection
+  behaviours, the privileged HiDPI write, and the app's own Screen Recording grant.
+
 ### Fixed
 - The feature matrix said the True Tone toggle *degrades* on macOS 27. It does not: measured on
   macOS 27.0.1 (built-in XDR panel, 2026-10-20), `CBTrueToneClient`'s `available` is true, `enabled`
@@ -12,6 +22,25 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   from a note in Lunar's `CBTrueToneClient.h` (not controllable from third parties since macOS
   26.3) that was never measured here. The matrix, the private-API ledger and the controller's
   comment now say what was measured; the macOS 26 cell is marked unmeasured instead of degraded.
+- The matrix said EDID is available on macOS 27. Measured: the built-in panel exposes none
+  (`fbdcli edid export 1` → "no EDID available"), which the private-API ledger already said.
+  EDID now has its own row, and external displays stay unverified.
+- The matrix said the XDR native preset rewrite works on macOS 26. It is refused on macOS 26 and
+  later — the controller's own self-test detects the rejected write — so both columns now point
+  at the software boost and the footnote says why.
+- `fbdcli xdr <id> <nits>` printed "upscaling enabled" when the write had in fact fallen back to
+  the software boost. The boost lives in an overlay, and an overlay does not outlive a one-shot
+  command, so the brightening was gone the moment the CLI exited. The command now says that
+  instead of claiming a lasting change, and it names the read-back.
+
+### Documentation
+- `docs/PRIVATE_APIS.md` gained a "Live-verified on this machine — 2026-10-20" section: what was
+  measured, the two measured facts that change a claim elsewhere (the True Tone note inherited
+  from Lunar, and the macOS 26+ refusal of the XDR preset rewrite), and what this machine cannot
+  show.
+- A new test runs the generated HiDPI override install script against a temporary root: the plist
+  is written and carries the ladder, `plutil -lint` accepts it, a repeated install is
+  byte-identical and leaves no staging file behind, and the removal takes exactly that file away.
 
 ## [2.1.0] - 2026-10-20
 

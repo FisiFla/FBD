@@ -30,15 +30,16 @@ light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/p
 
 | Feature | macOS 13–15 | macOS 26 | macOS 27 |
 |---|---|---|---|
-| Apple brightness / resolution | ✅ | ✅ | ✅ |
+| Apple brightness / resolution | ✅ | ✅ | ✅ live-verified |
 | DDC/CI (external displays, Apple Silicon) | ⚠️ implemented, not yet verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
 | Virtual displays | ⚠️ `CGVirtualDisplay` (dlopen; implemented, unverified) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
-| XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
-| True Tone toggle | ✅ | ⚠️ not measured here | ✅ live-verified (macOS 27.0.1) |
+| XDR upscaling (native preset rewrite) | ✅ | ⚠️ rewrite write-protected → software boost* | ⚠️ rewrite write-protected → software boost*; preset switching ✅ live-verified |
+| True Tone toggle | ✅ | ✅ | ✅ live-verified (macOS 27.0.1) |
+| Night Shift / OSD / PiP / display profiles | ✅ | ✅ | ✅ live-verified |
+| EDID | ⚠️ implemented; the built-in panel exposes none | ⚠️ same | ⚠️ none on the built-in panel (macOS 27); external displays untested |
 | Below-floor brightness blend (DDC floor reached in software) | ⚠️ needs Screen Recording; not yet verified on hardware | ⚠️ same | ⚠️ same |
-| HiDPI smooth scaling (scaled-mode ladder) | ⚠️ implemented, not yet verified on hardware; asks for an administrator password | ⚠️ same | ⚠️ same |
+| HiDPI smooth scaling (scaled-mode ladder) | ⚠️ the install mechanism is live-verified; the privileged write is not | ⚠️ same | ⚠️ same |
 | Remembered disconnects · docked built-in display · ambient auto-brightness sync | ⚠️ implemented, not yet verified on hardware | ⚠️ same | ⚠️ same |
-| Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 
 Screen rotation on an external display is likewise implemented but unverified.
 
@@ -47,10 +48,52 @@ there, on the strength of a note in Lunar's `CBTrueToneClient.h` that True Tone
 stopped being controllable from third parties in macOS 26.3. Measured on
 macOS 27.0.1 (built-in XDR panel, 2026-10-20): `available` is true, `enabled`
 reads back, and `setEnabled:` round-trips — off reads back off, on reads back
-on. FBD's toggle therefore works there; the macOS 26 cell is simply unmeasured.
+on. FBD's toggle therefore works there. The macOS 26 cell follows: the True
+Tone path has no version gate, so it takes the same code.
 
 \* The software boost overlay needs **Screen Recording** permission and combined
 brightness mode enabled — with both in place, XDR upscaling works on macOS 27.
+The native preset rewrite is refused on macOS 26 and later (the controller's
+own self-test detects the rejected write), so both columns point at the
+software boost. The boost lives in an overlay, and an overlay does not outlive
+a one-shot `fbdcli` run — from the app, or through its HTTP API, it does.
+
+### What was measured on macOS 27.0.1 (2026-10-20)
+
+Every cell that says *live-verified* was measured on this machine (M1 Max,
+built-in XDR panel), not taken from a header comment:
+
+- **Apple brightness** — read 46.7 %, wrote 60 %, read 60 %, restored 46.7 %.
+- **Resolution** — 132 modes enumerated; the current mode re-applied through
+  the mode write path.
+- **Night Shift** — strength 50 % → 0 % → 50 %, read back after each write.
+- **Display presets** — the built-in XDR panel switched preset 0 → 1 → 0, read
+  back after each switch.
+- **Virtual screens** — the app created a virtual screen from a persisted
+  config at launch (`SLVirtualDisplay`). A one-shot `fbdcli virtual create`
+  writes the config, but its screen dies with the command; the app owns the
+  screen.
+- **Software overlay** — a full-screen filter applied and cleared (the same
+  overlay the below-floor blend and the software boost ride on).
+- **OSD** — the transient HUD showed.
+- **PiP** — ScreenCaptureKit enumerated the displays, windows and apps (the
+  stream itself was not started).
+- **True Tone** — `available` true, `enabled` read back, `setEnabled:`
+  round-trip (off → on).
+- **HiDPI override** — the generated install script ran against a temporary
+  root: the plist is written, `plutil -lint` accepts it, a repeated install is
+  byte-identical and leaves no staging file behind, and the removal takes
+  exactly that file away.
+
+Still unverified, because this machine cannot show it: DDC/CI on an external
+monitor ([#7](https://github.com/FisiFla/FBD/issues/7)); EDID on the built-in
+panel (macOS 27 exposes none); the below-floor blend's DDC floor (it needs an
+external monitor with a high floor); the remembered-disconnect, docked-built-in
+and ambient-sync behaviours (they need an external display — disconnecting the
+built-in panel is not a safe test); the privileged HiDPI write to
+`/Library/Displays` and the display re-enumeration; and the app's own Screen
+Recording grant (the CLI's overlay had it; the app's could not be read from a
+shell).
 
 **A monitor's DDC brightness scale rarely reaches black.** The bottom of the
 slider is usually a dead zone: the knob moves, the screen does not. The

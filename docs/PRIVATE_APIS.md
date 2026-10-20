@@ -256,6 +256,39 @@ kept separate from that executor.
 The claim this feature supports is *implemented, not yet verified on hardware*: no display
 with a HiDPI ladder has been re-enumerated through this path in this repository.
 
+## Live-verified on this machine — 2026-10-20
+
+Everything in this section was **measured** on this machine (M1 Max, macOS 27.0.1,
+built-in XDR panel), not taken from a header comment, from another project or from
+a release note:
+
+- **Apple brightness** — `DisplayServices`: read 46.7 %, wrote 60 %, read 60 %, restored 46.7 %.
+- **Resolution** — 132 modes enumerated; the current mode re-applied through the mode write path.
+- **Night Shift** — strength 50 % → 0 % → 50 %, read back after each write.
+- **Display presets** — the built-in XDR panel switched preset 0 → 1 → 0, read back after each switch.
+- **Virtual screens** — the app created a virtual screen from a persisted config at launch (`SLVirtualDisplay`).
+- **Software overlay** — a full-screen filter applied and cleared (the overlay the below-floor blend and the software boost ride on).
+- **OSD** — the transient HUD showed.
+- **PiP** — ScreenCaptureKit enumerated the displays, windows and apps (the stream itself was not started).
+- **True Tone** — `CBTrueToneClient`: `available` true, `enabled` read back, `setEnabled:` round-tripped (off → on, read back after each write).
+- **HiDPI override** — the generated install script ran against a temporary root: the plist is written, `plutil -lint` accepts it, a repeated install is byte-identical and leaves no staging file behind, and the removal takes exactly that file away (`Tests/FBDCoreTests/HiDPIOverrideInstallScriptTests.swift`).
+
+Two measured facts that change a claim made elsewhere:
+
+- The **True Tone** row above was inherited from a note in Lunar's `CBTrueToneClient.h`
+  ("not controllable from third parties since macOS 26.3"). Measured here, `setEnabled:` is
+  accepted and reads back, so the note does not hold on this macOS: FBD's toggle is live-verified.
+- The **XDR native preset rewrite** is refused on macOS 26 and later. The controller's own
+  self-test detects the rejected write (`XDRNativeController.setUpscaleTarget` returns false),
+  so the upscaling falls back to the software boost overlay — which needs Screen Recording and
+  lives in an overlay session that does not outlive a one-shot `fbdcli` run.
+
+Still unverified here, because this machine cannot show them: DDC/CI on an external monitor
+(issue #7), EDID on the built-in panel (macOS 27 exposes none), the below-floor blend's DDC
+floor, the remembered-disconnect / docked-built-in / ambient-sync behaviours (they need an
+external display), and the privileged HiDPI write to `/Library/Displays` together with the
+display re-enumeration.
+
 ## Notes
 
 - **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch
