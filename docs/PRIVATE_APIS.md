@@ -21,8 +21,8 @@ and FOSS implementations (lunar, displayplacer).
 | `DisplayServicesAmbientLightCompensationEnabled / EnableAmbientLightCompensation` | lunar Bridge.h | AppleController | 1 |
 | `DisplayServicesResetAmbientLight` | lunar Bridge.h | (declared; auto-brightness reset) | 2 |
 | `DisplayServicesRegisterForBrightnessChangeNotifications` (+unregister) | lunar Bridge.h | (declared; brightness sync owns a global registry) | 2 |
-| `IOAVServiceCreateWithService` | IOKit dyld exports | IOAVServiceAPI / ExternalController | 1 |
-| `IOAVServiceReadI2C / WriteI2C` | lunar arm64 path | IOAVServiceAPI / DDCController | 1 |
+| `IOAVServiceCreateWithService` | IOKit dyld exports | IOAVServiceAPI / ExternalController (DDC audit: `docs/ddc-equivalence.md`) | 1 |
+| `IOAVServiceReadI2C / WriteI2C` | lunar arm64 path | IOAVServiceAPI / DDCController (DDC audit: `docs/ddc-equivalence.md`) | 1 |
 | `IOAVServiceCopyEDID` | IOKit dyld exports | IOAVServiceAPI (Tier 4 EDID) | 4 |
 | `SLSMainConnectionID` | yabai/skhd headers | SkyLightAPI | 1 |
 | `SLSDetectDisplays` | IOKit dyld exports | SkyLightAPI / ResolutionController | 1 |
@@ -169,6 +169,19 @@ checked the same way as above; only `SLSConfigureDisplayMode` exists, and FBD al
 it through `CGSAPI`. Creating a display mode needs a *different* mechanism from the one
 those rows' route assumed, so they are blocked on design rather than on a name.
 
+## DDC/CI transport — audited component by component
+
+`docs/ddc-equivalence.md` compares FBD's DDC/CI transport with the transport of
+[didriksg/Crisp](https://github.com/didriksg/Crisp) v1.7.1 (`242a8ce`), component by
+component: the private symbol, the wire framing, the reply validation, the read cache, the
+read quarantine, the write cadence, the bus contention and the display↔channel matching.
+
+The claim it supports is **code-verified equivalence**, never hardware verification: FBD's
+DDC path has not been exercised against a real DDC monitor in this repository (issue #7).
+The symbols it relies on are the ones already listed above — `IOAVServiceCreateWithService`,
+`IOAVServiceReadI2C`, `IOAVServiceWriteI2C` — and no new private symbol was declared for the
+hardening work (issue #25).
+
 ## Notes
 
 - **Nothing new was added to this ledger by the BetterDisplay-parity work** (branch
@@ -184,7 +197,7 @@ those rows' route assumed, so they are blocked on design rather than on a name.
 
 - ObjC classes are always reached via `NSClassFromString` + runtime messaging (never static link). Class names verified at runtime via `NSClassFromString` on macOS 27.
 - `VirtualDisplay.framework` does not exist on macOS 27 beta — Tier 3 must use the SidecarCore path there.
-- DDC (IOAVService) is Apple Silicon only and **does not work under Rosetta** — guarded by `IOAVServiceAPI.isAppleSilicon`.
+- DDC (IOAVService) is Apple Silicon only and **does not work under Rosetta** — guarded by `IOAVServiceAPI.isAppleSilicon`. The transport's reply validation, read cache, read quarantine and topology hold are audited against didriksg/Crisp v1.7.1 in `docs/ddc-equivalence.md`.
 - **Built-in display disconnect is a hardware hazard, not an API one.** On Macs with the base M3 chip (M3 MacBook Air, entry-level M3 MacBook Pro) Apple repurposed the built-in panel's connection for clamshell two-display support, so a soft-disconnected built-in display may not come back without a reboot. `CGSConfigureDisplayEnabled` is fine there; the machine is not. `BuiltInDisconnectGuard` refuses the disconnect on that hardware unless `Settings.allowBuiltInDisconnectOnAffectedMacs` is set. BetterDisplay ships the same guard (`_displayAllowDisconnectM3Builtin`, waydabber/BetterDisplay#4723).
 - **Mode capability queries are declared and wired** — `SLSGetDisplayModeMinRefreshRate`, `SLSIsDisplayModeVRR`, `SLSIsDisplayModeProMotion` (Tier 2→3, live-verified on macOS 27). Two traps worth keeping:
   - The mode argument is an **`IODisplayModeID`** (`CGDisplayCopyDisplayMode(_:).ioDisplayModeID`), **not** the CGS `displayModeNumber` that `CGSGetDisplayModeDescriptionOfLength` reports. A wrong number returns 0/false silently rather than erroring, so a bad mapping is indistinguishable from "this display has no VRR".

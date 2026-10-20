@@ -57,7 +57,7 @@ off `AppCore`. Each owns its own state and its own timer and is started once fro
 - `DisplayController` is the entry point for display state and per-display control (UI, HTTP API, CLI direct mode); other subsystems are reached through `AppCore`.
 - `Display` is a reference-type `ObservableObject`; instances are preserved across refreshes by display id (SwiftUI observes identity).
 - Controllers never throw to callers — they return nil/false and `os_log` (private APIs degrade, UI stays alive).
-- DDC I2C access is serialized per display (per-display `DispatchQueue`) with a cooldown (`Settings.ddcCooldownMilliseconds`, default 1 s) between writes.
+- DDC I2C access is serialized per display (per-display `DispatchQueue` in `DDCQueuePool`) with a cooldown (`Settings.ddcCooldownMilliseconds`, default 1 s) between writes. Reads are paced (`Settings.ddcReadCooldownMilliseconds`, default 100 ms), served from a 5 s cache, and validated before any of their numbers are used; a display that stops answering has its reads quarantined. A display topology change (enable/disable, mode switch) pauses DDC traffic and waits for the transactions already in flight. The contract is audited against didriksg/Crisp v1.7.1 in `docs/ddc-equivalence.md`.
 - Brightness writes are debounced (`Settings.brightnessDebounceMilliseconds`, default 100 ms) in `DisplayController`.
 
 ## OS-version differences

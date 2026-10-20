@@ -164,7 +164,8 @@ supported on Intel Macs.
 ## Docs
 
 Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-· Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
+· Private APIs: [docs/PRIVATE_APIS.md](docs/PRIVATE_APIS.md) · DDC audit: [docs/ddc-equivalence.md](docs/ddc-equivalence.md)
+· Changes: [CHANGELOG.md](CHANGELOG.md)
 · Releasing: [RELEASING.md](RELEASING.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License

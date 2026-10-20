@@ -35,6 +35,14 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   soon as the write is accepted, so the next read asks the display rather than the cache
   (issue #25).
 
+### Documentation
+- `docs/ddc-equivalence.md` audits FBD's DDC/CI transport against didriksg/Crisp v1.7.1,
+  component by component: the private symbol, the wire framing, the reply validation, the read
+  cache, the read quarantine, the write cadence, the bus contention and the display↔channel
+  matching. Each divergence is either aligned — with the commit that aligned it — or recorded
+  with the reason the equivalence still holds. The claim it supports is *code-verified
+  equivalence*, never hardware verification (issue #24).
+
 ## [2.0.0] - 2026-10-16
 
 ### Changed
