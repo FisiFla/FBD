@@ -10,9 +10,74 @@ import os
 private let log = Logger(subsystem: "dev.fisifla.fbd", category: "OverlayController")
 
 /// Errors surfaced by the boost pipeline.
-private enum OverlayError: Error {
+private enum OverlayError: Error, LocalizedError {
     case shareableContentUnavailable
     case metalSetupFailed
+    case displayUnavailable
+    case runningApplicationUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .shareableContentUnavailable:
+            return "the shareable content is unavailable"
+        case .metalSetupFailed:
+            return "the Metal pipeline could not be set up"
+        case .displayUnavailable:
+            return "the display is not available for screen capture"
+        case .runningApplicationUnavailable:
+            return "the running application is not in the shareable content"
+        }
+    }
+}
+
+/// Diagnostics for a captured frame.
+///
+/// The overlay's first frame is the diagnosis of a white display: a frame
+/// that comes back uniformly white says the capture was blanked or contains
+/// the overlay itself, and a frame with the desktop in it says the pipeline
+/// works.
+enum CapturedFrame {
+    /// A coarse average of the frame's colour, 0…1 per channel.
+    ///
+    /// A sparse sample (a 16×16 grid) rather than a full-frame average: it
+    /// is enough to tell "a uniform white surface" from "the desktop", and it
+    /// does not cost a full pass over a multi-megapixel buffer.
+    static func averageColor(of pixelBuffer: CVPixelBuffer) -> (r: Double, g: Double, b: Double)? {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard width > 0, height > 0, bytesPerRow > 0 else { return nil }
+        // The capture is 32-bit BGRA (see makeConfiguration); RGBA is
+        // accepted too, so the diagnostic survives a format change.
+        let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        let redIndex: Int
+        switch format {
+        case kCVPixelFormatType_32BGRA: redIndex = 2
+        case kCVPixelFormatType_32RGBA: redIndex = 0
+        default: return nil
+        }
+        let bytes = base.assumingMemoryBound(to: UInt8.self)
+        var red = 0.0, green = 0.0, blue = 0.0
+        var count = 0
+        let steps = 16
+        for row in 0..<steps {
+            let y = min(height - 1, row * height / steps)
+            for column in 0..<steps {
+                let x = min(width - 1, column * width / steps)
+                let pixel = bytes + (y * bytesPerRow + x * 4)
+                blue += Double(pixel[0])
+                green += Double(pixel[1])
+                red += Double(pixel[redIndex])
+                count += 1
+            }
+        }
+        guard count > 0 else { return nil }
+        let scale = 1.0 / (255.0 * Double(count))
+        return (red * scale, green * scale, blue * scale)
+    }
 }
 
 /// Full-screen overlay capabilities, one per display:
@@ -58,6 +123,117 @@ public final class OverlayController {
             return result
         }
     }
+
+    /// The gate that keeps the overlay window invisible until it has
+    /// something real to show.
+    ///
+    /// The window is ordered front before the capture exists — it has to be,
+    /// so the capture can exclude it — and an undrawn Metal layer is an
+    /// undefined (white) surface. So the window stays fully transparent
+    /// until a frame has actually been rendered.
+    struct RevealGate {
+        /// How many frames have been rendered.
+        private(set) var framesRendered = 0
+
+        /// Whether the window may be shown.
+        private(set) var revealed = false
+
+        /// A frame was rendered. Returns true the first time — that is the
+        /// moment the window may be shown.
+        mutating func frameRendered() -> Bool {
+            framesRendered += 1
+            guard !revealed else { return false }
+            revealed = true
+            return true
+        }
+    }
+
+    /// What the capture has to exclude so it cannot contain the overlay.
+    ///
+    /// The shareable content is an **asynchronous snapshot** of what the
+    /// WindowServer knows about, and the overlay window is ordered front
+    /// microseconds before the capture starts — so the first snapshot often
+    /// does not contain it yet. A capture that contains the overlay is a
+    /// feedback loop: the overlay renders the capture, the next capture
+    /// contains the overlay, and the first frame latches forever (a uniform
+    /// white display). That is why the exclusion cannot depend on a snapshot
+    /// that may predate our own window.
+    enum CaptureExclusion: Equatable {
+        /// Exclude FBD's own windows (the filter, the software dim, the
+        /// corner mask) from the capture.
+        case excludeWindows([CGWindowID])
+
+        /// Exclude the running application — the deterministic fallback for
+        /// when the shareable content never contained our own window.
+        case excludeApplication
+    }
+
+    /// Decide what the capture must exclude, from the snapshots taken.
+    ///
+    /// The *last* snapshot that contains the overlay's own window is the one
+    /// to use: it is the freshest view of the window list, and it proves our
+    /// window has been published — so the capture provably cannot contain
+    /// it. If no snapshot ever contained it, the capture excludes the
+    /// running application instead — that is heavier than excluding the
+    /// windows (FBD's Settings window leaves the capture too), but it is
+    /// deterministic, and a capture that can contain the overlay is worse
+    /// than a capture that misses a settings panel.
+    ///
+    /// - Parameters:
+    ///   - snapshots: the window ids of each shareable-content snapshot, in
+    ///     the order they were taken.
+    ///   - overlay: FBD's own window ids.
+    ///   - own: the overlay window's own id — the one that must not end up
+    ///     in the capture.
+    nonisolated static func captureExclusion(
+        snapshots: [[CGWindowID]],
+        overlay: Set<CGWindowID>,
+        own: CGWindowID
+    ) -> CaptureExclusion {
+        for shareable in snapshots.reversed() {
+            guard shareable.contains(own) else { continue }
+            return .excludeWindows(shareable.filter { overlay.contains($0) })
+        }
+        return .excludeApplication
+    }
+
+    /// The level the overlay windows sit at.
+    ///
+    /// Above the desktop, the Dock and the menu bar — the filter has to
+    /// cover them — but **below the shielding level**
+    /// (`CGShieldingWindowLevel()`). That level is the one macOS reserves
+    /// for content that must *not* appear in a screen recording: a capture
+    /// that covers such a window can come back blanked instead of showing
+    /// the desktop, which paints the whole display white.
+    ///
+    /// Every window that lives in the captured region (the filter itself,
+    /// the software dim, the corner mask) therefore has to stay below it.
+    nonisolated static let captureSafeLevel = NSWindow.Level(
+        rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1
+    )
+
+    /// The level of the windows that sit *on top of* the filter's output:
+    /// the software dim and the corner mask. One step above the filter, so
+    /// they dim and mask what the filter renders rather than being hidden
+    /// behind it.
+    nonisolated static let overlayTopLevel = NSWindow.Level(
+        rawValue: captureSafeLevel.rawValue + 1
+    )
+
+    /// How many shareable-content snapshots may be taken while waiting for
+    /// the overlay's own window to appear in one.
+    static let snapshotAttempts = 10
+
+    /// How long to wait between two snapshots, in milliseconds.
+    static let snapshotRetryDelay = 100
+
+    /// How long the capture may take to deliver its first frame before the
+    /// session is torn down.
+    ///
+    /// Fail closed: a capture that never delivers a frame is not going to
+    /// work, and the display is better off without the overlay than painted
+    /// with an undrawn one.
+    static let firstFrameTimeout: Duration = .seconds(3)
 
     /// Dim overlay windows by display id.
     private var dimWindows: [CGDirectDisplayID: NSWindow] = [:]
@@ -206,7 +382,11 @@ public final class OverlayController {
             removeDim(for: displayID)
             return false
         }
-        let window = dimWindows[displayID] ?? makeOverlayWindow(bounds: bounds, backgroundColor: .black)
+        let window = dimWindows[displayID] ?? makeOverlayWindow(
+            bounds: bounds,
+            backgroundColor: .black,
+            level: Self.overlayTopLevel
+        )
         dimWindows[displayID] = window
         window.alphaValue = CGFloat(opacity)
         window.setFrame(bounds, display: true)
@@ -356,6 +536,12 @@ public final class OverlayController {
             )
             view.delegate = session
             boostSessions[displayID] = session
+            // The window goes on screen before the capture exists — it has
+            // to, so the capture can exclude it — but it stays fully
+            // transparent until a real frame has been rendered. An undrawn
+            // Metal layer is an undefined (white) surface: showing it is the
+            // white-display bug.
+            window.alphaValue = 0
             window.orderFrontRegardless()
             session.start(params: params)
             return true
@@ -383,6 +569,14 @@ public final class OverlayController {
         let view = MTKView(frame: .zero, device: device)
         view.colorPixelFormat = .bgra8Unorm
         view.framebufferOnly = true
+        // Transparent: a CAMetalLayer is opaque by default, and an opaque
+        // layer presents as an undefined (white) surface before the first
+        // draw(in:). The window is kept invisible until a real frame has
+        // been rendered, but a transparent layer is the belt to that
+        // braces — the layer must never be able to paint white.
+        view.layer?.isOpaque = false
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.clearColor = MTLClearColorMake(0, 0, 0, 0)
         // Delegate-draw pattern: the SCK output stores the latest frame and
         // flags needsDisplay; draw(in:) renders on the main thread. Paused +
         // enableSetNeedsDisplay keeps the loop frame-driven rather than
@@ -439,6 +633,9 @@ public final class OverlayController {
         if let window = dimWindows[displayID] {
             ids.insert(CGWindowID(window.windowNumber))
         }
+        if let window = cornerWindows[displayID] {
+            ids.insert(CGWindowID(window.windowNumber))
+        }
         if let session = boostSessions[displayID] {
             ids.insert(CGWindowID(session.window.windowNumber))
         }
@@ -451,9 +648,15 @@ public final class OverlayController {
         boostSessions[displayID] === session
     }
 
-    private func makeOverlayWindow(bounds: CGRect, backgroundColor: NSColor) -> NSWindow {
+    private func makeOverlayWindow(
+        bounds: CGRect,
+        backgroundColor: NSColor,
+        level: NSWindow.Level = OverlayController.captureSafeLevel
+    ) -> NSWindow {
         let window = NSWindow(contentRect: bounds, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        // Not the shielding level: the windows that live in the captured
+        // region have to be capturable, or the capture comes back blanked.
+        window.level = level
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isOpaque = false
         window.backgroundColor = backgroundColor
@@ -507,6 +710,10 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
     /// queue / UI thread, read on the main thread by draw(in:).
     private var latestPixelBuffer: CVPixelBuffer?
     private var filterParams = ScreenFilterParams.neutral
+    /// How many frames the capture has delivered.
+    private var framesReceived = 0
+    /// The gate that keeps the window invisible until a frame is rendered.
+    private var revealGate = OverlayController.RevealGate()
 
     var isCapturing: Bool {
         stateLock.lock()
@@ -585,20 +792,11 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
 
     @MainActor private func runCapture() async {
         do {
-            let content = try await fetchShareableContent()
+            let (filter, scDisplay) = try await makeContentFilter()
             // The session may have been torn down (stop/stopAll) while we were
             // waiting for the shareable-content query. Both this check and
             // teardown run on the main actor, so this is race-free.
             guard owner?.isCurrentBoostSession(self, for: displayID) == true else { return }
-            guard let scDisplay = content.displays.first(where: { $0.displayID == displayID }) else {
-                fail("display \(displayID) is not available for screen capture")
-                return
-            }
-            // Never capture our own overlays: transparent boost window + black
-            // dim window would otherwise feed back into the next frame.
-            let overlayIDs = owner?.overlayWindowIDs(for: displayID) ?? []
-            let excluded = content.windows.filter { overlayIDs.contains($0.windowID) }
-            let filter = SCContentFilter(display: scDisplay, excludingWindows: excluded)
             let config = makeConfiguration(for: scDisplay)
             let newStream = SCStream(filter: filter, configuration: config, delegate: self)
             try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
@@ -612,11 +810,80 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
                 // context (an error in Swift 6), and a scoped critical section is
                 // what that diagnostic asks for.
                 self.stateLock.withLock { self._isCapturing = true }
+                // Fail closed: a capture that never delivers a frame is not
+                // going to work, and painting the display with an undrawn
+                // overlay is worse than no overlay at all.
+                self.armFirstFrameWatchdog()
             } catch {
                 self.fail("startCapture failed: \(error.localizedDescription)")
             }
         } catch {
             fail(error.localizedDescription)
+        }
+    }
+
+    /// Build the capture's content filter, with FBD's own windows excluded.
+    ///
+    /// The exclusion cannot be decided from a single snapshot: the shareable
+    /// content is taken asynchronously and the overlay window is ordered
+    /// front microseconds before the capture starts, so the first snapshot
+    /// often predates it. A capture that contains the overlay is a feedback
+    /// loop — the overlay renders the capture, the next capture contains the
+    /// overlay — and the first frame latches forever, as a uniform white
+    /// display.
+    ///
+    /// So the snapshot is re-taken (bounded) until it contains our own
+    /// window, and the running application is excluded as the deterministic
+    /// fallback.
+    @MainActor private func makeContentFilter() async throws -> (SCContentFilter, SCDisplay) {
+        let own = CGWindowID(window.windowNumber)
+        var snapshots: [[CGWindowID]] = []
+        var content: SCShareableContent?
+        var scDisplay: SCDisplay?
+        for _ in 0..<OverlayController.snapshotAttempts {
+            let fetched = try await fetchShareableContent()
+            content = fetched
+            let windowIDs = fetched.windows.map(\.windowID)
+            snapshots.append(windowIDs)
+            guard let display = fetched.displays.first(where: { $0.displayID == displayID }) else {
+                throw OverlayError.displayUnavailable
+            }
+            scDisplay = display
+            if windowIDs.contains(own) { break }
+            // The WindowServer has not published our window yet: give it a
+            // moment and ask again.
+            try? await Task.sleep(for: .milliseconds(OverlayController.snapshotRetryDelay))
+        }
+        guard let content, let scDisplay else { throw OverlayError.displayUnavailable }
+        // FBD's own windows are read now, not when the loop started: the
+        // software dim and the corner mask may have appeared since.
+        let overlayIDs = owner?.overlayWindowIDs(for: displayID) ?? []
+        switch OverlayController.captureExclusion(
+            snapshots: snapshots,
+            overlay: overlayIDs,
+            own: own
+        ) {
+        case .excludeWindows(let ids):
+            log.info("overlay: the overlay window is in the shareable content; excluding FBD's own windows \(ids.sorted()) from the capture of display \(self.displayID)")
+            let excluded = content.windows.filter { ids.contains($0.windowID) }
+            return (SCContentFilter(display: scDisplay, excludingWindows: excluded), scDisplay)
+        case .excludeApplication:
+            // The fallback: heavier than excluding the windows (FBD's own
+            // Settings window leaves the capture too), but deterministic.
+            guard let running = content.applications.first(where: {
+                $0.processID == ProcessInfo.processInfo.processIdentifier
+            }) else {
+                throw OverlayError.runningApplicationUnavailable
+            }
+            log.error("overlay: the overlay window never appeared in the shareable content; excluding the running application instead")
+            return (
+                SCContentFilter(
+                    display: scDisplay,
+                    excludingApplications: [running],
+                    exceptingWindows: []
+                ),
+                scDisplay
+            )
         }
     }
 
@@ -652,7 +919,7 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
 
     /// Log the failure and tear the overlay down on the main thread.
     private func fail(_ reason: String) {
-        log.error("Software boost failed for display \(self.displayID): \(reason)")
+        log.error("Overlay failed for display \(self.displayID): \(reason)")
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.owner?.teardownBoost(for: self.displayID)
@@ -665,9 +932,10 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
         guard type == .screen, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         stateLock.lock()
         latestPixelBuffer = pixelBuffer
+        framesReceived += 1
         stateLock.unlock()
         // Render on the main thread via the MTKView draw loop (reliable
-        // compositing for transparent shield windows).
+        // compositing for transparent windows).
         DispatchQueue.main.async { [weak self] in
             self?.metalView.needsDisplay = true
         }
@@ -681,11 +949,53 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
         stateLock.lock()
         guard let buffer = latestPixelBuffer else {
             stateLock.unlock()
+            // No frame yet: the layer keeps its (transparent) content and the
+            // window stays invisible. An undrawn Metal layer is an undefined
+            // surface, and showing it is a white display.
             return
         }
         let params = filterParams
+        let isFirst = revealGate.frameRendered()
         stateLock.unlock()
+
         renderer.render(pixelBuffer: buffer, params: params, in: view)
+
+        guard isFirst else { return }
+        // The first real frame is on screen: the window may be shown now.
+        revealWindow()
+        if let color = CapturedFrame.averageColor(of: buffer) {
+            log.info("overlay: first frame for display \(self.displayID) — average RGB \(color.r) \(color.g) \(color.b)")
+        }
+    }
+
+    /// Show the window.
+    ///
+    /// The window is ordered front before the capture exists (it has to be,
+    /// so the capture can exclude it), but it stays fully transparent until
+    /// a real frame has been rendered: an undrawn Metal layer is an
+    /// undefined (white) surface, and showing it is a white display.
+    @MainActor private func revealWindow() {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            window.animator().alphaValue = 1
+        }
+    }
+
+    /// Fail closed: tear the session down when the capture does not deliver
+    /// a frame.
+    ///
+    /// A capture that never delivers a frame is not going to work, and the
+    /// display is better off without the overlay than painted with an
+    /// undrawn one.
+    @MainActor private func armFirstFrameWatchdog() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: OverlayController.firstFrameTimeout)
+            guard let self else { return }
+            let rendered = self.stateLock.withLock { self.revealGate.framesRendered }
+            let received = self.stateLock.withLock { self.framesReceived }
+            guard rendered == 0 else { return }
+            self.fail("no frame was rendered within \(Int(OverlayController.firstFrameTimeout.components.seconds)) s (\(received) frames captured)")
+        }
     }
 
     // MARK: SCStreamDelegate
@@ -695,7 +1005,7 @@ private final class BoostSession: NSObject, SCStreamOutput, SCStreamDelegate, MT
         let stopping = _isStopping
         stateLock.unlock()
         guard !stopping else { return }
-        log.error("Boost stream stopped unexpectedly for display \(self.displayID): \(error.localizedDescription)")
+        log.error("Overlay stream stopped unexpectedly for display \(self.displayID): \(error.localizedDescription)")
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.owner?.teardownBoost(for: self.displayID)
