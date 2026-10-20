@@ -89,6 +89,17 @@ final class CommandLineParserTests: XCTestCase {
         )
     }
 
+    func testSkillInstall() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["skill", "install", "claude", "--print"]),
+            .command(
+                .skill,
+                raw: ["skill", "install", "claude", "--print"],
+                direct: false
+            )
+        )
+    }
+
     func testVirtualCreateWithFlags() {
         XCTAssertEqual(
             CLICommandLine.parse(["virtual", "create", "Foo", "1920x1080@60", "--hdr", "--no-auto"]),

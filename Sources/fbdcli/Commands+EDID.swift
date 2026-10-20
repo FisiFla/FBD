@@ -116,8 +116,11 @@ func cmdEDIDApply(_ controller: DisplayController, args: [String]) -> Int32 {
         return 1
     }
     guard edidController.applyOverride(data, for: display) else {
-        print("fbdcli: edid apply: failed to apply override to display \(display.id)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the EDID override was not applied"),
+            command: "edid apply \(display.id)",
+            readBack: readBackCommand(.edid, String(display.id))
+        )
     }
     print("applied \(data.count)-byte EDID override to display \(display.id)")
     return 0
@@ -131,8 +134,11 @@ func cmdEDIDRestore(_ controller: DisplayController, args: [String]) -> Int32 {
     let edidController = EDIDController()
     let original = edidController.exportEDID(for: display)
     guard edidController.restoreFactory(originalEDID: original, for: display) else {
-        print("fbdcli: edid restore: failed to restore factory EDID for display \(display.id)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the factory EDID was not restored"),
+            command: "edid restore \(display.id)",
+            readBack: readBackCommand(.edid, String(display.id))
+        )
     }
     print("restored factory EDID for display \(display.id)")
     return 0
@@ -224,8 +230,11 @@ func cmdProfileApply(_ controller: DisplayController, args: [String]) -> Int32 {
         return 1
     }
     guard profileController.applyProfile(profile.url, for: display) else {
-        print("fbdcli: profile apply: failed to apply profile '\(profile.name)' to display \(display.id)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the profile was not applied"),
+            command: "profile apply \(display.id)",
+            readBack: readBackCommand(.profile, String(display.id))
+        )
     }
     print("applied profile '\(profile.name)' to display \(display.id)")
     return 0
@@ -236,8 +245,11 @@ func cmdProfileApply(_ controller: DisplayController, args: [String]) -> Int32 {
 func cmdProfileRestore(_ controller: DisplayController, args: [String]) -> Int32 {
     guard let display = requireDisplay(args.first, in: controller) else { return 1 }
     guard ColorProfileController().restoreDefault(for: display) else {
-        print("fbdcli: profile restore: failed to restore default profile for display \(display.id)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the default profile was not restored"),
+            command: "profile restore \(display.id)",
+            readBack: readBackCommand(.profile, String(display.id))
+        )
     }
     print("restored default color profile for display \(display.id)")
     return 0
@@ -260,8 +272,11 @@ func cmdUnderscan(display: Display, args: [String]) -> Int32 {
             return 1
         }
         guard UnderscanController().setUnderscan(enabled, for: display) else {
-            print("fbdcli: underscan: failed for display \(display.id) (no underscan support?)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "underscan was not changed (no underscan support?)"),
+                command: "underscan \(display.id)",
+                readBack: readBackCommand(.underscan, String(display.id))
+            )
         }
         print("underscan \(display.id) = \(enabled ? "on" : "off")")
         return 0

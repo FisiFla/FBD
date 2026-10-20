@@ -48,8 +48,12 @@ let package = Package(
         // CLI command surface + argument parser (library so it is testable).
         // Directory is `fbdcli-parser`: a case-variant of `fbdcli` would
         // alias on case-insensitive filesystems (macOS/APFS).
-        .target(name: "FBDCLIParser", dependencies: ["FBDCore"], path: "Sources/fbdcli-parser"),
-        .testTarget(name: "FBDCLIParserTests", dependencies: ["FBDCLIParser"]),
+        // No FBDCore dependency on purpose: the library carries plain values
+        // only, so the parsers stay testable on their own.
+        .target(name: "FBDCLIParser", path: "Sources/fbdcli-parser"),
+        // FBDCore is a *test* dependency here: the parser mirrors one of its
+        // constants, and the tests assert the two still agree.
+        .testTarget(name: "FBDCLIParserTests", dependencies: ["FBDCLIParser", "FBDCore"]),
         // App Intents / Shortcuts (Tier 5).
         .target(name: "FBDIntents", dependencies: ["FBDCore"]),
         .testTarget(name: "FBDCoreTests", dependencies: ["FBDCore"]),

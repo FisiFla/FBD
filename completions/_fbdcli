@@ -49,6 +49,7 @@ _fbdcli() {
     'tv:Control a TV/AVR over the network'
     'report:Detailed report of every display (for bug reports)'
     'config:BetterDisplay-parity settings (show/protect/favourite/lockdim/…)'
+    'skill:Write the agent skill (SKILL.md) for Claude or Codex'
     'help:Show help'
   )
 
@@ -110,6 +111,13 @@ _fbdcli() {
           ;;
         report)
           _message 'optional output file'
+          ;;
+        skill)
+          if (( CURRENT > 3 )); then
+            _values 'agent' claude codex
+          else
+            _values 'skill subcommand' install
+          fi
           ;;
         brightness|contrast|volume)
           _fbdcli_percent_command

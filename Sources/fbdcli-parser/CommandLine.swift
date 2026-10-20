@@ -1,10 +1,12 @@
-import FBDCore
 import Foundation
 
 /// The fbdcli command vocabulary, shared between the executable and the
 /// parser. Raw values match the CLI verbatim. Lives in a library target so
 /// parsing is unit-testable (SwiftPM test targets cannot import executable
 /// targets).
+///
+/// The library deliberately has no FBDCore dependency: it carries plain
+/// values only, so the parsers stay testable on their own.
 public enum Command: String, CaseIterable {
     case list
     case info
@@ -47,6 +49,7 @@ public enum Command: String, CaseIterable {
     case tv
     case config
     case report
+    case skill
     case help
 }
 
@@ -432,6 +435,11 @@ public enum PiPSourceArgs: Equatable, Sendable {
 /// Parsed `pip` arguments.
 /// Options shared by `pip` and `stream` that are not filter values (#14).
 public struct StreamOptions: Equatable, Sendable {
+    /// The capture rates the parser accepts. Mirrors FBDCore's
+    /// `StreamFrameRate.range`; this library has no FBDCore dependency, so
+    /// the parser tests assert the two agree.
+    public static let allowedFrameRates = 1...120
+
     /// Requested capture rate; nil leaves the stream at `StreamFrameRate.default`.
     public var fps: Int?
     /// Ask for the pointer to be kept off the stream's display. Honoured only
@@ -460,9 +468,9 @@ public struct StreamOptions: Equatable, Sendable {
                 guard index + 1 < args.count, let fps = Int(args[index + 1]) else {
                     return .failure(TVCommandValidation.Failure("--fps expects a whole number of frames per second"))
                 }
-                guard StreamFrameRate.range.contains(fps) else {
+                guard Self.allowedFrameRates.contains(fps) else {
                     return .failure(TVCommandValidation.Failure(
-                        "--fps must be \(StreamFrameRate.range.lowerBound)...\(StreamFrameRate.range.upperBound) (got \(fps))"
+                        "--fps must be \(Self.allowedFrameRates.lowerBound)...\(Self.allowedFrameRates.upperBound) (got \(fps))"
                     ))
                 }
                 options.fps = fps

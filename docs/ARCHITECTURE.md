@@ -8,7 +8,9 @@ FBD            executable — LSUIElement menu-bar app (AppKit + SwiftUI)
 fbdcli         executable — CLI (command bodies + HTTP routing)
 FBDCLIParser   library — CLI command vocabulary + all argument/spec parsers +
                the routed-CLI request/URL builders (HTTPRoutingPlan,
-               HTTPRequestBuilder) — all unit-tested; fbdcli delegates
+               HTTPRequestBuilder) + the CLI's grammar table, the agent-skill
+               document and the write-outcome taxonomy — all unit-tested;
+               fbdcli delegates. No FBDCore dependency: plain values only
 FBDIntents     library — Shortcuts actions (AppIntents; exposed via the app's
                FBDAppIntentsBridge)
 CPrivateAPI    C target — private-framework declarations + CGS struct layout (single header)
@@ -128,6 +130,30 @@ main thread).
   declared `Content-Length` above 1 MB is rejected with 413 before
   buffering; idle connections are dropped after 10 s.
 - **`/api/health` is the only unauthenticated endpoint** (uptime checks).
+
+## The CLI's write contract
+
+`fbdcli` writes in two ways: directly against the controllers (when the app is not running) or
+over the app's HTTP API (when it is). Both end in the same place — a state change the user may
+or may not be able to see.
+
+The CLI therefore distinguishes three outcomes of a write, and never blurs them:
+
+- **applied** — the app confirmed it;
+- **refused / failed** — the write did not happen;
+- **reply lost** — the request went out and no answer came back, so the app *may have
+  committed it*.
+
+The third case is the one that matters for an agent or a script: repeating the command would
+apply the change twice. So a lost reply prints *the command may have applied* together with the
+command that reads the state back (`fbdcli brightness 1`), and exits **75** (`EX_TEMPFAIL`)
+rather than the usual failure code 2. No error message invites a blind retry.
+
+The read-back commands come from one table (`CLIGrammar` in `FBDCLIParser`), which is also
+what the agent skill's grammar table is generated from — so the skill, the help text and the
+runtime hints cannot drift apart. `fbdcli skill install <claude|codex>` writes that skill as a
+`SKILL.md`; the document is compiled in, so `--print` and the installed file are byte-for-byte
+the same.
 
 ## Diagnostics
 
