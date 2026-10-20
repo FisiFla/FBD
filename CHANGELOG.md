@@ -5,15 +5,17 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-20
+
 ### Changed
 - The feature matrix now says what was measured rather than what was inherited. Every cell that
   reads *live-verified* was measured on this machine (M1 Max, macOS 27.0.1, built-in XDR panel,
   2026-10-20): the brightness write, the resolution write, Night Shift, the display presets, the
   software overlay, the OSD, the PiP enumeration, True Tone and the HiDPI install script. The
-  README gained a "What was measured on macOS 27.0.1 (2026-10-20)" section that lists each
-  measurement and each thing this machine cannot show: DDC/CI on an external monitor, EDID on
-  the built-in panel, the below-floor blend's DDC floor, the three display-connection
-  behaviours, the privileged HiDPI write, and the app's own Screen Recording grant.
+  evidence lives in `docs/PRIVATE_APIS.md`, which also lists what this machine cannot show:
+  DDC/CI on an external monitor, EDID on the built-in panel, the below-floor blend's DDC floor,
+  the three display-connection behaviours, the privileged HiDPI write, and the app's own Screen
+  Recording grant.
 
 ### Fixed
 - The full-screen overlay could latch on a blank white screen. The capture excluded the overlay
