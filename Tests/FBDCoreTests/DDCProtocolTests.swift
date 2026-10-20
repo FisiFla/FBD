@@ -9,9 +9,20 @@ final class DDCProtocolTests: XCTestCase {
 
     /// Reply as an IOAVService read returns it: [0x6E, 0x88, 0x02, result, code, type,
     /// maxHi, maxLo, curHi, curLo, chk, pad] (m1ddc reads 12 bytes; max @6-7, current @8-9).
+    ///
+    /// The checksum byte is the display's bus address (0x50) XORed over the frame —
+    /// `DDC.replyChecksum`, the same rule didriksg/Crisp v1.7.1 applies.
     private func vcpReply(code: UInt8 = 0x10, max: UInt16 = 100, current: UInt16 = 50, result: UInt8 = 0) -> Data {
-        Data([0x6E, 0x88, 0x02, result, code, 0x00,
-              UInt8(max >> 8), UInt8(max & 0xFF), UInt8(current >> 8), UInt8(current & 0xFF), 0x00, 0x00])
+        let frame: [UInt8] = [0x6E, 0x88, 0x02, result, code, 0x00,
+                              UInt8(max >> 8), UInt8(max & 0xFF), UInt8(current >> 8), UInt8(current & 0xFF)]
+        return Data(frame + [DDC.replyChecksum(frame), 0x00])
+    }
+
+    /// The same frame, with one byte replaced, and a recomputed checksum.
+    private func vcpReply(patching index: Int, _ byte: UInt8, code: UInt8 = 0x10) -> Data {
+        var frame: [UInt8] = [0x6E, 0x88, 0x02, 0x00, code, 0x00, 0x00, 0x64, 0x00, 0x32]
+        frame[index] = byte
+        return Data(frame + [DDC.replyChecksum(frame), 0x00])
     }
 
     // MARK: - VCP write packet
@@ -65,6 +76,84 @@ final class DDCProtocolTests: XCTestCase {
 
     func testParseVCPReplyRejectsEmptyData() {
         XCTAssertNil(DDC.parseVCPReply(Data()))
+    }
+
+    // MARK: - VCP reply validation
+
+    func testReplyChecksumMatchesTheCrispVector() {
+        // The canonical frame [0x6E, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32]
+        // checksums to 0xF2 with the display's bus address (0x50) as the seed.
+        let frame: [UInt8] = [0x6E, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32]
+        XCTAssertEqual(DDC.replyChecksum(frame), 0xF2)
+        // The request checksum uses a different seed (0x6E ^ 0x51) and must not
+        // be used on replies.
+        XCTAssertNotEqual(DDC.checksum(frame), DDC.replyChecksum(frame))
+    }
+
+    func testValidateVCPReplyAcceptsAWellFormedReply() {
+        XCTAssertNil(DDC.validateVCPReply(vcpReply(code: 0x10), expecting: 0x10))
+    }
+
+    func testValidateVCPReplyRejectsATooShortFrame() {
+        XCTAssertEqual(DDC.validateVCPReply(Data([0x6E, 0x88, 0x02])), .tooShort(3))
+    }
+
+    func testValidateVCPReplyRejectsAMissingSignature() {
+        // Stale EDID bytes start with 0x00 — the reply has to start with 0x6E.
+        XCTAssertEqual(DDC.validateVCPReply(vcpReply(patching: 0, 0x00)), .badSignature(0x00))
+    }
+
+    func testValidateVCPReplyRejectsAWrongOpcode() {
+        XCTAssertEqual(DDC.validateVCPReply(vcpReply(patching: 2, 0x03)), .badOpcode(0x03))
+    }
+
+    func testValidateVCPReplyRejectsANonZeroResultCode() {
+        // Result 1 = "the display does not support this VCP feature".
+        XCTAssertEqual(DDC.validateVCPReply(vcpReply(result: 0x01)), .badResult(0x01))
+    }
+
+    func testValidateVCPReplyRejectsAnEchoOfAnotherFeature() {
+        XCTAssertEqual(
+            DDC.validateVCPReply(vcpReply(code: 0x12), expecting: 0x10),
+            .badEcho(expected: 0x10, actual: 0x12)
+        )
+    }
+
+    func testValidateVCPReplyRejectsABrokenChecksum() {
+        var bytes = [UInt8](vcpReply(code: 0x10))
+        bytes[10] = bytes[10] ^ 0xFF
+        XCTAssertEqual(
+            DDC.validateVCPReply(Data(bytes), expecting: 0x10),
+            .badChecksum(expected: DDC.replyChecksum(Array(bytes[0..<10])), actual: bytes[10])
+        )
+    }
+
+    func testValidateVCPReplyRejectsAZeroMaximumForAScaledFeature() {
+        // A zero maximum would scale every write to that feature to zero.
+        XCTAssertEqual(DDC.validateVCPReply(vcpReply(code: 0x10, max: 0)), .zeroMaximum)
+    }
+
+    func testValidateVCPReplyAcceptsAZeroMaximumForTheInputSource() {
+        // The input source has no scale; some monitors report a maximum of zero.
+        XCTAssertNil(DDC.validateVCPReply(vcpReply(code: 0x60, max: 0), expecting: 0x60))
+    }
+
+    func testParseVCPReplyRejectsAFrameThatOnlyPassesTheHeader() {
+        // The classic failure: a display acknowledges the I2C read and answers
+        // with stale bytes. The header looks right, the checksum does not.
+        var bytes = [UInt8](vcpReply(code: 0x10))
+        bytes[10] = 0x00
+        XCTAssertNil(DDC.parseVCPReply(Data(bytes), expecting: 0x10))
+    }
+
+    func testParseVCPReplyRejectsAZeroMaximumForAScaledFeature() {
+        XCTAssertNil(DDC.parseVCPReply(vcpReply(code: 0x10, max: 0), expecting: 0x10))
+    }
+
+    func testParseVCPReplyAcceptsAZeroMaximumForTheInputSource() {
+        let parsed = DDC.parseVCPReply(vcpReply(code: 0x60, max: 0, current: 3), expecting: 0x60)
+        XCTAssertEqual(parsed?.code, 0x60)
+        XCTAssertEqual(parsed?.value.currentValue, 3)
     }
 
     // MARK: - Mute polarity

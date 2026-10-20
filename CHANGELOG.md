@@ -5,6 +5,18 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Added
+- DDC/CI replies are validated before any of their numbers are used: a reply has to carry the
+  DDC/CI signature, echo the VCP code that was asked for, report no error, and pass its
+  checksum. A monitor that acknowledges an I2C read but answers with stale EDID bytes or a NULL
+  frame no longer poisons the brightness scale (issue #25).
+- A display whose DDC controller stops answering has its reads quarantined after six
+  consecutive failures — or after a single attempt that takes longer than three seconds, which
+  means the channel is not listening at all. Quarantined reads fail fast instead of hanging for
+  the full timeout; writes are unaffected (issue #25).
+- DDC/CI reads are cached for five seconds and paced like writes, so a display is not asked
+  more often than its controller can answer (issue #25).
+
 ### Changed
 - `fbdcli auth-token` no longer prints the API token to stdout. It now explains how to obtain
   it; `--reveal` prints the token explicitly. The token grants full control of the user's
@@ -12,10 +24,16 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 - The local API token comparison now has a single implementation (`APIToken`) shared by the
   HTTP router and the `fbd://` URL handler, instead of two copies that had to be kept in
   sync (issue #32).
+- Enabling or disabling a display and switching its mode now pause DDC traffic and wait for
+  the transactions already in flight to finish. The window server waits behind an in-flight
+  I2C transaction, and freezes the whole Mac with it (issue #25).
 
 ### Fixed
 - The HTTP server parsed every request's headers twice — once per received TCP segment. The
   header block is now parsed exactly once per request (issue #32).
+- A DDC/CI write no longer leaves a stale cached read behind: the cache entry is dropped as
+  soon as the write is accepted, so the next read asks the display rather than the cache
+  (issue #25).
 
 ## [2.0.0] - 2026-10-16
 

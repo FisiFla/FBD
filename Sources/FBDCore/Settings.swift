@@ -21,6 +21,8 @@ public enum Settings {
         add("ddcAutoConfigure", ddcAutoConfigure)
         add("ddcReadRetries", ddcReadRetries)
         add("ddcSettleMilliseconds", ddcSettleMilliseconds)
+        add("ddcReadCooldownMilliseconds", ddcReadCooldownMilliseconds)
+        add("ddcReadCacheSeconds", ddcReadCacheSeconds)
         add("xdrUpscaleTargetNits", xdrUpscaleTargetNits)
         add("xdrUpscaleMaxFactor", xdrUpscaleMaxFactor)
         add("softwareUpscalingEnabled", softwareUpscalingEnabled)
@@ -103,6 +105,23 @@ public enum Settings {
     /// (some displays need 50-100 ms).
     @Storage(key: "ddcSettleMilliseconds", defaultValue: 30)
     public static var ddcSettleMilliseconds: Int
+
+    /// Minimum delay between two DDC read operations on the same display,
+    /// milliseconds.
+    ///
+    /// Reads are paced like writes: a display's DDC controller answers less
+    /// often the more it is asked, and a controller that answers rarely turns
+    /// into a display whose brightness slider does nothing.
+    @Storage(key: "ddcReadCooldownMilliseconds", defaultValue: 100)
+    public static var ddcReadCooldownMilliseconds: Int
+
+    /// How long a cached VCP read stays valid, seconds.
+    ///
+    /// A short cache keeps a panel refresh from turning into a burst of I2C
+    /// traffic; a write to the same feature drops the entry, so the next read
+    /// always asks the display.
+    @Storage(key: "ddcReadCacheSeconds", defaultValue: 5)
+    public static var ddcReadCacheSeconds: Int
 
     // MARK: XDR/HDR (Tier 2)
 

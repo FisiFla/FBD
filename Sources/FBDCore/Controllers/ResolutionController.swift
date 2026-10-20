@@ -55,7 +55,12 @@ public final class ResolutionController {
     @discardableResult
     public func applyMode(_ mode: DisplayMode, to display: Display) -> Bool {
         do {
-            try CGSAPI.configureMode(mode.modeNumber, on: display.id)
+            // Hold the DDC bus while the mode changes: WindowServer's mode
+            // switch waits behind an in-flight I2C transaction and freezes the
+            // whole Mac with it.
+            try DDCQueuePool.shared.withTrafficPaused {
+                try CGSAPI.configureMode(mode.modeNumber, on: display.id)
+            }
         } catch {
             log.error("applyMode \(mode.modeNumber) failed for \(display.id): \(error.localizedDescription)")
             return false

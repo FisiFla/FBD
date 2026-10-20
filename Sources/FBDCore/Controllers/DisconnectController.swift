@@ -44,7 +44,12 @@ public final class DisconnectController {
             return false
         }
         do {
-            try CGSAPI.setEnabled(enabled, displayID: displayID)
+            // Hold the DDC bus while the topology changes: WindowServer's
+            // display enable waits behind an in-flight I2C transaction and
+            // freezes the whole Mac with it.
+            try DDCQueuePool.shared.withTrafficPaused {
+                try CGSAPI.setEnabled(enabled, displayID: displayID)
+            }
         } catch {
             log.warning("setEnabled(\(enabled)) failed for \(displayID): \(error.localizedDescription)")
             return false

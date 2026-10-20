@@ -38,7 +38,12 @@ private final class MockExternal: ExternalControlling {
 
 final class DDCControllerTests: XCTestCase {
     /// m1ddc-style 12-byte get-VCP reply: code 0x10, max 100, current 50.
-    private static let brightnessReply = Data([0x6E, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32, 0x00, 0x00])
+    /// The checksum is the display's bus address (0x50) XORed over the frame,
+    /// which is what a reply has to carry to be believed.
+    private static let brightnessReply: Data = {
+        let frame: [UInt8] = [0x6E, 0x88, 0x02, 0x00, 0x10, 0x00, 0x00, 0x64, 0x00, 0x32]
+        return Data(frame + [DDC.replyChecksum(frame), 0x00])
+    }()
 
     private var display: Display {
         Display(
@@ -237,6 +242,89 @@ final class DDCControllerTests: XCTestCase {
 
         wait(for: [delivered], timeout: 3)
         XCTAssertEqual(mock.writeCalls, 2)
+    }
+
+    // MARK: - Read cache
+
+    func testRepeatedReadsAreServedFromTheCache() {
+        let mock = MockExternal()
+        mock.readScript = [Self.brightnessReply]
+        let controller = makeController(mock: mock)
+
+        XCTAssertNotNil(controller.readVCP(0x10, for: display))
+        XCTAssertNotNil(controller.readVCP(0x10, for: display))
+
+        XCTAssertEqual(mock.readCalls, 1, "the second read should come from the cache")
+    }
+
+    func testAWriteInvalidatesTheCachedRead() {
+        let mock = MockExternal()
+        mock.readScript = [Self.brightnessReply]
+        let controller = makeController(mock: mock)
+        let previous = Settings.ddcCooldownMilliseconds
+        Settings.ddcCooldownMilliseconds = 10
+        defer { Settings.ddcCooldownMilliseconds = previous }
+
+        XCTAssertNotNil(controller.readVCP(0x10, for: display))
+        XCTAssertEqual(mock.readCalls, 1)
+
+        controller.writeVCP(0x10, value: 75, for: display)
+        // The write is delivered asynchronously; give it a moment.
+        let delivered = expectation(description: "write delivered")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { delivered.fulfill() }
+        wait(for: [delivered], timeout: 2)
+
+        // The display now holds a value we have not read back: the next read
+        // has to ask it again.
+        XCTAssertNotNil(controller.readVCP(0x10, for: display))
+        XCTAssertEqual(mock.readCalls, 2)
+    }
+
+    // MARK: - Quarantine
+
+    func testRepeatedFailuresQuarantineTheDisplay() {
+        let mock = MockExternal()
+        mock.readScript = [nil]
+        let controller = DDCController(
+            external: mock,
+            isPlatformSupported: { true },
+            readHealth: DDCReadHealth(failureThreshold: 2)
+        )
+        let previous = Settings.ddcReadRetries
+        Settings.ddcReadRetries = 0
+        defer { Settings.ddcReadRetries = previous }
+
+        XCTAssertNil(controller.readVCP(0x10, for: display))
+        XCTAssertNil(controller.readVCP(0x10, for: display))
+
+        // The third read is refused outright — no bus traffic at all.
+        let callsBefore = mock.readCalls
+        XCTAssertNil(controller.readVCP(0x10, for: display))
+        XCTAssertEqual(mock.readCalls, callsBefore, "a quarantined display must not be asked again")
+    }
+
+    // MARK: - Traffic gate
+
+    func testReadsAreRefusedWhileTheDisplayTopologyChanges() {
+        let mock = MockExternal()
+        mock.readScript = [Self.brightnessReply]
+        let pool = DDCQueuePool()
+        let controller = DDCController(
+            external: mock,
+            isPlatformSupported: { true },
+            queuePool: pool
+        )
+
+        let hold = pool.hold()
+
+        XCTAssertNil(controller.readVCP(0x10, for: display))
+        XCTAssertEqual(mock.writeCalls, 0, "no bus traffic while a topology change is in progress")
+        XCTAssertEqual(mock.readCalls, 0)
+
+        hold.release()
+
+        XCTAssertNotNil(controller.readVCP(0x10, for: display))
+        XCTAssertEqual(mock.readCalls, 1)
     }
 
     // MARK: - Capabilities

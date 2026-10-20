@@ -52,7 +52,9 @@ public enum DDC {
     /// handed to IOAVServiceWriteI2C: it is passed as the call's data address
     /// (offset) and the transport puts it on the wire.
     ///
-    /// NOTE: hardware verification of this framing is still pending (issue #7).
+    /// NOTE: hardware verification of this framing is still pending (issue #7); the
+    /// code-level equivalence audit against didriksg/Crisp v1.7.1 lives in
+    /// `docs/ddc-equivalence.md`.
     public static func checksum(_ payload: [UInt8], includeSource: Bool = true) -> UInt8 {
         payload.reduce(UInt8(0x6E) ^ (includeSource ? sourceAddress : 0)) { $0 ^ $1 }
     }
@@ -80,19 +82,91 @@ public enum DDC {
     /// Bytes to read back for a VCP reply (m1ddc reads 12).
     public static let vcpReplyLength = 12
 
-    /// Parse a VCP reply as m1ddc does (`convertI2CtoDDC`):
-    /// [0x6E, len, 0x02, result, code, type, maxHi, maxLo, curHi, curLo, …].
-    /// Max is bytes 6-7 and current bytes 8-9, big-endian. m1ddc does not check the
-    /// reply checksum, so neither do we; a non-0x02 opcode (e.g. an all-zero buffer)
-    /// or a non-zero result code (1 = unsupported VCP) yields nil.
-    public static func parseVCPReply(_ data: Data) -> (code: UInt8, value: DDCValue)? {
+    /// The DDC/CI signature byte that opens every reply frame.
+    public static let replySignature: UInt8 = 0x6E
+
+    /// The bus address of the display, used as the checksum seed of a reply.
+    ///
+    /// A reply's checksum is seeded with the *display's* address (0x50), not
+    /// with the 0x6E signature — which is why it is not `checksum(...)`, whose
+    /// seed is 0x6E ^ 0x51 and which is used for the requests we send.
+    public static let replyChecksumSeed: UInt8 = 0x50
+
+    /// The checksum of a reply frame: the display's bus address XORed with
+    /// every byte of the frame, the 0x6E header byte included.
+    public static func replyChecksum(_ frame: [UInt8]) -> UInt8 {
+        frame.reduce(replyChecksumSeed) { $0 ^ $1 }
+    }
+
+    /// Why a VCP reply was rejected.
+    ///
+    /// A display can acknowledge an I2C read and still answer with stale EDID
+    /// bytes, a NULL frame, or an echo of our own request. Values read from
+    /// such a reply poison the write scale — a bogus maximum makes every
+    /// brightness write saturate — so a reply has to prove itself before any
+    /// of its numbers are used.
+    public enum VCPReplyRejection: Equatable {
+        /// The frame was shorter than a reply can be.
+        case tooShort(Int)
+        /// The frame did not start with the 0x6E signature.
+        case badSignature(UInt8)
+        /// The opcode was not 0x02 ("get VCP feature reply").
+        case badOpcode(UInt8)
+        /// The result byte was not 0x00 (1 = unsupported VCP feature).
+        case badResult(UInt8)
+        /// The reply echoed a different VCP code than the one requested.
+        case badEcho(expected: UInt8, actual: UInt8)
+        /// The frame's checksum did not match its bytes.
+        case badChecksum(expected: UInt8, actual: UInt8)
+        /// The reply reported a maximum of zero for a scaled feature.
+        case zeroMaximum
+    }
+
+    /// Validate a VCP reply.
+    ///
+    /// `expecting` is the VCP code that was requested: the reply has to echo
+    /// it, and it decides whether a maximum of zero is acceptable — the input
+    /// source has no scale, and some monitors report a zero maximum for it.
+    /// When no code is given, the reply's own echo is used for that decision.
+    ///
+    /// - Returns: the reason the reply was rejected, or nil when it is valid.
+    public static func validateVCPReply(
+        _ data: Data,
+        expecting code: UInt8? = nil
+    ) -> VCPReplyRejection? {
         let bytes = [UInt8](data)
-        guard bytes.count >= 10 else { return nil }
-        guard bytes[2] == 0x02, bytes[3] == 0x00 else { return nil }
-        let code = bytes[4]
+        guard bytes.count >= 11 else { return .tooShort(bytes.count) }
+        guard bytes[0] == replySignature else { return .badSignature(bytes[0]) }
+        guard bytes[2] == 0x02 else { return .badOpcode(bytes[2]) }
+        guard bytes[3] == 0x00 else { return .badResult(bytes[3]) }
+        if let code, bytes[4] != code { return .badEcho(expected: code, actual: bytes[4]) }
+        let expected = replyChecksum(Array(bytes[0 ..< 10]))
+        guard expected == bytes[10] else { return .badChecksum(expected: expected, actual: bytes[10]) }
+        let maxValue = UInt16(bytes[6]) << 8 | UInt16(bytes[7])
+        let effectiveCode = code ?? bytes[4]
+        if maxValue == 0, effectiveCode != VCPCode.inputSource.rawValue {
+            return .zeroMaximum
+        }
+        return nil
+    }
+
+    /// Parse a VCP reply.
+    ///
+    /// The reply has to validate first (see `validateVCPReply`): the numbers in
+    /// a frame that does not prove itself are never used, because a display
+    /// that answers with stale bytes would otherwise set the write scale for
+    /// every write that follows. See `docs/ddc-equivalence.md` for the audit
+    /// of this contract against didriksg/Crisp v1.7.1.
+    public static func parseVCPReply(
+        _ data: Data,
+        expecting code: UInt8? = nil
+    ) -> (code: UInt8, value: DDCValue)? {
+        guard validateVCPReply(data, expecting: code) == nil else { return nil }
+        let bytes = [UInt8](data)
+        let replyCode = bytes[4]
         let maxValue = UInt16(bytes[6]) << 8 | UInt16(bytes[7])
         let currentValue = UInt16(bytes[8]) << 8 | UInt16(bytes[9])
-        return (code, DDCValue(maxValue: maxValue, currentValue: currentValue))
+        return (replyCode, DDCValue(maxValue: maxValue, currentValue: currentValue))
     }
 
     // MARK: Capabilities

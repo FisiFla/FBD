@@ -560,7 +560,13 @@ public final class DisplayController {
         let features = Settings.ddcFeatures(for: display.identityKey)
         if features.isEmpty, Settings.ddcAutoConfigure {
             if autoConfigureAttempted.insert(display.id).inserted {
-                ddc.autoConfigure(for: display)
+                let configured = ddc.autoConfigure(for: display)
+                if !configured, ddc.isTrafficPaused {
+                    // The probe was refused because a display topology change
+                    // was in progress, not because the display is mute: let
+                    // the next refresh try again.
+                    autoConfigureAttempted.remove(display.id)
+                }
                 return
             }
             // Auto-configure already ran and persisted nothing: the display has an AVService
