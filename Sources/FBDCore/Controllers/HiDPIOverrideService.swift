@@ -158,7 +158,10 @@ public final class HiDPIOverrideService {
     public func state(for display: Display) -> HiDPIOverrideState {
         let modes = ladder(for: display)
         return HiDPIOverrideState(
-            isSupported: modes != nil,
+            // The same question the panel asks: a display that cannot take a
+            // ladder is not supported, however many modes the ladder would
+            // have had.
+            isSupported: isSupported(for: display),
             isInstalled: isInstalled(for: display),
             modeCount: modes?.count ?? 0,
             wouldPrompt: smoothScalingWouldPrompt(for: display),
@@ -173,6 +176,7 @@ public final class HiDPIOverrideService {
     /// words in front of the user.
     @discardableResult
     public func installSmoothScaling(for display: Display) -> Result<Void, HiDPIOverrideError> {
+        guard isSupported(for: display) else { return .failure(.unsupportedDisplay) }
         guard let modes = ladder(for: display) else { return .failure(.unsupportedDisplay) }
         if isInstalled(for: display) {
             // Already there: nothing to do, and nothing to ask for.

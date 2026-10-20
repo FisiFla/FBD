@@ -26,7 +26,12 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   HDR mode, set the extra-brightness target, switch the input source, disconnect or reconnect a
   display (remembering it if asked), and apply an image adjustment. The per-display page shows a
   "Brightness blend" row and a "Connection" section — hidden rather than greyed where they do
-  not apply — and states what each of them needs (issue #28).
+  not apply — and states what each of them needs. The CLI grew the matching commands:
+  `fbdcli hidpi <id> install|remove|status [--preview]`, `fbdcli gamma-floor <id> [on|off]
+  [percent]`, `fbdcli display <id> disconnect [--remember]`, `fbdcli display <id> reconnect` and
+  `fbdcli display --list-remembered`. Every one of them follows the write contract below: a lost
+  reply says the command may have applied and exits 75, a refused write names the read-back
+  command (issue #28).
 - A display can now be kept disconnected across reboots: FBD remembers the choice and
   re-disconnects the display when it comes back, until the user re-enables it. The memory is
   filed per display identity, so it survives a restart (issue #30).
