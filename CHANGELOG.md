@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-20
+
 ### Fixed
 - The app could freeze solid when macOS asked for Keychain access. Reading the HTTP API token
   touches the login Keychain, and `SecItemCopyMatching` blocks on the modal "allow access?"
