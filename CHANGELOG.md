@@ -5,6 +5,14 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Fixed
+- The feature matrix said the True Tone toggle *degrades* on macOS 27. It does not: measured on
+  macOS 27.0.1 (built-in XDR panel, 2026-10-20), `CBTrueToneClient`'s `available` is true, `enabled`
+  reads back and `setEnabled:` round-trips — off reads back off, on reads back on. The claim came
+  from a note in Lunar's `CBTrueToneClient.h` (not controllable from third parties since macOS
+  26.3) that was never measured here. The matrix, the private-API ledger and the controller's
+  comment now say what was measured; the macOS 26 cell is marked unmeasured instead of degraded.
+
 ## [2.1.0] - 2026-10-20
 
 ### Added

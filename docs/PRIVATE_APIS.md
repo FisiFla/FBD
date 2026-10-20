@@ -51,7 +51,7 @@ and FOSS implementations (lunar, displayplacer).
 | API | Status | Used by |
 |---|---|---|
 | `CBBlueLightClient` (CoreBrightness, ObjC runtime + C shims): `setStrength:commit:`, `getStrength:`, `supportsBlueLightReduction` | ✅ live-verified (strength round-trip 0–100 %) | NightShiftController |
-| `CBTrueToneClient`: `available`, `enabled`, `setEnabled:` | available=false on macOS 26.3+ (degrades) | TrueToneController |
+| `CBTrueToneClient`: `available`, `enabled`, `setEnabled:` | ✅ live-verified 2026-10-20 on macOS 27.0.1 (built-in XDR panel): `available` = true, `enabled` reads back, `setEnabled:` round-trips (off → on, read back after each write). The "unavailable on macOS 26.3+" note came from Lunar's `CBTrueToneClient.h` and does not hold on macOS 27 | TrueToneController |
 | Sparkle 2.9.5 (public, SPM) | ✅ linked; SUFeedURL configured (repo appcast), updater active when signed | UpdaterController |
 | `CoreDisplay_DisplayCreateInfoDictionary` | ✅ live-verified (rich display info; no IODisplayEDID for built-in panel on macOS 27) | EDIDController fallback |
 

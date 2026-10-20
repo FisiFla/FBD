@@ -12,8 +12,12 @@ import os
 ///   - `enabled`     (BOOL)
 ///   - `setEnabled:` (BOOL)
 ///
-/// NOTE: as of macOS 26.3+ True Tone is no longer controllable from third
-/// parties (`available` returns false) — every method degrades gracefully.
+/// NOTE: a note in Lunar's `CBTrueToneClient.h` says True Tone stopped being
+/// controllable from third parties in macOS 26.3. Measured on macOS 27.0.1
+/// (2026-10-20, built-in XDR panel) that does not hold: `available` is true,
+/// `enabled` reads back and `setEnabled:` round-trips (off → on). The toggle
+/// therefore works there. Every method still degrades gracefully when the
+/// class is missing or a call fails.
 ///
 /// Plain class (not MainActor): safe to call from any queue. All private-API
 /// failures degrade to nil/false with a logged warning — never crash.

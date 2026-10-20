@@ -34,13 +34,20 @@ light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/p
 | DDC/CI (external displays, Apple Silicon) | ⚠️ implemented, not yet verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
 | Virtual displays | ⚠️ `CGVirtualDisplay` (dlopen; implemented, unverified) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
 | XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
-| True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
+| True Tone toggle | ✅ | ⚠️ not measured here | ✅ live-verified (macOS 27.0.1) |
 | Below-floor brightness blend (DDC floor reached in software) | ⚠️ needs Screen Recording; not yet verified on hardware | ⚠️ same | ⚠️ same |
 | HiDPI smooth scaling (scaled-mode ladder) | ⚠️ implemented, not yet verified on hardware; asks for an administrator password | ⚠️ same | ⚠️ same |
 | Remembered disconnects · docked built-in display · ambient auto-brightness sync | ⚠️ implemented, not yet verified on hardware | ⚠️ same | ⚠️ same |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 
 Screen rotation on an external display is likewise implemented but unverified.
+
+**True Tone works on macOS 27.** The matrix used to say the toggle *degrades*
+there, on the strength of a note in Lunar's `CBTrueToneClient.h` that True Tone
+stopped being controllable from third parties in macOS 26.3. Measured on
+macOS 27.0.1 (built-in XDR panel, 2026-10-20): `available` is true, `enabled`
+reads back, and `setEnabled:` round-trips — off reads back off, on reads back
+on. FBD's toggle therefore works there; the macOS 26 cell is simply unmeasured.
 
 \* The software boost overlay needs **Screen Recording** permission and combined
 brightness mode enabled — with both in place, XDR upscaling works on macOS 27.
