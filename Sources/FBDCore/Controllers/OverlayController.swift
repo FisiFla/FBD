@@ -40,6 +40,12 @@ public final class OverlayController {
     private var cornerWindows: [CGDirectDisplayID: NSWindow] = [:]
     /// Active capture sessions (window + stream + renderer) by display id.
     private var boostSessions: [CGDirectDisplayID: BoostSession] = [:]
+    /// The user's own image-adjustment parameters, per display.
+    private var userFilterParams: [CGDirectDisplayID: ScreenFilterParams] = [:]
+    /// The software-boost factor per display (brightening).
+    private var boostFactors: [CGDirectDisplayID: Double] = [:]
+    /// The below-floor brightness blend factor per display (dimming).
+    private var blendFactors: [CGDirectDisplayID: Double] = [:]
     private var screenObserver: NSObjectProtocol?
 
     /// Whether a dim set here outlives the call that set it.
@@ -218,10 +224,34 @@ public final class OverlayController {
     public func setSoftwareBoost(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         guard factor > 1 else {
             // Boost only: the dim and corner mask are owned by other callers.
-            teardownBoost(for: displayID)
-            return true
+            // The user's own filter is kept — the boost was one source of the
+            // brightness multiplier, not the whole of it.
+            boostFactors.removeValue(forKey: displayID)
+            return applyFilter(displayID: displayID)
         }
-        return setScreenFilter(ScreenFilterParams(brightness: factor), displayID: displayID)
+        boostFactors[displayID] = factor
+        return applyFilter(displayID: displayID)
+    }
+
+    /// Apply the below-floor brightness blend's software factor.
+    ///
+    /// A multiplicative dim (1 = no dim) carried by the same capture-and-
+    /// render pipeline as the software boost: the shader multiplies the
+    /// captured content by the factor, which is the same effect Crisp gets
+    /// from a gamma transfer table.
+    ///
+    /// The factor is composed with the user's own filter and with the boost
+    /// rather than replacing them — the blend is one more source of the
+    /// brightness multiplier, not a second filter.
+    @discardableResult
+    public func setBrightnessBlendFactor(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
+        let clamped = min(max(factor, 0), 1)
+        if clamped >= 1 {
+            blendFactors.removeValue(forKey: displayID)
+        } else {
+            blendFactors[displayID] = clamped
+        }
+        return applyFilter(displayID: displayID)
     }
 
     /// Apply (or update) a full-screen software filter for a display. Neutral
@@ -230,9 +260,37 @@ public final class OverlayController {
     /// asynchronous stream failures tear the overlay down and log.
     @discardableResult
     public func setScreenFilter(_ params: ScreenFilterParams, displayID: CGDirectDisplayID) -> Bool {
-        guard !params.isNeutral else {
+        userFilterParams[displayID] = params
+        return applyFilter(displayID: displayID)
+    }
+
+    /// Compose the three brightness sources and push the result to the
+    /// pipeline.
+    ///
+    /// The user's own image adjustments, the software boost and the
+    /// below-floor blend all touch the same brightness multiplier, so they are
+    /// composed rather than applied one after the other: the last writer would
+    /// otherwise silently drop the others.
+    @discardableResult
+    private func applyFilter(displayID: CGDirectDisplayID) -> Bool {
+        let user = userFilterParams[displayID] ?? .neutral
+        let boost = boostFactors[displayID] ?? 1
+        let blend = blendFactors[displayID] ?? 1
+        var composed = user
+        composed.brightness = user.brightness * boost * blend
+        guard !composed.isNeutral else {
             stopScreenFilter(displayID: displayID)
             return true
+        }
+        return startOrUpdateFilter(composed, displayID: displayID)
+    }
+
+    /// Start the capture pipeline for a display, or update the parameters of a
+    /// running session.
+    private func startOrUpdateFilter(_ params: ScreenFilterParams, displayID: CGDirectDisplayID) -> Bool {
+        guard ScreenRecordingPermission.ensure() else {
+            log.error("setScreenFilter: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording, then relaunch FBD")
+            return false
         }
         guard ScreenRecordingPermission.ensure() else {
             log.error("setScreenFilter: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording, then relaunch FBD")
@@ -300,6 +358,11 @@ public final class OverlayController {
         removeDim(for: displayID)
         removeCornerMask(for: displayID)
         teardownBoost(for: displayID)
+        // The display is gone: its filter sources go with it, so a later
+        // re-attach does not resurrect a stale boost or blend.
+        userFilterParams.removeValue(forKey: displayID)
+        boostFactors.removeValue(forKey: displayID)
+        blendFactors.removeValue(forKey: displayID)
     }
 
     /// Tear down all overlays.
@@ -313,6 +376,9 @@ public final class OverlayController {
         for id in Array(boostSessions.keys) {
             teardownBoost(for: id)
         }
+        userFilterParams.removeAll()
+        boostFactors.removeAll()
+        blendFactors.removeAll()
     }
 
     /// Remove only the boost overlay for a display (dim overlay untouched).

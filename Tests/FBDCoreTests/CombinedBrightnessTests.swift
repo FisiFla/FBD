@@ -74,6 +74,8 @@ private final class FakeOverlay: OverlayControlling {
     var accepts = true
     var boostCalls: [(factor: Double, displayID: CGDirectDisplayID)] = []
     var dimCalls: [(factor: Double, displayID: CGDirectDisplayID)] = []
+    /// The below-floor blend factor requested, per display.
+    var blendCalls: [(factor: Double, displayID: CGDirectDisplayID)] = []
     /// Whether the surface claims a dim set here would outlive the call. The app's overlay does;
     /// a one-shot CLI's does not, which is the case worth testing.
     var softwareDimPersists = true
@@ -87,6 +89,12 @@ private final class FakeOverlay: OverlayControlling {
     @discardableResult
     func setSoftwareDim(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         dimCalls.append((factor, displayID))
+        return accepts
+    }
+
+    @discardableResult
+    func setBrightnessBlendFactor(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
+        blendCalls.append((factor, displayID))
         return accepts
     }
 }
@@ -106,6 +114,8 @@ final class CombinedBrightnessTests: XCTestCase {
     private var savedSoftware: Bool!
     private var savedTarget: Int!
     private var savedPreferences: BrightnessPreferences!
+    private var savedFloorBlendEnabled: Bool!
+    private var savedFloorBlendThreshold: Double!
 
     override func setUp() {
         super.setUp()
@@ -113,6 +123,8 @@ final class CombinedBrightnessTests: XCTestCase {
         savedSoftware = Settings.softwareUpscalingEnabled
         savedTarget = Settings.xdrUpscaleTargetNits
         savedPreferences = Settings.brightnessPreferences
+        savedFloorBlendEnabled = Settings.brightnessFloorBlendEnabled
+        savedFloorBlendThreshold = Settings.brightnessFloorBlendThresholdPercent
         apple = FakeApple()
         ddc = FakeDDC()
         xdr = FakeXDR()
@@ -151,6 +163,10 @@ final class CombinedBrightnessTests: XCTestCase {
         // Reset the model profile so every case starts from the shipped
         // default; tests that exercise a profile set it explicitly.
         Settings.brightnessPreferences = .standard
+        // The below-floor blend is off unless a case turns it on.
+        Settings.brightnessFloorBlendEnabled = false
+        Settings.brightnessFloorBlendThresholdPercent = 15
+        Settings.setFloorBlend(nil, for: display.identityKey)
     }
 
     override func tearDown() {
@@ -160,6 +176,9 @@ final class CombinedBrightnessTests: XCTestCase {
         Settings.softwareUpscalingEnabled = savedSoftware
         Settings.xdrUpscaleTargetNits = savedTarget
         Settings.brightnessPreferences = savedPreferences
+        Settings.brightnessFloorBlendEnabled = savedFloorBlendEnabled
+        Settings.brightnessFloorBlendThresholdPercent = savedFloorBlendThreshold
+        Settings.setFloorBlend(nil, for: display.identityKey)
         super.tearDown()
     }
 
@@ -601,5 +620,113 @@ final class CombinedBrightnessTests: XCTestCase {
         XCTAssertFalse(module.set(0.5, on: display))
         XCTAssertTrue(overlay.boostCalls.isEmpty)
         XCTAssertFalse(display.isXDRUpscaled)
+    }
+
+    // MARK: - The below-floor blend
+
+    /// With the blend on, a request under the threshold pins the hardware at
+    /// the threshold and lets the software layer carry the rest.
+    func testBlendPinsTheHardwareAndLetsTheSoftwareCarryTheRest() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+        Settings.brightnessFloorBlendThresholdPercent = 15
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.15, accuracy: 1e-9,
+                       "the hardware sits at the threshold, not at the request")
+        XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 0.05 / 0.15, accuracy: 1e-9)
+        XCTAssertEqual(display.floorBlendFactor, 0.05 / 0.15, accuracy: 1e-9)
+    }
+
+    /// The read-back has to report the position the user asked for, not the
+    /// panel's floor — the hardware is pinned, so it cannot report it itself.
+    func testBlendReadBackReportsTheLogicalPosition() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+
+        XCTAssertTrue(module.set(0, on: display))
+
+        XCTAssertEqual(module.get(for: display) ?? -1, 0, accuracy: 1e-9,
+                       "0 % must not read back as the panel's floor")
+    }
+
+    /// Above the threshold the blend steps aside: the hardware carries the
+    /// request and no software dim is left over.
+    func testBlendStandsAsideAboveTheThreshold() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+
+        XCTAssertTrue(module.set(0.05, on: display))
+        XCTAssertTrue(module.set(0.5, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 1, accuracy: 1e-9,
+                       "the software dim must be released above the threshold")
+        XCTAssertEqual(display.floorBlendFactor, 1, accuracy: 1e-9)
+    }
+
+    /// A one-shot CLI invocation has no overlay that outlives it: pinning the
+    /// hardware with nothing left to dim it would leave the screen brighter
+    /// than the slider says, so the blend must not engage there.
+    func testBlendIsSkippedWhenTheOverlayDoesNotOutliveTheCall() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+        overlay.softwareDimPersists = false
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.05, accuracy: 1e-9,
+                       "the request is written as-is when nothing can dim it afterwards")
+        XCTAssertTrue(overlay.blendCalls.allSatisfy { $0.factor >= 1 },
+                      "the blend must not engage when nothing can dim the screen afterwards")
+        XCTAssertEqual(display.floorBlendFactor, 1, accuracy: 1e-9)
+    }
+
+    /// With the blend off nothing changes: the hardware carries the request
+    /// and the read-back is the hardware's own.
+    func testBlendOffLeavesTheRouteUntouched() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = false
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.05, accuracy: 1e-9)
+        XCTAssertTrue(overlay.blendCalls.allSatisfy { $0.factor >= 1 },
+                      "with the blend off the software layer stays neutral")
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.05, accuracy: 1e-9)
+    }
+
+    /// A per-display override wins over the global switch.
+    func testPerDisplayOverrideWinsOverTheGlobalSwitch() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = false
+        Settings.setFloorBlend(
+            BrightnessFloorBlend(threshold: 0.2, isEnabled: true),
+            for: display.identityKey
+        )
+
+        XCTAssertTrue(module.set(0.1, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.2, accuracy: 1e-9)
+        XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 0.5, accuracy: 1e-9)
+    }
+
+    /// In HDR the DDC scale does not describe the panel, so the software layer
+    /// carries the whole range and the hardware is left alone.
+    func testHDRLeavesTheHardwareAloneAndCarriesTheRangeInSoftware() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+        display.updateXDRState(
+            presets: [], isXDRCapable: true, activePresetIndex: nil,
+            isXDRUpscaled: false, xdrUpscaleTargetNits: nil,
+            isHDRModeCapable: true, isHDRModeEnabled: true
+        )
+
+        XCTAssertTrue(module.set(0.4, on: display))
+
+        XCTAssertEqual(apple.writeCalls, 0, "the DDC scale says nothing about HDR")
+        XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 0.4, accuracy: 1e-9)
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.4, accuracy: 1e-9)
     }
 }

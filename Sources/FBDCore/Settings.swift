@@ -52,6 +52,8 @@ public enum Settings {
         add("menuBarIcon", menuBarIconRaw)
         add("hideMenuBarIconWhenSingleDisplay", hideMenuBarIconWhenSingleDisplay)
         add("brightnessPreferences", debugBrightnessPreferences)
+        add("brightnessFloorBlendEnabled", brightnessFloorBlendEnabled)
+        add("brightnessFloorBlendThresholdPercent", brightnessFloorBlendThresholdPercent)
         add("launchAtLogin", launchAtLogin)
         add("keepAwakeEnabled", keepAwakeEnabled)
         add("uiScaleMatchingEnabled", uiScaleMatchingEnabled)
@@ -148,6 +150,62 @@ public enum Settings {
     /// Dim-to-black (allows turning the panel fully black via software).
     @Storage(key: "dimToBlackEnabled", defaultValue: false)
     public static var dimToBlackEnabled: Bool
+
+    // MARK: Below-floor brightness blend
+
+    /// Carry the bottom of the brightness slider in software when the
+    /// hardware cannot go that low (the "below-floor blend").
+    ///
+    /// Off by default: the blend needs a software overlay, and a monitor whose
+    /// DDC scale reaches black gains nothing from it. It is enabled per
+    /// display, because only a display with a high floor needs it.
+    @Storage(key: "brightnessFloorBlendEnabled", defaultValue: false)
+    public static var brightnessFloorBlendEnabled: Bool
+
+    /// Where the below-floor blend hands over to the hardware, as a percentage
+    /// of the hardware brightness scale.
+    ///
+    /// The default matches the point where a panel's own floor usually sits;
+    /// a per-display override can move it.
+    @Storage(key: "brightnessFloorBlendThresholdPercent", defaultValue: 15)
+    public static var brightnessFloorBlendThresholdPercent: Double
+
+    /// The below-floor blend configured for a display.
+    ///
+    /// A per-display override (stored as JSON under `floorBlend.<identity>`)
+    /// wins; otherwise the global default applies — the global switch decides
+    /// whether the blend is on at all, the global threshold where it hands
+    /// over.
+    public static func floorBlend(
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) -> BrightnessFloorBlend {
+        let key = "floorBlend.\(identity)"
+        if let data = defaults.data(forKey: key),
+           let stored = try? JSONDecoder().decode(BrightnessFloorBlend.self, from: data) {
+            return stored
+        }
+        return BrightnessFloorBlend(
+            threshold: brightnessFloorBlendThresholdPercent / 100,
+            isEnabled: brightnessFloorBlendEnabled,
+            hardwareFloor: 0
+        )
+    }
+
+    /// Store (or clear) the per-display below-floor blend override.
+    public static func setFloorBlend(
+        _ blend: BrightnessFloorBlend?,
+        for identity: String,
+        in defaults: UserDefaults = Settings.defaults
+    ) {
+        let key = "floorBlend.\(identity)"
+        guard let blend else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(blend) else { return }
+        defaults.set(data, forKey: key)
+    }
 
     /// Allow the experimental direct color-table method (entitlement-gated on
     /// macOS 26+; has no effect there).

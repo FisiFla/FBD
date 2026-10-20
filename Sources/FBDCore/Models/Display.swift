@@ -102,6 +102,21 @@ public final class Display: ObservableObject, Identifiable {
         softwareDim = min(max(factor, 0), 1)
     }
 
+    /// The multiplicative factor the below-floor brightness blend is applying,
+    /// 1 = no blend in force.
+    ///
+    /// Tracked for the same reason the software dim is: while the blend pins
+    /// the hardware at the panel's floor, the hardware read-back reports that
+    /// floor rather than the position the user asked for. The factor is the
+    /// part that carries the difference, so a read has to take it into
+    /// account — see `BrightnessFloorBlend.reconstructSlider`.
+    public private(set) var floorBlendFactor: Double = 1
+
+    /// Record the below-floor blend factor this display is at. Clamped.
+    public func updateFloorBlendFactor(_ factor: Double) {
+        floorBlendFactor = min(max(factor, 0), 1)
+    }
+
     public func updateModes(_ modes: [DisplayMode], current: DisplayMode?) {
         self.modes = modes
         currentMode = current

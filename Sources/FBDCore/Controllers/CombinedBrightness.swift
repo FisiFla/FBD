@@ -41,6 +41,14 @@ public protocol OverlayControlling: AnyObject {
     /// usable geometry, which is the caller's signal to keep the hardware route.
     @discardableResult func setSoftwareDim(_ factor: Double, displayID: CGDirectDisplayID) -> Bool
 
+    /// Apply the below-floor brightness blend's software factor: a multiplicative dim
+    /// (1 = no dim) carried by the same filter pipeline as the software boost.
+    ///
+    /// Required rather than defaulted: a conformer that ignores the blend would silently
+    /// leave the hardware pinned at the panel's floor, which is the exact failure the
+    /// blend exists to avoid.
+    @discardableResult func setBrightnessBlendFactor(_ factor: Double, displayID: CGDirectDisplayID) -> Bool
+
     /// Whether a dim set through this surface is still in force afterwards.
     ///
     /// The dim is a window owned by this process, so it lives exactly as long as the process
@@ -126,7 +134,15 @@ public final class CombinedBrightness {
             return min(max(Double(target) / Double(top), 0), 1) * dim
         }
         guard let hardware = hardwareBrightness(for: display) else { return nil }
-        return min(max(hardware * dim, 0), 1)
+        // The below-floor blend pins the hardware at the panel's floor and lets the software
+        // carry the rest, so the hardware read alone would report that floor rather than
+        // the position the user asked for. Reconstruct the logical position from the pair.
+        let logical = floorBlend(for: display).reconstructSlider(
+            hardwareReadBack: hardware,
+            softwareFactor: display.floorBlendFactor,
+            hdrActive: display.isHDRModeEnabled
+        )
+        return min(max(logical * dim, 0), 1)
     }
 
     /// Set brightness 0…1. Below the hardware ceiling the write goes to
@@ -164,14 +180,20 @@ public final class CombinedBrightness {
 
             if let route = dimRoute(value: clamped, on: display) {
                 applySoftwareDim(route.dim, on: display)
+                // The software dim already carries the bottom of the range, so the
+                // below-floor blend steps aside: two dimming sources would fight.
+                releaseFloorBlend(on: display)
                 guard let hardware = route.hardware else { return true }
-                return setHardwareBrightness(hardware, on: display)
+                return writeHardwareBrightness(hardware, on: display)
             }
             // No dim in play: release any a previous route applied, so the screen cannot stay
             // dimmed after whatever dimmed it has gone.
             applySoftwareDim(1, on: display)
             return setHardwareBrightness(fraction, on: display)
         case .nativeUpscale(let nits):
+            // The boost path carries the brightness on its own; the below-floor blend
+            // would only add a second dimming source to fight it.
+            releaseFloorBlend(on: display)
             // XDRNativeController updates the display state on success. The curve's ceiling
             // applies here as well as to the software boost: `upscaleMaxPercent` says how far
             // past the hardware ceiling an upscale may reach, and the native path is usually
@@ -200,6 +222,7 @@ public final class CombinedBrightness {
             log.warning("set: native XDR upscaling unavailable for \(display.id); using software boost")
             // A boost brightens and a dim darkens: they would fight, so the dim goes.
             applySoftwareDim(1, on: display)
+            releaseFloorBlend(on: display)
             let boost = boostFactor(from: factor, value: clamped, ceiling: Double(hardwareMax))
             let ok = withOverlay { $0.setSoftwareBoost(boost, displayID: display.id) }
             if ok {
@@ -221,6 +244,7 @@ public final class CombinedBrightness {
             let native = xdr.disableUpscaling(for: display)
             withOverlay { $0.setSoftwareBoost(1, displayID: display.id) }
             display.updateSoftwareBoost(false, targetNits: nil)
+            releaseFloorBlend(on: display)
             return native
         }
 
@@ -251,6 +275,7 @@ public final class CombinedBrightness {
             return ok
         case .softwareBoost(let factor):
             // Requires Screen Recording permission (logged by the overlay).
+            releaseFloorBlend(on: display)
             let ok = withOverlay { $0.setSoftwareBoost(factor, displayID: display.id) }
             if ok {
                 display.updateSoftwareBoost(true, targetNits: nits)
@@ -324,10 +349,13 @@ public final class CombinedBrightness {
         return carried
     }
 
-    /// Whether a dim is worth routing to here: it has to be a surface that outlives the call.
-    /// Outside the app the overlay is transient, so the route keeps to hardware rather than
-    /// accepting a write that would vanish.
-    private func softwareDimIsUsable(on display: Display) -> Bool {
+    /// Whether the overlay surface outlives the call.
+    ///
+    /// Outside the app the overlay is transient, so a route that needs it keeps to hardware
+    /// rather than accepting a write that would vanish. The software dim and the below-floor
+    /// blend both depend on this: a blend applied by a one-shot CLI invocation would leave
+    /// the hardware pinned at the panel's floor with nothing left to dim it.
+    private func overlayPersists(on display: Display) -> Bool {
         withOverlay { $0.softwareDimPersists }
     }
 
@@ -348,7 +376,7 @@ public final class CombinedBrightness {
         value: Double,
         on display: Display
     ) -> (hardware: Double?, dim: Double)? {
-        guard softwareDimIsUsable(on: display) else { return nil }
+        guard overlayPersists(on: display) else { return nil }
         let profile = effectivePreferences.clamped()
         let standard = BrightnessPreferences.standard
 
@@ -412,13 +440,72 @@ public final class CombinedBrightness {
         return max(curve.upscaleFactor, 1)
     }
 
+    /// Hardware brightness write, with the below-floor blend applied.
+    ///
+    /// `value` is a brightness on the *hardware scale* — the DDC scale for an
+    /// external display — which is the space the panel's floor lives in.
+    ///
+    /// The blend splits the request: below the threshold the hardware is pinned
+    /// at the threshold and the software layer carries the rest. The software
+    /// factor goes first: if the overlay refuses it, the request is written to
+    /// the hardware unchanged, so the screen is never left pinned brighter than
+    /// the slider says. If the hardware write then fails, the factor is
+    /// released again — a screen left dimmed to a value nobody asked for is
+    /// worse than a failed write.
     private func setHardwareBrightness(_ value: Double, on display: Display) -> Bool {
+        let clamped = min(max(value, 0), 1)
+        let blend = floorBlend(for: display)
+        guard blend.isEnabled, overlayPersists(on: display) else {
+            // The blend is off, or the overlay would not outlive the call (a
+            // one-shot CLI invocation): the hardware carries the request alone.
+            releaseFloorBlend(on: display)
+            return writeHardwareBrightness(clamped, on: display)
+        }
+        let output = blend.evaluate(clamped, hdrActive: display.isHDRModeEnabled)
+        guard applyFloorBlendFactor(output.factor, on: display) else {
+            log.warning("set: the below-floor blend could not be applied for \(display.id); writing the request unchanged")
+            return writeHardwareBrightness(clamped, on: display)
+        }
+        guard let hardware = output.hardware else {
+            // HDR: the software layer is the only path, and it is already in force.
+            return true
+        }
+        guard writeHardwareBrightness(hardware, on: display) else {
+            releaseFloorBlend(on: display)
+            return false
+        }
+        return true
+    }
+
+    /// The plain hardware write, without the below-floor blend.
+    private func writeHardwareBrightness(_ value: Double, on display: Display) -> Bool {
         let clamped = min(max(value, 0), 1)
         if display.appleBrightnessAvailable {
             apple.setBrightness(clamped, on: display)
             return true
         }
         return ddc.setFeature(.brightness, value: clamped, for: display)
+    }
+
+    /// The below-floor blend configured for a display.
+    private func floorBlend(for display: Display) -> BrightnessFloorBlend {
+        Settings.floorBlend(for: display.identityKey)
+    }
+
+    /// Apply the below-floor blend's software factor, recording it so a read
+    /// agrees with the screen.
+    @discardableResult
+    private func applyFloorBlendFactor(_ factor: Double, on display: Display) -> Bool {
+        let clamped = min(max(factor, 0), 1)
+        let carried = withOverlay { $0.setBrightnessBlendFactor(clamped, displayID: display.id) }
+        display.updateFloorBlendFactor(carried ? clamped : 1)
+        return carried
+    }
+
+    /// Release the below-floor blend's software factor.
+    private func releaseFloorBlend(on display: Display) {
+        _ = withOverlay { $0.setBrightnessBlendFactor(1, displayID: display.id) }
+        display.updateFloorBlendFactor(1)
     }
 
     /// OverlayController is @MainActor; CombinedBrightness is driven from the

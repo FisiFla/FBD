@@ -6,6 +6,14 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 ## [Unreleased]
 
 ### Added
+- A monitor's brightness scale rarely reaches black, so the bottom of the brightness slider
+  was a dead zone: the knob moved, the screen did not. The new below-floor blend pins the
+  hardware at a threshold and lets the software layer carry the rest as a multiplicative dim,
+  so the screen reaches what was asked for instead of stopping at the panel's floor. The
+  curve is continuous at the handoff and monotonic across it, the read-back reports the
+  position that was asked for rather than the floor, and in HDR the whole range goes to the
+  software layer — the DDC scale says nothing about the panel's luminance there. Off by
+  default, per display, and it needs Screen Recording permission (issue #29).
 - DDC/CI replies are validated before any of their numbers are used: a reply has to carry the
   DDC/CI signature, echo the VCP code that was asked for, report no error, and pass its
   checksum. A monitor that acknowledges an I2C read but answers with stale EDID bytes or a NULL
@@ -18,6 +26,9 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   more often than its controller can answer (issue #25).
 
 ### Changed
+- The software boost no longer overwrites the display's own picture settings: the overlay
+  keeps the user's filter and composes the boost into it, so applying and removing a boost
+  leaves the screen as it was (issue #29).
 - `fbdcli auth-token` no longer prints the API token to stdout. It now explains how to obtain
   it; `--reveal` prints the token explicitly. The token grants full control of the user's
   displays, so it is treated as a secret (issue #32).

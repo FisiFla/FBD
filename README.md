@@ -35,12 +35,23 @@ light mode and the pre-revamp panel, are in [`docs/plans/fbd-ui-revamp/`](docs/p
 | Virtual displays | ⚠️ `CGVirtualDisplay` (dlopen; implemented, unverified) | ✅ `SLVirtualDisplay` | ✅ `SLVirtualDisplay` (live-verified) |
 | XDR upscaling (native preset rewrite) | ✅ | ✅ | ⚠️ rewrite write-protected → software boost*; preset switching ✅ |
 | True Tone toggle | ✅ | ⚠️ | ⚠️ degrades |
+| Below-floor brightness blend (DDC floor reached in software) | ⚠️ needs Screen Recording; not yet verified on hardware | ⚠️ same | ⚠️ same |
 | Night Shift / OSD / PiP / EDID / profiles | ✅ | ✅ | ✅ |
 
 Screen rotation on an external display is likewise implemented but unverified.
 
 \* The software boost overlay needs **Screen Recording** permission and combined
 brightness mode enabled — with both in place, XDR upscaling works on macOS 27.
+
+**A monitor's DDC brightness scale rarely reaches black.** The bottom of the
+slider is usually a dead zone: the knob moves, the screen does not. The
+below-floor blend splits the slider in two — above the threshold the hardware
+carries the brightness exactly as before, below it the hardware is pinned at
+the threshold and the software layer carries the rest as a multiplicative dim,
+so the screen reaches what you asked for instead of stopping at the panel's
+floor. The read-back reports the position you asked for, not the floor. It is
+off by default, needs **Screen Recording** permission, and is applied per
+display (Settings → the display's page).
 
 **Built-in display disconnect is refused on base-M3 MacBooks.** On Macs with the
 base M3 chip (M3 MacBook Air, entry-level M3 MacBook Pro) Apple repurposed the
