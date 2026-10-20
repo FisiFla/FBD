@@ -17,9 +17,15 @@ Commands:
   list [--json]                 List displays (one line per display, or JSON;
                                 --json reads the hardware directly, even when
                                 the app is running)
-  info <id> [--json]            Show full detail for a display (or JSON, direct)
-  report [file]                 Detailed report of every display, for a bug
-                                report (prints, or writes to <file>)
+  info <id> [--json]            Show full detail for a display (or JSON, direct):
+                                mode, control paths, EDID, panel facts, DPCD,
+                                link and connection state
+  report [<id>][file] [--json]  Detailed report for a bug report. With <id> the
+                                report covers that display and also reads its
+                                sink's DPCD over AUX; without one it covers every
+                                display. A positional argument that names no
+                                display is the file to write; --json prints the
+                                report as JSON
   report --dpcd <hex>           Decode a supplied DPCD dump (repeatable; prefix
                                 with a hex address, e.g. 68028:00 for HDCP)
   brightness <id> [0-100]       Get or set brightness (Apple or DDC path)

@@ -145,6 +145,10 @@ final class HTTPExecutorTests: XCTestCase {
         let (status, body) = run(.displayInfo(id: 7))
         XCTAssertEqual(status, 200)
         XCTAssertTrue(body.contains("\"modes\""))
+        // The hardware profile travels with the display info, so a client gets the
+        // whole story from the app instead of reaching for the hardware itself.
+        XCTAssertTrue(body.contains("\"profile\""))
+        XCTAssertTrue(body.contains("\"profileSummary\""))
         XCTAssertEqual(run(.displayInfo(id: 99)).0, 404)
     }
 

@@ -262,4 +262,25 @@ void *FBDIodpDeviceWithService(uint32_t service);
    way) — or -1 when the entry point is missing, so the caller can tell the two apart. */
 int FBDIodpReadDPCD(void *device, uint32_t address, uint8_t *buffer, uint32_t length);
 
+#pragma mark - DisplayPort link data (probe only — never called)
+
+/* BetterDisplay 5 reads the DisplayPort link data (DPCD / DSC / link bandwidth / tiling) through
+   a pair of IOKit entry points that 4.3.5 did not use:
+
+     IOAVVideoInterfaceCreateWithService
+     IOAVVideoInterfaceGetLinkData
+
+   Both resolve in IOKit on macOS 27.0.1 (measured with dlsym; see docs/PRIVATE_APIS.md).
+
+   **Neither is called, and this declaration exists so that neither is called by accident.**
+   `IOAVVideoInterfaceGetLinkData` returns a structure that no public header describes, so its
+   fields cannot be decoded safely — a wrong guess would put invented numbers into a bug report.
+   `IOAVVideoInterfaceCreateWithService` was measured raising a kernel trap (SIGTRAP) when handed
+   the only display this repository's machine has.
+
+   What this answers is one question honestly: *is the entry point present on this macOS?* A
+   report can then say "present here, but its result cannot be read" instead of implying the
+   feature is absent. False when the framework or either symbol is missing. */
+bool FBDVideoLinkDataAvailable(void);
+
 #endif /* FBD_PRIVATE_API_H */

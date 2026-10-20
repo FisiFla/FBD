@@ -100,6 +100,12 @@ public enum HTTPExecutor {
                 info["brightness"] = value
             }
             info["modes"] = display.modes.map { HTTPJSON.mode($0) }
+            // The hardware facts (EDID, panel, DPCD, link, connection). They are
+            // served here so a client gets the whole story from the app — which owns
+            // the display — instead of reaching for the hardware itself.
+            let profile = DisplayProfileController().profile(for: display, readDPCD: true)
+            info["profile"] = DisplayReport.profileJSON(profile)
+            info["profileSummary"] = DisplayReport.profileSummaryJSON(profile)
             return (200, HTTPJSON.encode(info))
         case .displayControls(let id, let what):
             guard let display = controller.display(withID: id) else {

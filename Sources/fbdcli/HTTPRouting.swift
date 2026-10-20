@@ -134,6 +134,12 @@ enum HTTPRouting {
         if let modes = info["modes"] as? [[String: Any]] {
             print("  modes: \(modes.count)")
         }
+        // The hardware facts (EDID, panel, DPCD, link, connection), as the app
+        // reports them.
+        for entry in info["profileSummary"] as? [[String: Any]] ?? [] {
+            guard let label = entry["label"] as? String else { continue }
+            print("  \(label): \(entry["value"] as? String ?? "")")
+        }
         _ = plan
         return 0
     }
