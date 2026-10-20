@@ -16,6 +16,32 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
   behaviours, the privileged HiDPI write, and the app's own Screen Recording grant.
 
 ### Fixed
+- The full-screen overlay could latch on a blank white screen. The capture excluded the overlay
+  by window id, but that id was matched against a snapshot of the window list taken microseconds
+  after the overlay had been ordered front — when the overlay was not in the snapshot yet, the
+  capture included the overlay itself, and the overlay then rendered its own output for ever. The
+  overlay windows now sit below the screen-capture shielding level instead of on it, the capture
+  waits (briefly) for the overlay to be known and falls back to excluding the application, the
+  window stays invisible until a real frame has been drawn, and a session that never receives one
+  is torn down and reported instead of painting.
+- The below-floor brightness blend never engaged. A request below the panel's floor was served by
+  the software-dim route, which released the blend and left the screen at the floor while the
+  slider said otherwise. The blend now decides before the dim route does, and only one software
+  dim can be in force per display.
+- The blend's read-back reported the floor instead of the position that was asked for. It decided
+  "is the blend pinning the hardware?" by asking the hardware whether it sat at the threshold — a
+  condition that is also true of the normal case, and that a read which has not caught up with the
+  write yet fails. The read-back now follows the software factor, the one piece of state that says
+  the blend is in force: 5 % in, 5 % out.
+- Turning a full-screen filter off left its parameters behind, so the next composition restored
+  the old cast and a stale software boost kept the screen brighter than the brightness slider
+  said. "Off" now clears the user's filter parameters; the boost and the blend keep their own
+  state, because they belong to the brightness route.
+- The display model could claim an XDR upscale that was not on screen. The "is a software boost
+  active?" question was answered with the model's own flag — the one the boost itself writes — so
+  the flag could never clear itself once the session that owned it was gone, and the brightness
+  read-back reported a brightness the screen was not showing. The live overlay session decides
+  now.
 - The feature matrix said the True Tone toggle *degrades* on macOS 27. It does not: measured on
   macOS 27.0.1 (built-in XDR panel, 2026-10-20), `CBTrueToneClient`'s `available` is true, `enabled`
   reads back and `setEnabled:` round-trips — off reads back off, on reads back on. The claim came
