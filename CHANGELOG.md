@@ -6,6 +6,15 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 ## [Unreleased]
 
 ### Added
+- `fbdcli report [<id>][file] [--json]` is a paste-ready report for a bug report: the display's
+  identity (masked), its geometry and mode, the control paths, the EDID, the panel facts and the
+  sink's DPCD — revision, max link rate, lanes, capability bandwidth, DSC and HDCP. A fact is
+  either a value or absent with a reason, never a number standing in for a measurement: the
+  fields whose source cannot be read safely on this macOS (the active link bandwidth and rate,
+  the DSC-in-use flag, the tiling, the connection-mode keys) are reported as unavailable with
+  the reason, and the JSON carries `null` plus the reason next to it. Serials are masked and
+  home-directory paths are shortened, on the same precedent as the masked settings dump
+  (issue #19).
 - `fbdcli skill install claude|codex` writes an agent-ready `SKILL.md`: the command grammar, the
   token model (the token is never echoed), a read-back command for every state-changing command
   and the write contract. The document is compiled in and version-stamped, so a re-install updates
