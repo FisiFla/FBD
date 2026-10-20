@@ -729,4 +729,122 @@ final class CombinedBrightnessTests: XCTestCase {
         XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 0.4, accuracy: 1e-9)
         XCTAssertEqual(module.get(for: display) ?? -1, 0.4, accuracy: 1e-9)
     }
+
+    // MARK: - The blend's contract
+
+    /// The whole point of the blend: a request of 5 % dims the screen to 5 %
+    /// and reads back as 5 % — not the panel's floor, and not a stale value.
+    func testBlendRequestOfFivePercentDimsTheScreenAndReadsBackFivePercent() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+        Settings.brightnessFloorBlendThresholdPercent = 15
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.15, accuracy: 1e-9,
+                       "the hardware is pinned at the threshold")
+        XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 0.05 / 0.15, accuracy: 1e-9,
+                       "the software layer carries the rest")
+        XCTAssertEqual(display.floorBlendFactor, 0.05 / 0.15, accuracy: 1e-9)
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.05, accuracy: 1e-9,
+                       "the read-back reports the position the user asked for")
+    }
+
+    /// The write lands asynchronously, so the read-back right after it can
+    /// still show the value from before the write. The blend's own factor
+    /// carries the position, so that stale value must not become the
+    /// read-back.
+    func testTheReadBackIsNotTheStaleHardwareValue() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+        apple.read = 0.6259
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.05, accuracy: 1e-9,
+                       "a stale hardware read must not become the read-back")
+    }
+
+    /// The display model must not fall back to the floor either: the
+    /// hardware-change notification that follows the pinned write reports the
+    /// floor, and the slider must not jump to it.
+    func testTheModelKeepsTheLogicalPositionWhileTheBlendPinsTheHardware() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        // The hardware reports the pinned floor — that is what it was told to
+        // be — and the model keeps the position the user asked for.
+        display.updateBrightness(0.15)
+
+        XCTAssertEqual(display.brightness ?? -1, 0.05, accuracy: 1e-9,
+                       "the model must not fall back to the panel's floor")
+    }
+
+    /// The software dim route must not swallow a request the blend is there to
+    /// deliver: it used to release the blend and serve the request the plain
+    /// way, which left the screen at the panel's floor while the slider said
+    /// otherwise.
+    func testTheSoftwareDimRouteDoesNotSwallowTheBlend() {
+        Settings.combinedBrightnessEnabled = true
+        Settings.brightnessFloorBlendEnabled = true
+        Settings.brightnessFloorBlendThresholdPercent = 20
+        apple.read = 0.6259
+        // A profile that takes the software dim route.
+        let module = CombinedBrightness(
+            apple: apple, ddc: ddc, xdr: xdr, overlay: overlay,
+            preferences: BrightnessPreferences(preferHardwareControl: false)
+        )
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        // 0.05 of the 1600-nit slider is 80 nits — 16 % of the 500-nit
+        // hardware scale, below the 20 % threshold, so the blend takes it.
+        XCTAssertEqual(apple.lastWrite, 0.2, accuracy: 1e-9,
+                       "the hardware is pinned at the threshold")
+        XCTAssertEqual(overlay.blendCalls.last?.factor ?? -1, 0.16 / 0.2, accuracy: 1e-9,
+                       "the blend carries the request, not the dim")
+        XCTAssertEqual(display.softwareDim, 1, accuracy: 1e-9,
+                       "only one software dim can be in force: the dim stands aside")
+        XCTAssertEqual(overlay.dimCalls.last?.factor ?? -1, 1, accuracy: 1e-9)
+    }
+
+    /// Fail-closed: if the overlay refuses the factor the request goes to the
+    /// hardware unchanged and no blend is reported, so the screen is never
+    /// left brighter than the slider says.
+    func testBlendFallsBackToTheHardwareWhenTheOverlayRefusesTheFactor() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+        overlay.accepts = false
+
+        XCTAssertTrue(module.set(0.05, on: display))
+
+        XCTAssertEqual(apple.lastWrite, 0.05, accuracy: 1e-9,
+                       "the request is written unchanged when nothing can dim it")
+        XCTAssertEqual(display.floorBlendFactor, 1, accuracy: 1e-9,
+                       "and no blend is reported")
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.05, accuracy: 1e-9,
+                       "the read-back is what is on screen")
+    }
+
+    /// The other half of the same rule: above the threshold the blend stands
+    /// aside and the hardware carries the request again — and the model
+    /// follows the hardware once more.
+    func testTheBlendIsReleasedWhenTheRequestLeavesTheThreshold() {
+        Settings.combinedBrightnessEnabled = false
+        Settings.brightnessFloorBlendEnabled = true
+
+        XCTAssertTrue(module.set(0.05, on: display))
+        XCTAssertEqual(display.floorBlendFactor, 0.05 / 0.15, accuracy: 1e-9)
+
+        XCTAssertTrue(module.set(0.5, on: display))
+
+        XCTAssertEqual(display.floorBlendFactor, 1, accuracy: 1e-9,
+                       "the blend is released above the threshold")
+        XCTAssertEqual(module.get(for: display) ?? -1, 0.5, accuracy: 1e-9)
+        display.updateBrightness(0.5)
+        XCTAssertEqual(display.brightness ?? -1, 0.5, accuracy: 1e-9,
+                       "and the model follows the hardware again")
+    }
 }

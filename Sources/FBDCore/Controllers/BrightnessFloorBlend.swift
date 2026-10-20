@@ -20,7 +20,9 @@ import Foundation
 /// - **Honest read-back.** While the blend is in force the hardware is
 ///   pinned, so a hardware read alone reports the floor — "25 %" when the user
 ///   asked for 0 %. `reconstructSlider(hardwareReadBack:softwareFactor:)`
-///   turns the pair back into the logical slider position.
+///   turns the pair back into the logical slider position, and it takes the
+///   software factor — the one piece of state that says the blend is in
+///   force — as its signal, not the hardware read.
 ///
 /// The whole model is pure: no display, no settings, no overlay. The
 /// persistence lives in `Settings`, the wiring in `CombinedBrightness`.
@@ -112,9 +114,24 @@ public struct BrightnessFloorBlend: Equatable, Codable, Sendable {
     /// for. The software factor is what carries the difference, so the logical
     /// position is `threshold × factor`.
     ///
+    /// **The factor — not the hardware read — says whether the blend is in
+    /// force.** The hardware read cannot: while the blend pins the hardware
+    /// the read sits at the threshold, a read that has not caught up with the
+    /// write yet still shows the old value, and a monitor that moved on
+    /// through its own OSD shows a third value. Asking the hardware "is it at
+    /// the threshold?" therefore cannot tell *pinned* from *the hardware moved
+    /// on* from *the write has not landed yet* — and it answered "the
+    /// hardware is the truth" in exactly the case the blend exists for, so
+    /// the read-back reported the floor (or a stale value) instead of the
+    /// position the user asked for.
+    ///
+    /// The caller knows whether the blend is in force: it applied the factor,
+    /// and a factor of 1 means it is not in force.
+    ///
     /// - Parameters:
     ///   - hardwareReadBack: what the hardware reports, when it could be read.
-    ///   - softwareFactor: the factor the software layer is applying now.
+    ///   - softwareFactor: the factor the software layer is applying now; 1
+    ///     means the blend is not in force.
     ///   - hdrActive: whether the display is in HDR mode.
     public func reconstructSlider(
         hardwareReadBack: Double?,
@@ -140,23 +157,11 @@ public struct BrightnessFloorBlend: Equatable, Codable, Sendable {
         guard threshold > 0 else {
             return hardware ?? 0
         }
-        // The blend is in force only while the hardware sits pinned at the
-        // threshold. If the hardware moved on — the monitor's own OSD, a
-        // physical dimmer, another app — its read-back is the truth, and
-        // multiplying it by our factor would invent a position nobody asked
-        // for.
-        guard let hardware, abs(hardware - threshold) <= Self.pinTolerance else {
-            return hardware ?? 0
-        }
+        // The blend is in force: the hardware is pinned at the threshold and
+        // the software factor carries the rest, so the logical position is
+        // `threshold × factor` — the position the user asked for.
         return Self.clamp01(threshold * factor)
     }
-
-    /// How far the hardware read-back may sit from the threshold and still
-    /// count as "pinned there".
-    ///
-    /// A DDC read-back is a division of two integers, so the value that was
-    /// written and the value that comes back differ by a rounding step.
-    private static let pinTolerance: Double = 0.01
 
     private static func clamp01(_ value: Double) -> Double {
         guard value.isFinite else { return 0 }

@@ -77,6 +77,20 @@ public final class Display: ObservableObject, Identifiable {
     }
 
     public func updateBrightness(_ value: Double?) {
+        guard let value else {
+            brightness = nil
+            return
+        }
+        // While the below-floor blend is in force the hardware is pinned at the
+        // panel's floor, so anything that reports the hardware — a read-back
+        // or a hardware-change notification — reports that floor rather than
+        // the position the user asked for. The model keeps the logical
+        // position the blend carries: a notification that the hardware moved
+        // must not drag the slider back to the floor.
+        if floorBlendFactor < 1 {
+            brightness = floorBlendPosition
+            return
+        }
         brightness = value
     }
 
@@ -112,9 +126,22 @@ public final class Display: ObservableObject, Identifiable {
     /// account — see `BrightnessFloorBlend.reconstructSlider`.
     public private(set) var floorBlendFactor: Double = 1
 
-    /// Record the below-floor blend factor this display is at. Clamped.
-    public func updateFloorBlendFactor(_ factor: Double) {
+    /// The logical slider position the blend carries, 0 when no blend is in
+    /// force.
+    ///
+    /// The blend knows what the user asked for; the hardware does not (it is
+    /// pinned at the panel's floor). This is that position, so the model can
+    /// keep reporting it when the hardware says something else.
+    public private(set) var floorBlendPosition: Double = 0
+
+    /// Record the below-floor blend factor this display is at, with the
+    /// logical position the factor carries. Clamped.
+    ///
+    /// The position is only meaningful while the factor is below 1 — that is
+    /// what "the blend is in force" means.
+    public func updateFloorBlendFactor(_ factor: Double, position: Double = 0) {
         floorBlendFactor = min(max(factor, 0), 1)
+        floorBlendPosition = min(max(position, 0), 1)
     }
 
     public func updateModes(_ modes: [DisplayMode], current: DisplayMode?) {

@@ -136,7 +136,9 @@ public final class CombinedBrightness {
         guard let hardware = hardwareBrightness(for: display) else { return nil }
         // The below-floor blend pins the hardware at the panel's floor and lets the software
         // carry the rest, so the hardware read alone would report that floor rather than
-        // the position the user asked for. Reconstruct the logical position from the pair.
+        // the position the user asked for. Reconstruct the logical position from the pair:
+        // the software factor is what says the blend is in force, and the position it
+        // carries is the one the user asked for.
         let logical = floorBlend(for: display).reconstructSlider(
             hardwareReadBack: hardware,
             softwareFactor: display.floorBlendFactor,
@@ -177,6 +179,20 @@ public final class CombinedBrightness {
             // upscaling is off, full stop.
             withOverlay { $0.setSoftwareBoost(1, displayID: display.id) }
             display.updateSoftwareBoost(false, targetNits: nil)
+
+            // The below-floor blend owns the bottom of the range: below the
+            // threshold the hardware is pinned at the threshold and the
+            // software layer carries the rest. It is decided *before* the dim
+            // route, because a dim route that swallowed the request would
+            // release the blend and serve it the plain way — the screen would
+            // stop at the panel's floor while the slider said otherwise.
+            if floorBlendEngages(fraction, on: display) {
+                // The blend and the software dim both dim the screen, and only
+                // one of them can be in force per display. The blend is the one
+                // that can reach the floor, so the dim stands aside.
+                applySoftwareDim(1, on: display)
+                return setHardwareBrightness(fraction, on: display)
+            }
 
             if let route = dimRoute(value: clamped, on: display) {
                 applySoftwareDim(route.dim, on: display)
@@ -492,20 +508,56 @@ public final class CombinedBrightness {
         Settings.floorBlend(for: display.identityKey)
     }
 
+    /// Whether the below-floor blend takes the request.
+    ///
+    /// The blend is in force when it is enabled, the overlay can outlive the
+    /// call (a one-shot CLI invocation cannot dim the screen afterwards, and
+    /// a pinned hardware with nothing left to dim it would leave the screen
+    /// brighter than the slider says) and the request is below the threshold.
+    ///
+    /// In HDR the whole range goes to the software layer, so the blend takes
+    /// the request there too — a software dim on top of it would dim twice.
+    ///
+    /// `value` is on the *hardware scale* — the space the threshold lives in.
+    private func floorBlendEngages(_ value: Double, on display: Display) -> Bool {
+        let blend = floorBlend(for: display)
+        guard blend.isEnabled, overlayPersists(on: display) else { return false }
+        if display.isHDRModeEnabled { return true }
+        let threshold = blend.effectiveThreshold
+        guard threshold > 0 else { return false }
+        return value < threshold
+    }
+
     /// Apply the below-floor blend's software factor, recording it so a read
     /// agrees with the screen.
+    ///
+    /// Fail-closed: when the overlay refuses the factor the blend cannot be
+    /// carried, so it is dropped from the overlay as well — a factor the
+    /// brightness route has given up on must not come back with the next
+    /// composition — and the caller falls back to the hardware write.
     @discardableResult
     private func applyFloorBlendFactor(_ factor: Double, on display: Display) -> Bool {
         let clamped = min(max(factor, 0), 1)
         let carried = withOverlay { $0.setBrightnessBlendFactor(clamped, displayID: display.id) }
-        display.updateFloorBlendFactor(carried ? clamped : 1)
+        if !carried {
+            _ = withOverlay { $0.setBrightnessBlendFactor(1, displayID: display.id) }
+        }
+        // The logical position the factor carries — the position the user
+        // asked for. The hardware read plays no part in it while the blend is
+        // in force (that is the whole point of the reconstruction).
+        let position = floorBlend(for: display).reconstructSlider(
+            hardwareReadBack: nil,
+            softwareFactor: clamped,
+            hdrActive: display.isHDRModeEnabled
+        )
+        display.updateFloorBlendFactor(carried ? clamped : 1, position: position)
         return carried
     }
 
     /// Release the below-floor blend's software factor.
     private func releaseFloorBlend(on display: Display) {
         _ = withOverlay { $0.setBrightnessBlendFactor(1, displayID: display.id) }
-        display.updateFloorBlendFactor(1)
+        display.updateFloorBlendFactor(1, position: 0)
     }
 
     /// OverlayController is @MainActor; CombinedBrightness is driven from the

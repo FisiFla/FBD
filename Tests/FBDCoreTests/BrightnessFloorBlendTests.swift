@@ -133,12 +133,37 @@ final class BrightnessFloorBlendTests: XCTestCase {
         XCTAssertEqual(reconstructed, 0.42, accuracy: 0.0001)
     }
 
-    func testReadBackUsesTheHardwareWhenItMovedOn() {
-        // The monitor changed the brightness through its own OSD: the
-        // hardware read is the truth, not our factor.
+    /// While the blend is in force the read-back reports the position the
+    /// user asked for — and it is the *factor*, not the hardware read, that
+    /// says the blend is in force.
+    ///
+    /// The old rule asked the hardware whether it sat at the threshold and
+    /// answered "the hardware is the truth" whenever it did not. A read that
+    /// had not caught up with the write yet and a monitor that moved on
+    /// through its own OSD both read as "the blend is not in force", so the
+    /// read-back reported the floor (or a stale value) exactly when the
+    /// blend was doing its job. The two cases were indistinguishable.
+    func testTheBlendStateDecidesTheReadBackNotTheHardwareValue() {
+        // The hardware reports something else entirely — it moved on, or the
+        // write has not landed yet. The logical position is still the one
+        // the blend carries.
         let reconstructed = blend.reconstructSlider(hardwareReadBack: 0.4, softwareFactor: 0.2)
 
-        XCTAssertEqual(reconstructed, 0.4, accuracy: 0.0001)
+        XCTAssertEqual(reconstructed, 0.15 * 0.2, accuracy: 0.0001,
+                       "the blend's own factor decides, so the read-back is the logical position")
+    }
+
+    /// The write lands asynchronously, so the read-back right after it can
+    /// still show the value from before the write. The read-back has to
+    /// report the position the user asked for, not that stale value.
+    func testTheReadBackIsNotTheStaleHardwareValue() {
+        let reconstructed = blend.reconstructSlider(
+            hardwareReadBack: 0.6259,
+            softwareFactor: 0.05 / 0.15
+        )
+
+        XCTAssertEqual(reconstructed, 0.05, accuracy: 0.0001,
+                       "a stale hardware read must not become the read-back")
     }
 
     func testReadBackWithBlendOffIsTheHardwareRead() {
@@ -149,10 +174,17 @@ final class BrightnessFloorBlendTests: XCTestCase {
         XCTAssertEqual(reconstructed, 0.3, accuracy: 0.0001)
     }
 
-    func testMissingHardwareReadIsZero() {
-        let reconstructed = blend.reconstructSlider(hardwareReadBack: nil, softwareFactor: 0.5)
+    /// A missing hardware read is "no control path" when the blend is not in
+    /// force, and the logical position when it is: the factor carries the
+    /// position on its own, the hardware read only confirms the pin.
+    func testAMissingHardwareReadIsZeroWithoutTheBlendAndTheLogicalPositionWithIt() {
+        let withoutBlend = blend.reconstructSlider(hardwareReadBack: nil, softwareFactor: 1)
 
-        XCTAssertEqual(reconstructed, 0)
+        XCTAssertEqual(withoutBlend, 0)
+
+        let withBlend = blend.reconstructSlider(hardwareReadBack: nil, softwareFactor: 0.5)
+
+        XCTAssertEqual(withBlend, 0.075, accuracy: 0.0001)
     }
 
     // MARK: - HDR

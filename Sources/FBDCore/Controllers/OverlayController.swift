@@ -29,6 +29,36 @@ private enum OverlayError: Error {
 /// are logged and reported via the return value — never crash, never block.
 @MainActor
 public final class OverlayController {
+    /// The filter sources a display's overlay composes.
+    ///
+    /// The user's own image adjustments, the software boost and the
+    /// below-floor brightness blend all touch the same brightness multiplier,
+    /// so they are composed rather than applied one after the other: the last
+    /// writer would otherwise silently drop the others.
+    ///
+    /// Internal, and pure: the capture pipeline itself needs Screen Recording
+    /// and a real display, but the state that decides what it shows does not.
+    struct FilterSources: Equatable {
+        /// The user's own image-adjustment parameters.
+        var user: ScreenFilterParams = .neutral
+        /// The software boost multiplier (1 = no boost).
+        var boost: Double = 1
+        /// The below-floor brightness blend multiplier (1 = no blend).
+        var blend: Double = 1
+
+        /// The brightness multiplier the three sources compose to.
+        var composedBrightness: Double {
+            user.brightness * boost * blend
+        }
+
+        /// The parameters the pipeline runs.
+        var composed: ScreenFilterParams {
+            var result = user
+            result.brightness = composedBrightness
+            return result
+        }
+    }
+
     /// Dim overlay windows by display id.
     private var dimWindows: [CGDirectDisplayID: NSWindow] = [:]
     /// Opacity requested by the dim-to-black / lock path, per display.
@@ -40,12 +70,9 @@ public final class OverlayController {
     private var cornerWindows: [CGDirectDisplayID: NSWindow] = [:]
     /// Active capture sessions (window + stream + renderer) by display id.
     private var boostSessions: [CGDirectDisplayID: BoostSession] = [:]
-    /// The user's own image-adjustment parameters, per display.
-    private var userFilterParams: [CGDirectDisplayID: ScreenFilterParams] = [:]
-    /// The software-boost factor per display (brightening).
-    private var boostFactors: [CGDirectDisplayID: Double] = [:]
-    /// The below-floor brightness blend factor per display (dimming).
-    private var blendFactors: [CGDirectDisplayID: Double] = [:]
+    /// The filter sources per display: the user's own image adjustments, the
+    /// software boost and the below-floor brightness blend.
+    private var filterSources: [CGDirectDisplayID: FilterSources] = [:]
     private var screenObserver: NSObjectProtocol?
 
     /// Whether a dim set here outlives the call that set it.
@@ -226,10 +253,10 @@ public final class OverlayController {
             // Boost only: the dim and corner mask are owned by other callers.
             // The user's own filter is kept — the boost was one source of the
             // brightness multiplier, not the whole of it.
-            boostFactors.removeValue(forKey: displayID)
+            filterSources[displayID, default: FilterSources()].boost = 1
             return applyFilter(displayID: displayID)
         }
-        boostFactors[displayID] = factor
+        filterSources[displayID, default: FilterSources()].boost = factor
         return applyFilter(displayID: displayID)
     }
 
@@ -246,22 +273,31 @@ public final class OverlayController {
     @discardableResult
     public func setBrightnessBlendFactor(_ factor: Double, displayID: CGDirectDisplayID) -> Bool {
         let clamped = min(max(factor, 0), 1)
-        if clamped >= 1 {
-            blendFactors.removeValue(forKey: displayID)
-        } else {
-            blendFactors[displayID] = clamped
-        }
+        filterSources[displayID, default: FilterSources()].blend = clamped >= 1 ? 1 : clamped
         return applyFilter(displayID: displayID)
     }
 
     /// Apply (or update) a full-screen software filter for a display. Neutral
-    /// params stop the overlay. Returns false when ScreenCaptureKit is
+    /// params turn the filter off. Returns false when ScreenCaptureKit is
     /// unavailable or screen-recording permission is missing (reason logged);
     /// asynchronous stream failures tear the overlay down and log.
     @discardableResult
     public func setScreenFilter(_ params: ScreenFilterParams, displayID: CGDirectDisplayID) -> Bool {
-        userFilterParams[displayID] = params
+        // Neutral params are "off", and off is one state, not two: nothing is
+        // stored, so a later boost or blend composition cannot carry an old
+        // filter back onto the screen.
+        filterSources[displayID, default: FilterSources()].user = params.isNeutral ? .neutral : params
         return applyFilter(displayID: displayID)
+    }
+
+    /// The parameters the pipeline would run for a display: the user's own
+    /// filter, the boost and the blend composed.
+    ///
+    /// Internal: the capture pipeline needs Screen Recording and a real
+    /// display, neither of which a unit test has, so the state that decides
+    /// what it shows is what the tests can reach.
+    func composedFilterParams(for displayID: CGDirectDisplayID) -> ScreenFilterParams {
+        (filterSources[displayID] ?? FilterSources()).composed
     }
 
     /// Compose the three brightness sources and push the result to the
@@ -273,13 +309,12 @@ public final class OverlayController {
     /// otherwise silently drop the others.
     @discardableResult
     private func applyFilter(displayID: CGDirectDisplayID) -> Bool {
-        let user = userFilterParams[displayID] ?? .neutral
-        let boost = boostFactors[displayID] ?? 1
-        let blend = blendFactors[displayID] ?? 1
-        var composed = user
-        composed.brightness = user.brightness * boost * blend
+        let composed = (filterSources[displayID] ?? FilterSources()).composed
         guard !composed.isNeutral else {
-            stopScreenFilter(displayID: displayID)
+            // Nothing left to composite: take the pipeline down. The sources
+            // themselves stay — they are the state, and the next boost or
+            // blend must be able to bring the pipeline back.
+            teardownBoost(for: displayID)
             return true
         }
         return startOrUpdateFilter(composed, displayID: displayID)
@@ -288,8 +323,11 @@ public final class OverlayController {
     /// Start the capture pipeline for a display, or update the parameters of a
     /// running session.
     private func startOrUpdateFilter(_ params: ScreenFilterParams, displayID: CGDirectDisplayID) -> Bool {
-        guard ScreenRecordingPermission.ensure() else {
-            log.error("setScreenFilter: screen-recording permission missing — grant Screen Recording to FBD in System Settings → Privacy & Security → Screen Recording, then relaunch FBD")
+        // The geometry first: a display that cannot be filtered is not worth
+        // asking the user for a permission over.
+        let bounds = CGDisplayBounds(displayID)
+        guard isUsable(bounds) else {
+            log.error("setScreenFilter: no valid bounds for display \(displayID)")
             return false
         }
         guard ScreenRecordingPermission.ensure() else {
@@ -298,11 +336,6 @@ public final class OverlayController {
         }
         guard let device = MTLCreateSystemDefaultDevice() else {
             log.error("setScreenFilter: no Metal device available")
-            return false
-        }
-        let bounds = CGDisplayBounds(displayID)
-        guard isUsable(bounds) else {
-            log.error("setScreenFilter: no valid bounds for display \(displayID)")
             return false
         }
         if let session = boostSessions[displayID] {
@@ -333,8 +366,17 @@ public final class OverlayController {
     }
 
     /// Stop any full-screen filter overlay for the display.
+    ///
+    /// The user's own filter is off: its parameters go, so a later boost or
+    /// blend composition cannot resurrect them — a filter that was turned off
+    /// must not come back with the next brightness write.
+    ///
+    /// The boost and the blend belong to the brightness route and keep their
+    /// state — but the pipeline stays up while one of them is in force, or
+    /// the screen would jump brighter than the brightness slider says.
     public func stopScreenFilter(displayID: CGDirectDisplayID) {
-        teardownBoost(for: displayID)
+        filterSources[displayID, default: FilterSources()].user = .neutral
+        applyFilter(displayID: displayID)
     }
 
     private func makeBoostView(device: MTLDevice) -> MTKView {
@@ -359,10 +401,8 @@ public final class OverlayController {
         removeCornerMask(for: displayID)
         teardownBoost(for: displayID)
         // The display is gone: its filter sources go with it, so a later
-        // re-attach does not resurrect a stale boost or blend.
-        userFilterParams.removeValue(forKey: displayID)
-        boostFactors.removeValue(forKey: displayID)
-        blendFactors.removeValue(forKey: displayID)
+        // re-attach does not resurrect a stale filter, boost or blend.
+        filterSources.removeValue(forKey: displayID)
     }
 
     /// Tear down all overlays.
@@ -376,9 +416,7 @@ public final class OverlayController {
         for id in Array(boostSessions.keys) {
             teardownBoost(for: id)
         }
-        userFilterParams.removeAll()
-        boostFactors.removeAll()
-        blendFactors.removeAll()
+        filterSources.removeAll()
     }
 
     /// Remove only the boost overlay for a display (dim overlay untouched).
