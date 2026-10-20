@@ -46,6 +46,9 @@ _fbdcli() {
     'dark-mode:Get or set system Dark Mode'
     'dpcd:Read a DisplayPort sink\x27s DPCD over AUX'
     'ambient-light:Get or set ambient-light auto-brightness'
+    'hidpi:Smooth-scaling (HiDPI) ladder (install/remove/status)'
+    'gamma-floor:Below-floor brightness blend (on/off with a threshold)'
+    'display:Disconnect or reconnect a display (--list-remembered)'
     'tv:Control a TV/AVR over the network'
     'report:Detailed report of every display (for bug reports)'
     'config:BetterDisplay-parity settings (show/protect/favourite/lockdim/…)'
@@ -121,6 +124,34 @@ _fbdcli() {
           ;;
         brightness|contrast|volume)
           _fbdcli_percent_command
+          ;;
+        hidpi)
+          if (( CURRENT > 3 )); then
+            _values 'hidpi operation' install remove status
+          else
+            _fbdcli_display_id
+          fi
+          ;;
+        gamma-floor)
+          if (( CURRENT > 3 )); then
+            _values 'gamma-floor action' on off
+          else
+            _fbdcli_display_id
+          fi
+          ;;
+        display)
+          if (( CURRENT > 3 )); then
+            case $words[3] in
+              disconnect)
+                _arguments '--remember[keep the display off when it is plugged back in]'
+                ;;
+              *)
+                _values 'display action' disconnect reconnect
+                ;;
+            esac
+          else
+            _arguments '1:display id:' '--list-remembered[list the displays remembered as off]'
+          fi
           ;;
         xdr)
           _values 'xdr action' 'off' 'nits'

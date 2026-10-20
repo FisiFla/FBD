@@ -26,15 +26,19 @@ func run(arguments: [String]) -> Int32 {
         print(UsageText.text)
         return 1
     case .command(let command, let args, let direct):
+        let rest = Array(args.dropFirst())
         // Route over the app's HTTP API when it is running (single-driver I2C).
-        if !direct, HTTPRouting.routable.contains(command), !CLICommandLine.wantsDirectJSON(command, raw: args) {
+        // A few invocations have no HTTP route of their own and answer
+        // locally: the JSON dumps, the ladder preview and the two reads the
+        // app's API does not expose.
+        let localOnly = CLICommandLine.wantsDirectJSON(command, raw: args)
+            || CLICommandLine.wantsDirectPreview(command, raw: args)
+        if !direct, !localOnly, HTTPRouting.canRoute(command, args: rest) {
             if let exitCode = HTTPRouting.route(command, args: args) {
                 return exitCode
             }
             print("fbdcli: app HTTP API not available — using direct controllers")
         }
-
-        let rest = Array(args.dropFirst())
 
         // The agent skill is a file operation: it needs neither the app's
         // HTTP API nor the display controller, so it is dispatched before
@@ -132,6 +136,12 @@ func run(arguments: [String]) -> Int32 {
         return withDisplay(controller, rest) { cmdDPCD(controller, display: $0, args: $1) }
     case .ambientLight:
         return withDisplay(controller, rest) { cmdAmbientLight(controller, display: $0, args: $1) }
+    case .hidpi:
+        return cmdHiDPI(controller, args: rest)
+    case .gammaFloor:
+        return cmdGammaFloor(controller, args: rest)
+    case .display:
+        return cmdDisplay(controller, args: rest)
     case .config:
         return cmdConfig(controller, args: rest)
     case .skill:

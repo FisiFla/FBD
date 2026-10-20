@@ -139,6 +139,73 @@ final class HTTPRoutingPlanTests: XCTestCase {
         )
     }
 
+    // MARK: - The per-display state commands (#28)
+
+    func testTheHiDPIOperationsShareOneRoute() {
+        XCTAssertEqual(
+            plan(.hidpi, ["1", "install"]),
+            HTTPRoutingPlan(method: "POST", path: "/api/displays/1/hidpi", payload: ["operation": "install"])
+        )
+        XCTAssertEqual(
+            plan(.hidpi, ["1", "remove"]),
+            HTTPRoutingPlan(method: "POST", path: "/api/displays/1/hidpi", payload: ["operation": "remove"])
+        )
+        XCTAssertEqual(
+            plan(.hidpi, ["1", "status"]),
+            HTTPRoutingPlan(method: "POST", path: "/api/displays/1/hidpi", payload: ["operation": "status"])
+        )
+    }
+
+    func testGammaFloorNormalizesPercentToFraction() {
+        XCTAssertEqual(
+            plan(.gammaFloor, ["1", "on", "20"]),
+            HTTPRoutingPlan(
+                method: "POST",
+                path: "/api/displays/1/gamma-floor",
+                payload: ["enabled": true, "threshold": 0.2]
+            )
+        )
+    }
+
+    /// Without a value the configured threshold is kept, so the payload
+    /// carries no threshold at all.
+    func testGammaFloorOmitsTheThresholdWhenNoneIsGiven() {
+        XCTAssertEqual(
+            plan(.gammaFloor, ["1", "off"]),
+            HTTPRoutingPlan(
+                method: "POST",
+                path: "/api/displays/1/gamma-floor",
+                payload: ["enabled": false]
+            )
+        )
+    }
+
+    func testTheDisplayConnectionWrites() {
+        XCTAssertEqual(
+            plan(.display, ["2", "disconnect"]),
+            HTTPRoutingPlan(method: "POST", path: "/api/displays/2/disconnect", payload: ["remember": false])
+        )
+        XCTAssertEqual(
+            plan(.display, ["2", "disconnect", "--remember"]),
+            HTTPRoutingPlan(method: "POST", path: "/api/displays/2/disconnect", payload: ["remember": true])
+        )
+        XCTAssertEqual(
+            plan(.display, ["2", "reconnect"]),
+            HTTPRoutingPlan(method: "POST", path: "/api/displays/2/reconnect", payload: ["remember": false])
+        )
+    }
+
+    /// The invocations the app's API does not expose answer locally, so they
+    /// never travel over the bus.
+    func testTheLocalOnlyInvocationsHaveNoRoute() {
+        XCTAssertFalse(HTTPRoutingPlanBuilder.hasRoute(.hidpi, args: ["1", "install", "--preview"]))
+        XCTAssertFalse(HTTPRoutingPlanBuilder.hasRoute(.gammaFloor, args: ["1"]))
+        XCTAssertFalse(HTTPRoutingPlanBuilder.hasRoute(.display, args: ["--list-remembered"]))
+        XCTAssertTrue(HTTPRoutingPlanBuilder.hasRoute(.hidpi, args: ["1", "install"]))
+        XCTAssertTrue(HTTPRoutingPlanBuilder.hasRoute(.gammaFloor, args: ["1", "on"]))
+        XCTAssertTrue(HTTPRoutingPlanBuilder.hasRoute(.display, args: ["1", "reconnect"]))
+    }
+
     // MARK: - Validation failures (exact CLI messages)
 
     func testMissingIDMessages() {
@@ -185,5 +252,20 @@ final class HTTPRoutingPlanTests: XCTestCase {
 
     func testNonRoutableCommandRejected() {
         XCTAssertEqual(failureMessage(.layout, []), "fbdcli: layout: not routable")
+    }
+
+    func testTheStateCommandValidationMessages() {
+        XCTAssertEqual(
+            failureMessage(.hidpi, ["1", "uninstall"]),
+            "fbdcli: hidpi: unknown operation 'uninstall' (expected install, remove or status)"
+        )
+        XCTAssertEqual(
+            failureMessage(.gammaFloor, ["1", "maybe"]),
+            "fbdcli: gamma-floor: expected on or off (got 'maybe')"
+        )
+        XCTAssertEqual(
+            failureMessage(.display, ["2", "off"]),
+            "fbdcli: display: unknown action 'off' (expected disconnect or reconnect)"
+        )
     }
 }

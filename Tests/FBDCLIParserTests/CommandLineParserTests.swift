@@ -78,6 +78,43 @@ final class CommandLineParserTests: XCTestCase {
         )
     }
 
+    // MARK: - The per-display state commands (#28)
+
+    func testHiDPICommand() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["hidpi", "1", "install"]),
+            .command(.hidpi, raw: ["hidpi", "1", "install"], direct: false)
+        )
+    }
+
+    func testGammaFloorCommand() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["gamma-floor", "1", "on", "20"]),
+            .command(.gammaFloor, raw: ["gamma-floor", "1", "on", "20"], direct: false)
+        )
+    }
+
+    func testDisplayCommand() {
+        XCTAssertEqual(
+            CLICommandLine.parse(["display", "1", "disconnect", "--remember"]),
+            .command(.display, raw: ["display", "1", "disconnect", "--remember"], direct: false)
+        )
+        XCTAssertEqual(
+            CLICommandLine.parse(["display", "--list-remembered"]),
+            .command(.display, raw: ["display", "--list-remembered"], direct: false)
+        )
+    }
+
+    /// The ladder preview is computed from the display's own modes, so it
+    /// selects the direct path — and it installs nothing.
+    func testTheLadderPreviewSelectsTheDirectPath() {
+        XCTAssertTrue(
+            CLICommandLine.wantsDirectPreview(.hidpi, raw: ["hidpi", "1", "install", "--preview"])
+        )
+        XCTAssertFalse(CLICommandLine.wantsDirectPreview(.hidpi, raw: ["hidpi", "1", "install"]))
+        XCTAssertFalse(CLICommandLine.wantsDirectPreview(.display, raw: ["display", "1", "disconnect"]))
+    }
+
     func testAuthToken() {
         XCTAssertEqual(CLICommandLine.parse(["auth-token"]), .command(.authToken, raw: ["auth-token"], direct: false))
     }
