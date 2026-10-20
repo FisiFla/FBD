@@ -267,7 +267,8 @@ a release note:
 - **Night Shift** — strength 50 % → 0 % → 50 %, read back after each write.
 - **Display presets** — the built-in XDR panel switched preset 0 → 1 → 0, read back after each switch.
 - **Virtual screens** — the app created a virtual screen from a persisted config at launch (`SLVirtualDisplay`).
-- **Software overlay** — a full-screen filter applied and cleared (the overlay the below-floor blend and the software boost ride on).
+- **Software overlay** — a full-screen filter applied and cleared (the overlay the below-floor blend and the software boost ride on). The first captured frame is the real desktop (average RGB `0.123 0.119 0.124`), `contrast 0` produces the uniform `0.502` grey the shader must produce, and turning the filter off restores the desktop exactly — no stuck overlay and no stale filter left behind.
+- **Below-floor blend** — a 5 % request reads back **5 %** (not the panel's floor) and the screen is dimmed with it (average RGB `0.053` against `0.15` for the desktop); raising the slider above the threshold unpins the hardware and the read-back follows.
 - **OSD** — the transient HUD showed.
 - **PiP** — ScreenCaptureKit enumerated the displays, windows and apps (the stream itself was not started).
 - **True Tone** — `CBTrueToneClient`: `available` true, `enabled` read back, `setEnabled:` round-tripped (off → on, read back after each write).

@@ -70,10 +70,11 @@ missing stays off.
 | Apple brightness / resolution | ✅ | ✅ | ✅ live-verified |
 | DDC/CI (external displays, Apple Silicon) | ⚠️ not verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
 | Virtual displays | ⚠️ `CGVirtualDisplay`, unverified | ✅ `SLVirtualDisplay` | ✅ live-verified |
-| XDR upscaling (native preset rewrite) | ✅ | ⚠️ write-protected → software boost | ⚠️ write-protected → software boost; preset switching ✅ |
+| XDR upscaling (native preset rewrite) | ✅ | ⚠️ write-protected → software boost | ⚠️ write-protected → software boost (the boost overlay is live-verified); preset switching ✅ |
 | Night Shift / Dark Mode / True Tone / OSD / PiP / profiles | ✅ | ✅ | ✅ live-verified |
+| Full-screen software filters | ✅ | ✅ | ✅ live-verified |
 | EDID | ⚠️ the built-in panel exposes none | ⚠️ same | ⚠️ none on the built-in panel; external displays untested |
-| Below-floor brightness blend | ⚠️ needs Screen Recording; not verified on hardware | ⚠️ same | ⚠️ same |
+| Below-floor brightness blend | ⚠️ needs Screen Recording; not verified on hardware | ⚠️ same | ✅ the blend path is live-verified; a DDC floor is not |
 | HiDPI smooth scaling | ⚠️ the install mechanism is verified; the privileged write is not | ⚠️ same | ⚠️ same |
 | Remembered disconnects · docked built-in · ambient sync | ⚠️ implemented, not verified on hardware | ⚠️ same | ⚠️ same |
 
