@@ -5,6 +5,12 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Documentation
+- The install notes now say what an unsigned update costs: macOS treats the new binary as a new
+  app, so Screen Recording is requested again and the login Keychain asks for its password once
+  more (the app stays responsive while it does). `SECURITY.md` explains why the Keychain item's
+  access control list is not widened to avoid the prompt.
+
 ## [2.1.2] - 2026-10-20
 
 ### Fixed

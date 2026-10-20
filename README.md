@@ -30,6 +30,12 @@ xattr -dr com.apple.quarantine /Applications/FBD.app
 Signed, notarised builds are not published yet — they need a Developer ID
 certificate ([#6](https://github.com/FisiFla/FBD/issues/6)).
 
+Every unsigned update is a new binary as far as macOS is concerned: the first
+launch asks for Screen Recording again, and the first request that reads the
+API token asks for your login Keychain password — choose **Always Allow**. The
+app stays responsive while that prompt is open (the Keychain read happens off
+the main thread), but the API answers 401 until the password is entered.
+
 ## What it does
 
 - **Displays** — brightness (Apple and DDC/CI), contrast, volume, mute, input

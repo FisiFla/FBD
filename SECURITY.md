@@ -25,6 +25,13 @@ team.
 - Automation scripts: `FBD_DISPLAY_NAME` comes from the monitor's EDID and is
   untrusted; it is restricted to letters, digits, space and `- _ . ( )` before
   being exported to shell rules.
+- Unsigned builds are identified by their code hash, so an updated binary is a
+  *different* client to the Keychain: the token item's access control list
+  prompts again after every update. The read happens off the main thread, so
+  the prompt never freezes the app, and the request that needed the token
+  fails with 401 until it is answered. FBD does not widen the item's ACL to
+  avoid the prompt — a signed build ([#6](https://github.com/FisiFla/FBD/issues/6))
+  keeps the grant across updates instead.
 - Secrets: never commit `.env` files or tokens; the repo gitignores them.
 - Private-API usage: every private symbol is a forward-compatibility risk —
   see `docs/PRIVATE_APIS.md`.
