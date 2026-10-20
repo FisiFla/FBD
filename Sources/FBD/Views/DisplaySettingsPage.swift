@@ -47,6 +47,7 @@ struct DisplaySettingsPage: View {
                 ForEach(shown) { display in
                     // The scroll target for `targetDisplayID` lives on this card's first row.
                     PerDisplayCardView(display: display)
+                    DisplayBehaviourSection(display: display)
                     DisplayProtectionSection(display: display)
                     DisplayFavouritesSection(display: display)
                     DisplayPresetsSection(display: display)
@@ -157,6 +158,73 @@ struct DisplaySettingsPage: View {
         let applied = disconnect.apply(steps)
         lastConnectionResult = String(localized: "\(applied) of \(steps.count) display(s) changed.")
         log.info("connection management: \(action.rawValue) applied \(applied)/\(steps.count)")
+    }
+}
+
+/// The per-display switches that are about behaviour rather than properties:
+/// keeping the display disconnected, and letting its brightness follow the
+/// built-in display's ambient sensor.
+@MainActor
+private struct DisplayBehaviourSection: View {
+    let display: Display
+
+    /// The controller the remembered disconnect is read and written through.
+    /// It is not started here: the app's own instance owns the observers.
+    @State private var disconnect = DisconnectController()
+
+    var body: some View {
+        SettingsGroup {
+            Toggle("Keep this display disconnected", isOn: rememberedBinding)
+            if !display.isBuiltin {
+                Toggle("Follow the built-in display's auto-brightness", isOn: followerBinding)
+            }
+        } header: {
+            Text("Display behaviour")
+        } footer: {
+            VStack(alignment: .leading, spacing: FBDTheme.spacingXS) {
+                Text("Disconnects the display now, and again every time it comes back — after a reboot or a replug. Re-enabling it forgets this.")
+                    .fbdLeadingFooter()
+                if !display.isBuiltin {
+                    Text("Keeps this display's brightness in step with the built-in display's ambient sensor.")
+                        .fbdLeadingFooter()
+                }
+            }
+        }
+    }
+
+    /// Whether the display is remembered as "keep disconnected".
+    ///
+    /// Turning it on remembers the request *and* turns the display off now:
+    /// the request is that the display stays off, so it should not sit there
+    /// lit until the next replug. A refusal is reported rather than swallowed
+    /// — a display that could not be turned off is not a display that is off.
+    private var rememberedBinding: Binding<Bool> {
+        Binding(
+            get: { disconnect.isDisconnectRemembered(for: display) },
+            set: { on in
+                if on {
+                    disconnect.rememberDisconnect(for: display)
+                    guard display.isOnline, display.isActive else { return }
+                    guard disconnect.setEnabled(false, displayID: display.id) else {
+                        FBDNotice.shared.report(String(localized: "Could not disconnect this display."))
+                        return
+                    }
+                } else {
+                    disconnect.forgetDisconnect(for: display)
+                }
+            }
+        )
+    }
+
+    /// Whether the display's brightness follows the built-in display's
+    /// auto-brightness.
+    private var followerBinding: Binding<Bool> {
+        Binding(
+            get: { Settings.isAmbientSyncFollower(display.identityKey) },
+            set: { on in
+                Settings.setAmbientSyncFollower(on, for: display.identityKey)
+            }
+        )
     }
 }
 

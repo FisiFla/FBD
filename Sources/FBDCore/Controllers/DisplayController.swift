@@ -108,6 +108,13 @@ public final class DisplayController {
     public init() {
         ddc = DDCController(external: external)
         combined = CombinedBrightness(apple: apple, ddc: ddc, xdr: xdr, overlay: overlay)
+        // The ambient-light sync hangs on the observer: the built-in panel's
+        // ambient sensor drives its backlight, and this is where that change
+        // arrives.
+        brightnessObserver.onChange = { [weak self] display, value in
+            // The observer calls back on the main queue.
+            MainActor.assumeIsolated { self?.syncAmbientBrightness(from: display, value: value) }
+        }
     }
 
     // MARK: - DDC surface (typed, no controller exposure)
@@ -275,6 +282,52 @@ public final class DisplayController {
             display.updateBrightness(value)
         }
         return value
+    }
+
+    // MARK: - Ambient brightness sync (auto-brightness)
+
+    /// Drive the displays that follow the built-in display's auto-brightness.
+    ///
+    /// An external monitor has no ambient sensor, so the only way for it to
+    /// follow the room's light is to follow the built-in panel, which does.
+    /// The mapping goes through nits (`AmbientBrightnessSync`), because a 0…1
+    /// fraction means nothing across two panels with different ceilings.
+    ///
+    /// The write goes through `CombinedBrightness`, so it inherits the DDC
+    /// write cooldown and the read quarantine, and it cannot race the slider
+    /// path — that path drives the same route.
+    private func syncAmbientBrightness(from source: Display, value: Double) {
+        // The built-in panel is the one with the sensor; nothing else drives
+        // the sync.
+        guard source.isBuiltin else { return }
+        let followers = Settings.ambientSyncFollowers()
+        guard !followers.isEmpty else { return }
+        let sourceCeiling = combined.hardwareCeilingNits(for: source)
+        // Only the displays the user opted in, and never the source itself.
+        for target in AmbientBrightnessSync.targets(
+            source: source,
+            candidates: displays,
+            followers: followers
+        ) {
+            guard target.isOnline else { continue }
+            let targetCeiling = combined.hardwareCeilingNits(for: target)
+            guard let fraction = AmbientBrightnessSync.targetFraction(
+                sourceFraction: value,
+                sourceCeilingNits: sourceCeiling,
+                targetCeilingNits: targetCeiling
+            ) else {
+                log.debug("ambient sync: the brightness ceiling of \(target.id) is unknown — skipping")
+                continue
+            }
+            guard AmbientBrightnessSync.shouldWrite(current: target.brightness, target: fraction) else {
+                continue
+            }
+            guard combined.set(fraction, on: target) else {
+                log.warning("ambient sync: could not write the brightness of \(target.id)")
+                continue
+            }
+            target.updateBrightness(fraction)
+        }
     }
 
     // MARK: - XDR, HDR, overlays (passthroughs)
