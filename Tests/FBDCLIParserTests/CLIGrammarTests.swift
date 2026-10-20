@@ -67,6 +67,23 @@ final class CLIGrammarTests: XCTestCase {
         XCTAssertNil(CLIGrammar.readBack(for: .underscan))
     }
 
+    /// The per-display state commands read their state back with their own
+    /// commands, so a failed write can be checked without guessing.
+    func testTheStateCommandsReadBackWithTheirOwnCommand() {
+        XCTAssertEqual(
+            CLIGrammar.readBack(for: .hidpi, id: "7"),
+            "fbdcli hidpi 7 status"
+        )
+        XCTAssertEqual(
+            CLIGrammar.readBack(for: .gammaFloor, id: "7"),
+            "fbdcli gamma-floor 7"
+        )
+        XCTAssertEqual(
+            CLIGrammar.readBack(for: .display, id: "7"),
+            "fbdcli list"
+        )
+    }
+
     /// The skill teaches the read-back of every state-changing command.
     func testTheSkillCarriesTheReadBackOfEveryStateChangingCommand() {
         let text = AgentSkill.text(for: .claude)

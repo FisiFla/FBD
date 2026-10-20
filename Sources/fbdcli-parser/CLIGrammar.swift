@@ -307,6 +307,27 @@ public enum CLIGrammar {
             readBack: "fbdcli ambient-light <id>"
         ),
         CommandGrammar(
+            command: .hidpi,
+            usage: "hidpi <id> install|remove|status [--preview]",
+            summary: "The display's smooth-scaling (HiDPI) ladder: install it, remove it, or report its state.",
+            mutating: true,
+            readBack: "fbdcli hidpi <id> status"
+        ),
+        CommandGrammar(
+            command: .gammaFloor,
+            usage: "gamma-floor <id> [on|off] [value]",
+            summary: "The below-floor brightness blend of a display (the value is a threshold in percent).",
+            mutating: true,
+            readBack: "fbdcli gamma-floor <id>"
+        ),
+        CommandGrammar(
+            command: .display,
+            usage: "display <id> disconnect|reconnect [--remember] | --list-remembered",
+            summary: "Disconnect or reconnect a display, and list the ones remembered as off.",
+            mutating: true,
+            readBack: "fbdcli list"
+        ),
+        CommandGrammar(
             command: .tv,
             usage: "tv <brand> <host> [volume <0-100>|power|input <name>]",
             summary: "Control a TV or AVR over the network.",

@@ -42,7 +42,35 @@ public enum HTTPRoutingPlanBuilder {
     public static let supportedCommands: Set<Command> = [
         .list, .info, .brightness, .contrast, .volume, .mute, .input,
         .caps, .modes, .setMode, .xdr, .virtual, .rotate, .filter,
+        .hidpi, .gammaFloor, .display,
     ]
+
+    /// Whether *this* invocation has an HTTP route.
+    ///
+    /// `supportedCommands` says which commands can go over the app's API;
+    /// this says whether the invocation at hand can. Three of them have a
+    /// form the app's API does not expose, and those answer locally from
+    /// the settings the app and the CLI share:
+    ///
+    /// - `hidpi … --preview` prints the ladder, which is computed from the
+    ///   display's own modes;
+    /// - the bare `gamma-floor <id>` reports the blend's state;
+    /// - `display --list-remembered` lists the remembered displays.
+    public static func hasRoute(_ command: Command, args: [String]) -> Bool {
+        guard supportedCommands.contains(command) else { return false }
+        switch command {
+        case .hidpi:
+            return !args.contains("--preview")
+        case .gammaFloor:
+            guard case .success(let parsed) = GammaFloorArgs.parse(args) else { return false }
+            if case .set = parsed.action { return true }
+            return false
+        case .display:
+            return !args.contains("--list-remembered")
+        default:
+            return true
+        }
+    }
 
     /// Plan the request for a routable command. `args` are the CLI arguments
     /// after the command word (same shape `HTTPRouting.route` receives).
@@ -213,6 +241,73 @@ public enum HTTPRoutingPlanBuilder {
                 return .success(HTTPRoutingPlan(method: "POST", path: "/api/virtual/destroy", payload: ["id": args[1]]))
             default:
                 return .failure(HTTPRoutingError(message: "fbdcli: virtual: unknown action '\(action)' (list|create|destroy)"))
+            }
+
+        case .hidpi:
+            switch HiDPIArgs.parse(args) {
+            case .failure(let failure):
+                return .failure(HTTPRoutingError(message: "fbdcli: hidpi: \(failure.message)"))
+            case .success(let parsed):
+                guard !parsed.preview else {
+                    // The preview prints the ladder and installs nothing; it
+                    // is answered locally, never over the API.
+                    return .failure(HTTPRoutingError(message: "fbdcli: hidpi: --preview is answered locally"))
+                }
+                return .success(HTTPRoutingPlan(
+                    method: "POST",
+                    path: "/api/displays/\(parsed.displayID)/hidpi",
+                    payload: ["operation": parsed.operation.rawValue]
+                ))
+            }
+
+        case .gammaFloor:
+            switch GammaFloorArgs.parse(args) {
+            case .failure(let failure):
+                return .failure(HTTPRoutingError(message: "fbdcli: gamma-floor: \(failure.message)"))
+            case .success(let parsed):
+                guard case .set(let enabled, let thresholdPercent) = parsed.action else {
+                    // The bare form reports the state; there is no route for it.
+                    return .failure(HTTPRoutingError(message: "fbdcli: gamma-floor: the bare form is answered locally"))
+                }
+                var payload: [String: Any] = ["enabled": enabled]
+                // The threshold is a fraction on the wire and a percentage on
+                // the command line — the same conversion the other percentage
+                // commands do.
+                if let thresholdPercent {
+                    payload["threshold"] = thresholdPercent / 100.0
+                }
+                return .success(HTTPRoutingPlan(
+                    method: "POST",
+                    path: "/api/displays/\(parsed.displayID)/gamma-floor",
+                    payload: payload
+                ))
+            }
+
+        case .display:
+            switch DisplayArgs.parse(args) {
+            case .failure(let failure):
+                return .failure(HTTPRoutingError(message: "fbdcli: display: \(failure.message)"))
+            case .success(let parsed):
+                let action: String
+                let remember: Bool
+                switch parsed.action {
+                case .disconnect(let flag):
+                    action = "disconnect"
+                    remember = flag
+                case .reconnect:
+                    action = "reconnect"
+                    remember = false
+                case .listRemembered:
+                    return .failure(HTTPRoutingError(message: "fbdcli: display: --list-remembered is answered locally"))
+                }
+                guard let displayID = parsed.displayID else {
+                    return .failure(HTTPRoutingError(message: "fbdcli: display: display id required"))
+                }
+                return .success(HTTPRoutingPlan(
+                    method: "POST",
+                    path: "/api/displays/\(displayID)/\(action)",
+                    payload: ["remember": remember]
+                ))
             }
 
         default:

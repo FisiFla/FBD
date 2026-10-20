@@ -11,7 +11,7 @@ public enum AgentSkill {
     /// The skill's own version. Bumped whenever the text changes, so a
     /// re-install is visibly an update and a reader can tell which revision
     /// it is looking at.
-    public static let version = "1"
+    public static let version = "2"
 
     /// The file name every agent expects.
     public static let fileName = "SKILL.md"
@@ -66,7 +66,7 @@ public enum AgentSkill {
     private static let frontmatter = """
         ---
         name: fbd
-        description: "Control the user's displays from the command line with fbdcli (Free Better Display): brightness, contrast, volume, mute, input source, modes, HDR and XDR upscaling, virtual screens, software filters, EDID, colour profiles, display groups, Night Shift, True Tone and TV control. Use when the user wants to read or change a display, a monitor or a TV."
+        description: "Control the user's displays from the command line with fbdcli (Free Better Display): brightness, contrast, volume, mute, input source, modes, HDR and XDR upscaling, smooth scaling, below-floor brightness, virtual screens, software filters, EDID, colour profiles, display groups, disconnecting a display, Night Shift, True Tone and TV control. Use when the user wants to read or change a display, a monitor or a TV."
         version: \(version)
         ---
 
@@ -109,6 +109,16 @@ public enum AgentSkill {
         The `read back with` column is the command to run after a write to
         see what the display actually holds. Where it says "none", no command
         prints that state, so the write cannot be verified from the CLI.
+
+        Two of the commands need the user in the loop, so say what is about
+        to happen before you run them:
+
+        - `hidpi <id> install` asks macOS for an administrator password: the
+          override lives under /Library, so only an administrator may write
+          it. `hidpi <id> install --preview` prints the ladder instead and
+          installs nothing.
+        - `display <id> disconnect` puts the display's screen to black, and
+          `--remember` keeps it off when it is plugged back in.
 
         ## The token is a secret
 

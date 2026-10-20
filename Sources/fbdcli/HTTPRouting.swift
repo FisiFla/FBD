@@ -11,9 +11,15 @@ import Foundation
 /// functions only execute the plan and format output.
 @MainActor
 enum HTTPRouting {
-    /// Commands that can be routed through the app's HTTP API — declared in
-    /// the plan builder (the tested single source); no second list to drift.
-    static let routable: Set<Command> = HTTPRoutingPlanBuilder.supportedCommands
+    /// Whether *this* invocation goes over the app's HTTP API.
+    ///
+    /// A few invocations have no HTTP route — the ladder preview, the
+    /// remembered-disconnect list and the below-floor blend's state — and
+    /// answer from the settings the app and the CLI share. The decision
+    /// lives in the plan builder, next to the request mapping it belongs to.
+    static func canRoute(_ command: Command, args: [String]) -> Bool {
+        HTTPRoutingPlanBuilder.hasRoute(command, args: args)
+    }
 
     /// Route `command` over HTTP. Returns the exit code, or nil only when the
     /// app is not listening (caller falls back to direct execution). An app
@@ -49,6 +55,9 @@ enum HTTPRouting {
         case .virtual: return routedVirtual(rest)
         case .rotate: return routedRotate(rest)
         case .filter: return routedFilter(rest)
+        case .hidpi: return routedHiDPI(rest)
+        case .gammaFloor: return routedGammaFloor(rest)
+        case .display: return routedDisplay(rest)
         default:
             // A command in supportedCommands without a routed handler is a
             // programming error — loud in debug, safe fallback in release.
@@ -443,5 +452,135 @@ enum HTTPRouting {
         default:
             return 1
         }
+    }
+
+    // MARK: - The per-display state commands (#28)
+
+    /// `fbdcli hidpi <id> install|remove|status` — the smooth-scaling ladder.
+    ///
+    /// The status is a read that travels over the same POST the write does:
+    /// the app's route answers with the state itself. It is reported with the
+    /// read wording, not the write wording — nothing was written, so nothing
+    /// "may have applied".
+    private static func routedHiDPI(_ args: [String]) -> Int32 {
+        guard let plan = planFor(.hidpi, args) else { return 1 }
+        guard let id = args.first else { return 1 }
+        let operation = args.count >= 2 ? args[1].lowercased() : "status"
+
+        if operation == "status" {
+            let response = HTTPAPIClient.post(plan.path, json: plan.payload ?? [:])
+            switch response.outcome {
+            case .applied:
+                let object = HTTPAPIClient.json(response.body) ?? [:]
+                let status = HiDPIOverrideStatus(
+                    isSupported: object["supported"] as? Bool ?? false,
+                    isInstalled: object["installed"] as? Bool ?? false,
+                    modeCount: object["modeCount"] as? Int ?? 0,
+                    wouldPrompt: object["wouldPrompt"] as? Bool ?? false,
+                    path: object["path"] as? String ?? ""
+                )
+                print("hidpi \(id): \(status.summary)")
+                print("  override: \(status.path)")
+                return 0
+            case .refused, .failed, .replyLost:
+                return reportReadFailure(outcome: response.outcome, command: "hidpi \(id) status")
+            }
+        }
+
+        // The prompt for the administrator password appears while the app
+        // runs the privileged step, so the heads-up comes before the request.
+        switch operation {
+        case "install":
+            print("hidpi \(id): installing the smooth-scaling override — macOS will ask for an administrator password (via app)")
+        case "remove":
+            print("hidpi \(id): removing the smooth-scaling override — macOS will ask for an administrator password (via app)")
+        default:
+            break
+        }
+
+        switch write(plan.path, plan.payload ?? [:], command: "hidpi \(id) \(operation)",
+                     readBack: readBack(.hidpi, id)) {
+        case .failed(let code): return code
+        case .applied: break
+        }
+        switch operation {
+        case "install":
+            print("hidpi \(id): the smooth-scaling override was written (via app)")
+            print("  note: the display usually picks the ladder up on the next wake")
+        case "remove":
+            print("hidpi \(id): the smooth-scaling override was removed (via app)")
+        default:
+            break
+        }
+        return 0
+    }
+
+    /// `fbdcli gamma-floor <id> on|off [value]` — the below-floor brightness
+    /// blend.
+    ///
+    /// The threshold the app applied is the one the CLI sent; when none was
+    /// sent the configured one is kept, which the CLI says rather than
+    /// guessing a number.
+    private static func routedGammaFloor(_ args: [String]) -> Int32 {
+        guard let plan = planFor(.gammaFloor, args) else { return 1 }
+        guard let id = args.first else { return 1 }
+        switch write(plan.path, plan.payload ?? [:], command: "gamma-floor \(id)",
+                     readBack: readBack(.gammaFloor, id)) {
+        case .failed(let code): return code
+        case .applied: break
+        }
+        let enabled = (plan.payload?["enabled"] as? Bool) ?? false
+        if let threshold = plan.payload?["threshold"] as? Double {
+            print("gamma-floor \(id): \(enabled ? "on" : "off") (threshold \(Int((threshold * 100).rounded()))%) (via app)")
+        } else {
+            print("gamma-floor \(id): \(enabled ? "on" : "off") (threshold unchanged) (via app)")
+        }
+        return 0
+    }
+
+    /// `fbdcli display <id> disconnect|reconnect` — the display's place in the
+    /// layout.
+    private static func routedDisplay(_ args: [String]) -> Int32 {
+        guard let plan = planFor(.display, args) else { return 1 }
+        guard let id = args.first else { return 1 }
+        let action = args.count >= 2 ? args[1].lowercased() : ""
+        let remember = (plan.payload?["remember"] as? Bool) ?? false
+        switch write(plan.path, plan.payload ?? [:], command: "display \(id) \(action)",
+                     readBack: readBack(.display, id)) {
+        case .failed(let code): return code
+        case .applied: break
+        }
+        if action == "disconnect" {
+            print("display \(id) disconnected (via app)")
+            if remember {
+                print("  remembered as off: it stays off when it is plugged back in")
+                print("  verify the memory with: fbdcli display --list-remembered")
+            }
+        } else {
+            print("display \(id) reconnected (via app)")
+        }
+        return 0
+    }
+
+    /// Report a request that changed nothing and did not come back.
+    ///
+    /// The write wording ("the command may have applied") belongs to a write
+    /// whose confirmation was lost; a read that got no answer simply failed,
+    /// and saying otherwise would send the caller looking for a change that
+    /// was never asked for.
+    private static func reportReadFailure(outcome: WriteOutcome, command: String) -> Int32 {
+        let reason: String
+        switch outcome {
+        case .applied:
+            return 0
+        case .refused(let status):
+            reason = "the app refused the request (HTTP \(status))"
+        case .failed(let message):
+            reason = message
+        case .replyLost(let message):
+            reason = "\(message) — nothing was changed"
+        }
+        print("fbdcli: \(command): \(reason)")
+        return 2
     }
 }

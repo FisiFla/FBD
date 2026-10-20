@@ -120,6 +120,26 @@ public enum UsageText {
       ambient-light <display> [on|off]
                                     Apple display auto-brightness (ambient light);
                                     the state doubles as the capability probe
+      hidpi <id> install|remove|status [--preview]
+                                    The display's smooth-scaling (HiDPI) ladder:
+                                    install it, remove it, or report its state.
+                                    --preview prints the ladder first and
+                                    installs nothing; an install asks macOS for
+                                    an administrator password
+      gamma-floor <id> [on|off] [value]
+                                    The below-floor brightness blend of a
+                                    display (it reaches past the panel's own
+                                    floor; it needs Screen Recording
+                                    permission). The value is the threshold
+                                    in percent (0-100). Bare: report the state
+      display <id> disconnect [--remember]
+                                    Disconnect a display (black screen);
+                                    --remember keeps it off when it is plugged
+                                    back in
+      display <id> reconnect         Reconnect a display (and forget the
+                                    "keep it off" note)
+      display --list-remembered      List the displays FBD is remembering as
+                                    off
       tv <brand> <host> [action]    Control a TV/AVR over the network: brand is
                                     lg, samsung, philips, or yamaha; action is
                                     volume <0-100>, power, or input <name>

@@ -46,6 +46,9 @@ public enum Command: String, CaseIterable {
     case darkMode = "dark-mode"
     case dpcd
     case ambientLight = "ambient-light"
+    case hidpi
+    case gammaFloor = "gamma-floor"
+    case display
     case tv
     case config
     case report
@@ -108,6 +111,16 @@ public enum CLICommandLine {
     /// must not change how the command is routed.
     public static func wantsDirectJSON(_ command: Command, raw: [String]) -> Bool {
         (command == .list || command == .info) && raw.dropFirst().contains("--json")
+    }
+
+    /// True when the invocation asks for the local ladder preview.
+    ///
+    /// The preview prints the scaled modes a display would carry, which are
+    /// computed from the display's own modes — there is no HTTP route for
+    /// it, so the flag selects the direct path. It is a read: nothing is
+    /// installed.
+    public static func wantsDirectPreview(_ command: Command, raw: [String]) -> Bool {
+        command == .hidpi && raw.dropFirst().contains("--preview")
     }
 }
 
