@@ -24,13 +24,25 @@ enum HTTPAPIClient {
         case unresponsive(String)
     }
 
+    /// One state-changing exchange: what the CLI knows about the write, and
+    /// the body the app sent back (empty when no reply arrived).
+    struct WriteResponse {
+        /// `applied`, `refused`, `failed` or `replyLost`.
+        let outcome: WriteOutcome
+        /// The response body, empty when there was no response.
+        let body: Data
+    }
+
     /// Result of one HTTP exchange.
     private enum Outcome {
         case response(Int, Data)
         /// Nothing is listening on the published port.
         case refused
         case timedOut
+        /// The connection broke after the request went out.
         case failed(String)
+        /// The request never left the CLI.
+        case notSent(String)
     }
 
     /// Distinguishes "app not listening" (safe to drive hardware directly)
@@ -44,33 +56,52 @@ enum HTTPAPIClient {
         case .refused: return .notRunning
         case .timedOut: return .unresponsive("request timed out")
         case .failed(let message): return .unresponsive(message)
+        case .notSent(let message): return .unresponsive(message)
         }
     }
 
     static func get(_ path: String) -> (status: Int, data: Data)? {
         guard let port = activePort() else { return nil }
-        return unwrap(request(method: "GET", path: path, port: port, body: nil), mutating: false)
+        switch request(method: "GET", path: path, port: port, body: nil) {
+        case .response(let status, let data): return (status, data)
+        case .refused, .timedOut, .failed, .notSent: return nil
+        }
     }
 
-    static func post(_ path: String, json: [String: Any]) -> (status: Int, data: Data)? {
-        guard let port = activePort() else { return nil }
-        return unwrap(request(method: "POST", path: path, port: port, body: json), mutating: true)
-    }
-
-    /// Callers never fall back to direct control after a routed request, so a
-    /// nil here is reported, not retried. A timed-out write is called out
-    /// explicitly: the app may still apply it.
-    private static func unwrap(_ outcome: Outcome, mutating: Bool) -> (status: Int, data: Data)? {
-        switch outcome {
+    /// Send a state-changing request.
+    ///
+    /// The result says what the CLI *knows*, not what it hopes: a lost reply
+    /// is reported as `replyLost`, because the app may have committed the
+    /// write before the answer went missing. The caller turns that into the
+    /// CLI's write-failure wording (which names the read-back command)
+    /// instead of inviting a blind retry.
+    static func post(_ path: String, json: [String: Any]) -> WriteResponse {
+        guard let port = activePort() else {
+            return WriteResponse(outcome: .failed(reason: "the app is not listening"), body: Data())
+        }
+        switch request(method: "POST", path: path, port: port, body: json) {
         case .response(let status, let data):
-            return (status, data)
+            let outcome: WriteOutcome = (200...299).contains(status)
+                ? .applied
+                : .refused(status: status)
+            return WriteResponse(outcome: outcome, body: data)
         case .timedOut:
-            if mutating {
-                fputs("fbdcli: the app did not answer in time; the change may still be applied (not retrying directly)\n", stderr)
-            }
-            return nil
-        case .refused, .failed:
-            return nil
+            return WriteResponse(
+                outcome: .replyLost(reason: "the app did not answer in time"),
+                body: Data()
+            )
+        case .failed(let message):
+            return WriteResponse(
+                outcome: .replyLost(reason: "the connection broke before the reply arrived (\(message))"),
+                body: Data()
+            )
+        case .refused:
+            return WriteResponse(
+                outcome: .failed(reason: "the app refused the connection"),
+                body: Data()
+            )
+        case .notSent(let message):
+            return WriteResponse(outcome: .failed(reason: message), body: Data())
         }
     }
 
@@ -88,7 +119,7 @@ enum HTTPAPIClient {
             port: port,
             body: body,
             token: Settings.httpAPIToken
-        ) else { return .failed("could not build request") }
+        ) else { return .notSent("the request could not be built") }
         let semaphore = DispatchSemaphore(value: 0)
         var outcome: Outcome = .timedOut
         let task = URLSession.shared.dataTask(with: urlRequest) { data, response, error in
@@ -96,7 +127,9 @@ enum HTTPAPIClient {
                 outcome = .response(http.statusCode, data ?? Data())
             } else if let urlError = error as? URLError {
                 switch urlError.code {
-                case .cannotConnectToHost: outcome = .refused
+                // Nothing was listening: the request never went out.
+                case .cannotConnectToHost, .cannotFindHost: outcome = .refused
+                // The request went out; the answer did not come back.
                 case .timedOut: outcome = .timedOut
                 default: outcome = .failed(urlError.localizedDescription)
                 }

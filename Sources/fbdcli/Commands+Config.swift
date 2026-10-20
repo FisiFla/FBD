@@ -272,9 +272,12 @@ func cmdConfigVirtualScreen(_ controller: DisplayController, args: [String]) -> 
             associations: Settings.loadVirtualScreenAssociations()
         )
         guard applied else {
-            print("fbdcli: config vscreen apply: nothing applied for \(screenID) "
-                + "(no association, or its displays are not all attached)")
-            return 1
+            return reportWriteFailure(
+                outcome: .failed(reason: "nothing was applied for \(screenID) "
+                    + "(no association, or its displays are not all attached)"),
+                command: "config vscreen apply \(screenID)",
+                readBack: readBackCommand(.config)
+            )
         }
         print("applied the arrangement associated with \(screenID)")
         return 0
@@ -546,8 +549,11 @@ func cmdConfigPreset(_ controller: DisplayController, args: [String]) -> Int32 {
         }
         if action == "delete" {
             guard DisplayPresets.remove(id: preset.id, for: display.identityKey) else {
-                print("fbdcli: config preset delete: could not remove '\(preset.name)'")
-                return 2
+                return reportWriteFailure(
+                    outcome: .failed(reason: "the preset was not removed"),
+                    command: "config preset delete \(display.id)",
+                    readBack: readBackCommand(.config)
+                )
             }
             print("deleted preset '\(preset.name)'")
             return 0
@@ -559,8 +565,11 @@ func cmdConfigPreset(_ controller: DisplayController, args: [String]) -> Int32 {
             controller: controller
         )
         if outcome.applied.isEmpty && !outcome.requested.isEmpty {
-            print("fbdcli: config preset apply: no part of '\(preset.name)' applies to this display")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "no part of '\(preset.name)' applies to this display"),
+                command: "config preset apply \(display.id)",
+                readBack: readBackCommand(.config)
+            )
         }
         print("applied preset '\(preset.name)'")
         if !outcome.unavailable.isEmpty {

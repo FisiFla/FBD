@@ -151,6 +151,30 @@ cp completions/_fbdcli ~/.zfunc/
 echo 'fpath=(~/.zfunc $fpath); autoload -Uz compinit && compinit' >> ~/.zshrc
 ```
 
+## Agent skill
+
+`fbdcli` ships an agent-ready skill: a `SKILL.md` that teaches an agent the CLI's grammar, the
+token model and the read-back contract.
+
+```sh
+fbdcli skill install claude            # ~/.claude/skills/fbd/SKILL.md
+fbdcli skill install codex              # ~/.codex/skills/fbd/SKILL.md
+fbdcli skill install claude --path DIR # a directory of your choice
+fbdcli skill install claude --print    # dump the file to stdout instead of writing it
+```
+
+The document is compiled into the binary — it is never assembled by running the CLI and reading
+its help output — so `--print` and the installed file are byte-for-byte the same. The install
+overwrites the file, so re-running it after an upgrade refreshes the skill in place.
+
+Two rules the skill teaches an agent:
+
+- **the token is a secret** — `fbdcli auth-token` explains how to obtain it and `--reveal`
+  prints it; an agent never needs it, because `fbdcli` sends it itself.
+- **a write that was not confirmed is not a failed write** — when the app's answer is lost the
+  CLI prints *the command may have applied* and names the command that reads the state back
+  (exit code `75`). Repeating such a write blindly would apply the change twice.
+
 ## HTTP control API
 
 The app exposes a JSON API on `127.0.0.1` only (`fbdcli http on <port>`, default 8765 —

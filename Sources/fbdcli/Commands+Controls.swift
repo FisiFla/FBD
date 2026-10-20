@@ -15,8 +15,11 @@ func cmdBrightness(_ controller: DisplayController, display: Display, args: [Str
         guard let value = parsePercent(args[1], command: "brightness") else { return 1 }
         let target = value / 100.0
         guard controller.setBrightness(target, on: display) else {
-            print("fbdcli: brightness \(display.id): no control path (DDC unavailable or non-Apple display)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "no control path (DDC unavailable or non-Apple display)"),
+                command: "brightness \(display.id)",
+                readBack: readBackCommand(.brightness, String(display.id))
+            )
         }
 
         // setBrightness schedules the write via DispatchQueue.main.asyncAfter;
@@ -33,7 +36,7 @@ func cmdBrightness(_ controller: DisplayController, display: Display, args: [Str
         if let readBack = controller.getBrightness(for: display) {
             print("brightness \(display.id) = \(String(format: "%.1f", readBack * 100))")
         } else {
-            print("brightness \(display.id) set to \(String(format: "%.1f", value)) (no read-back available)")
+            print("brightness \(display.id) set to \(String(format: "%.1f", value)) (not verified on hardware: no read-back available)")
         }
         return 0
     }
@@ -55,8 +58,11 @@ func cmdContrast(_ controller: DisplayController, display: Display, args: [Strin
         guard let value = parsePercent(args[1], command: "contrast") else { return 1 }
         guard !ddcUnusable(display) else { return 2 }
         guard controller.setContrast(value / 100.0, on: display) else {
-            print("fbdcli: contrast \(display.id): write not accepted (DDC unavailable?)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the write was not sent (DDC unavailable?)"),
+                command: "contrast \(display.id)",
+                readBack: readBackCommand(.contrast, String(display.id))
+            )
         }
         print("contrast \(display.id) set to \(String(format: "%.1f", value))")
         return 0
@@ -78,8 +84,11 @@ func cmdVolume(_ controller: DisplayController, display: Display, args: [String]
         guard let value = parsePercent(args[1], command: "volume") else { return 1 }
         guard !ddcUnusable(display) else { return 2 }
         guard controller.setVolume(value / 100.0, on: display) else {
-            print("fbdcli: volume \(display.id): write not accepted (DDC unavailable?)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the write was not sent (DDC unavailable?)"),
+                command: "volume \(display.id)",
+                readBack: readBackCommand(.volume, String(display.id))
+            )
         }
         print("volume \(display.id) set to \(String(format: "%.1f", value))")
         return 0
@@ -163,7 +172,7 @@ private func resolveOutputDevice(_ spec: String, on volume: SystemVolumeControll
     }
     let matches = volume.devices.filter { $0.name.localizedCaseInsensitiveContains(spec) }
     guard let first = matches.first else {
-        print("fbdcli: sysvolume: no output device matches '\(spec)' (try --list)")
+        print("fbdcli: sysvolume: no output device matches '\(spec)' (use --list)")
         return nil
     }
     // An ambiguous name is refused rather than guessed: picking the wrong output
@@ -199,9 +208,12 @@ private func reportSystemVolume(_ volume: SystemVolumeController, afterWrite: Bo
     }
     guard let level = volume.volume else {
         let name = volume.deviceName.map { " '\($0)'" } ?? ""
-        print("fbdcli: sysvolume: output device\(name) exposes no software volume control — nothing changed")
-        print("       (HDMI and some USB outputs have none; use --list, then --device)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the output device\(name) exposes no software volume control — "
+                + "nothing changed (HDMI and some USB outputs have none; use --list, then --device)"),
+            command: "sysvolume",
+            readBack: readBackCommand(.sysvolume)
+        )
     }
     print(String(
         format: "system volume %.1f%% (%@)%@",
@@ -225,8 +237,11 @@ func cmdMute(_ controller: DisplayController, display: Display, args: [String]) 
         }
         guard !ddcUnusable(display) else { return 2 }
         guard controller.setMuted(state, on: display) else {
-            print("fbdcli: mute \(display.id): write not accepted (DDC unavailable?)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the write was not sent (DDC unavailable?)"),
+                command: "mute \(display.id)",
+                readBack: readBackCommand(.mute, String(display.id))
+            )
         }
         print("mute \(display.id) = \(state ? "on" : "off")")
         return 0
@@ -255,8 +270,11 @@ func cmdInput(_ controller: DisplayController, display: Display, args: [String])
         }
         guard !ddcUnusable(display) else { return 2 }
         guard controller.setInputSource(source, on: display) else {
-            print("fbdcli: input \(display.id): write not accepted (DDC unavailable?)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the write was not sent (DDC unavailable?)"),
+                command: "input \(display.id)",
+                readBack: readBackCommand(.input, String(display.id))
+            )
         }
         if let label = inputSourceLabel(source) {
             print("input \(display.id) set to \(source) (\(label))")
@@ -425,8 +443,11 @@ func cmdSetMode(_ controller: DisplayController, display: Display, args: [String
     }
 
     guard controller.applyMode(best, to: display) else {
-        print("fbdcli: set-mode: failed to apply \(best.key) to display \(display.id)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the mode \(best.key) was not applied"),
+            command: "set-mode \(display.id)",
+            readBack: readBackCommand(.setMode, String(display.id))
+        )
     }
     print("applied \(best.key) (\(best.isHiDPI ? "hidpi" : "lodpi"), \(best.isSafe ? "safe" : "unsafe"))")
     return 0

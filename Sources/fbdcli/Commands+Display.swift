@@ -12,8 +12,11 @@ func cmdXDR(_ controller: DisplayController, display: Display, args: [String]) -
     if args.count >= 2 {
         if args[1] == "off" {
             guard controller.disableXDRUpscaling(on: display) else {
-                print("fbdcli: xdr \(display.id): failed to disable upscaling")
-                return 2
+                return reportWriteFailure(
+                    outcome: .failed(reason: "upscaling was not disabled"),
+                    command: "xdr \(display.id)",
+                    readBack: readBackCommand(.xdr, String(display.id))
+                )
             }
             print("xdr \(display.id): upscaling disabled")
             return 0
@@ -23,8 +26,11 @@ func cmdXDR(_ controller: DisplayController, display: Display, args: [String]) -
             return 1
         }
         guard controller.setXDRUpscaleTarget(nits, on: display) else {
-            print("fbdcli: xdr \(display.id): failed to enable upscaling to \(nits) nits (no blank preset slot?)")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "upscaling to \(nits) nits was not enabled (no blank preset slot?)"),
+                command: "xdr \(display.id)",
+                readBack: readBackCommand(.xdr, String(display.id))
+            )
         }
         print("xdr \(display.id): upscaling enabled to \(nits) nits")
         return 0
@@ -50,8 +56,11 @@ func cmdPreset(_ controller: DisplayController, display: Display, args: [String]
             return 2
         }
         guard controller.selectPreset(index, on: display) else {
-            print("fbdcli: preset \(index): activation failed")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the preset was not activated"),
+                command: "preset \(display.id)",
+                readBack: readBackCommand(.preset, String(display.id))
+            )
         }
         print("preset \(display.id): activated \(index)")
         return 0
@@ -77,8 +86,11 @@ func cmdHDR(_ controller: DisplayController, display: Display, args: [String]) -
             return 1
         }
         guard controller.setHDRMode(enabled, on: display) else {
-            print("fbdcli: hdr \(display.id): display does not support the HDR framebuffer mode")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the HDR framebuffer mode was not changed (the display does not expose it)"),
+                command: "hdr \(display.id)",
+                readBack: readBackCommand(.hdr, String(display.id))
+            )
         }
         print("hdr \(display.id): \(enabled ? "on" : "off")")
         return 0
@@ -193,8 +205,11 @@ func cmdVirtualCreate(args: [String]) -> Int32 {
         autoConnect: autoConnect
     )
     guard controller.create(config), let displayID = controller.displayID(for: config.id) else {
-        print("fbdcli: virtual create: failed to create '\(name)'")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the virtual screen was not created"),
+            command: "virtual create \(name)",
+            readBack: readBackCommand(.virtual)
+        )
     }
     print("virtual display created: \(displayID) (\(name) \(virtualSpec(config)))")
     return 0
@@ -213,8 +228,11 @@ func cmdVirtualDestroy(args: [String]) -> Int32 {
         return 1
     }
     guard controller.destroy(id: config.id) else {
-        print("fbdcli: virtual destroy: failed to destroy '\(config.name)'")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the virtual screen was not destroyed"),
+            command: "virtual destroy \(config.name)",
+            readBack: readBackCommand(.virtual)
+        )
     }
     print("virtual screen '\(config.name)' destroyed")
     return 0
@@ -233,8 +251,11 @@ func cmdVirtualReconnect(args: [String]) -> Int32 {
         return 1
     }
     guard controller.reconnect(id: config.id) else {
-        print("fbdcli: virtual reconnect: failed to reconnect '\(config.name)' (already active or creation failed)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the virtual screen was not reconnected (already active, or creation failed)"),
+            command: "virtual reconnect \(config.name)",
+            readBack: readBackCommand(.virtual)
+        )
     }
     print("virtual screen '\(config.name)' reconnected (display \(controller.displayID(for: config.id) ?? 0))")
     return 0
@@ -287,8 +308,11 @@ func cmdDisableEnable(displayID: CGDirectDisplayID, enabled: Bool) -> Int32 {
         print("warning: built-in display will go dark until re-enabled")
     }
     guard DisconnectController().setEnabled(enabled, displayID: displayID) else {
-        print("fbdcli: \(enabled ? "enable" : "disable") \(displayID): display configuration failed")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the display configuration was not changed"),
+            command: "\(enabled ? "enable" : "disable") \(displayID)",
+            readBack: readBackCommand(enabled ? .enable : .disable)
+        )
     }
     print("display \(displayID) \(enabled ? "enabled" : "disabled")")
     return 0
@@ -338,8 +362,11 @@ func cmdLayoutRestore() -> Int32 {
         return 2
     }
     guard controller.restoreArrangement() else {
-        print("fbdcli: layout restore: failed to restore arrangement")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the arrangement was not restored"),
+            command: "layout restore",
+            readBack: readBackCommand(.layout)
+        )
     }
     print("arrangement restored")
     return 0
@@ -537,8 +564,11 @@ func cmdGroupMirror(args: [String], mirror: Bool) -> Int32 {
     guard let group = requireGroup(name, in: groups) else { return 1 }
     let action = mirror ? groups.mirror(inGroup: group.id) : groups.unmirror(inGroup: group.id)
     guard action else {
-        print("fbdcli: group \(mirror ? "mirror" : "unmirror"): failed for '\(group.name)'")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the group was not \(mirror ? "mirrored" : "unmirrored")"),
+            command: "group \(mirror ? "mirror" : "unmirror") \(group.name)",
+            readBack: readBackCommand(.group)
+        )
     }
     print("group '\(group.name)' \(mirror ? "mirrored" : "unmirrored")")
     return 0
@@ -553,8 +583,11 @@ func cmdRotate(_ controller: DisplayController, args: [String]) -> Int32 {
         return 1
     }
     guard let applied = controller.setRotation(degrees, on: display) else {
-        print("fbdcli: rotate: failed to rotate display \(display.id)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the display was not rotated"),
+            command: "rotate \(display.id)",
+            readBack: readBackCommand(.rotate, String(display.id))
+        )
     }
     print("display \(display.id) rotated to \(applied)°")
     return 0
@@ -604,8 +637,11 @@ func cmdFilter(_ controller: DisplayController, args: [String]) -> Int32 {
         }
     }
     guard controller.setScreenFilter(params, on: display) else {
-        print("fbdcli: filter: failed to apply filter (Screen Recording permission needed)")
-        return 2
+        return reportWriteFailure(
+            outcome: .failed(reason: "the filter was not applied (Screen Recording permission needed)"),
+            command: "filter \(display.id)",
+            readBack: readBackCommand(.filter, String(display.id))
+        )
     }
     var summary = "contrast \(params.contrast), saturation \(params.saturation), gamma \(params.gamma), temperature \(params.temperature)"
     if params.invert { summary += ", invert" }

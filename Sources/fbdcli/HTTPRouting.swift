@@ -94,9 +94,45 @@ enum HTTPRouting {
         return object["controls"] as? [String: Any]
     }
 
-    private static func postOK(_ path: String, _ json: [String: Any]) -> Bool {
-        guard let (status, _) = HTTPAPIClient.post(path, json: json) else { return false }
-        return status == 200 || status == 201
+    /// The outcome of a routed write.
+    private enum WriteResult {
+        /// The app confirmed the write; its JSON body is attached.
+        case applied([String: Any])
+        /// The write was not confirmed; the exit code to return.
+        case failed(Int32)
+    }
+
+    /// Run a state-changing request.
+    ///
+    /// On success the app's JSON body is returned. On failure the CLI prints
+    /// the write-failure wording — which says whether the command may have
+    /// applied and names the command that reads the state back — and the
+    /// exit code is returned. The wording never invites a blind retry: a lost
+    /// reply means the write may already have been committed, and repeating
+    /// it would apply the change twice.
+    private static func write(
+        _ path: String,
+        _ payload: [String: Any],
+        command: String,
+        readBack: String?
+    ) -> WriteResult {
+        let response = HTTPAPIClient.post(path, json: payload)
+        switch response.outcome {
+        case .applied:
+            return .applied(HTTPAPIClient.json(response.body) ?? [:])
+        case .refused, .failed, .replyLost:
+            let failure = WriteFailure(outcome: response.outcome, command: command, readBack: readBack)
+            let message = failure.message
+            log.warning("write not confirmed: \(message)")
+            print(message)
+            return .failed(failure.exitCode)
+        }
+    }
+
+    /// The command that reads the state back, with the display id filled in.
+    /// Every routed write has one; nil would mean the CLI cannot show it.
+    private static func readBack(_ command: Command, _ id: String? = nil) -> String? {
+        readBackCommand(command, id)
     }
 
     // MARK: - Routed commands
@@ -149,9 +185,10 @@ enum HTTPRouting {
             print(String(format: "%.1f", brightness * 100))
             return 0
         }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: brightness \(id): write not accepted (via app)")
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "brightness \(id)",
+                     readBack: readBack(.brightness, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print("brightness \(id) = \(String(format: "%.1f", Double(args[1]) ?? 0)) (via app)")
         return 0
@@ -168,9 +205,10 @@ enum HTTPRouting {
             print(String(format: "%.1f", value * 100))
             return 0
         }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: contrast \(id): write not accepted (via app)")
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "contrast \(id)",
+                     readBack: readBack(.contrast, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print("contrast \(id) = \(String(format: "%.1f", Double(args[1]) ?? 0)) (via app)")
         return 0
@@ -187,9 +225,10 @@ enum HTTPRouting {
             print(String(format: "%.1f", value * 100))
             return 0
         }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: volume \(id): write not accepted (via app)")
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "volume \(id)",
+                     readBack: readBack(.volume, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print("volume \(id) = \(String(format: "%.1f", Double(args[1]) ?? 0)) (via app)")
         return 0
@@ -206,9 +245,10 @@ enum HTTPRouting {
             print(muted ? "on" : "off")
             return 0
         }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: mute \(id): write not accepted (via app)")
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "mute \(id)",
+                     readBack: readBack(.mute, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print("mute \(id) = \(args[1] == "on" ? "on" : "off") (via app)")
         return 0
@@ -225,9 +265,10 @@ enum HTTPRouting {
             print(Int(source))
             return 0
         }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: input \(id): write not accepted (via app)")
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "input \(id)",
+                     readBack: readBack(.input, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print("input \(id) = \(args[1]) (via app)")
         return 0
@@ -272,12 +313,17 @@ enum HTTPRouting {
 
     private static func routedSetMode(_ args: [String]) -> Int32 {
         guard let plan = planFor(.setMode, args) else { return 1 }
-        guard let (status, data) = HTTPAPIClient.post(plan.path, json: plan.payload ?? [:]),
-              status == 200, let object = HTTPAPIClient.json(data) else {
-            print("fbdcli: set-mode: no matching mode via app")
-            return 2
+        guard let id = args.first else { return 1 }
+        switch write(plan.path, plan.payload ?? [:], command: "set-mode \(id)",
+                     readBack: readBack(.setMode, id)) {
+        case .failed(let code): return code
+        case .applied(let object):
+            guard let mode = object["mode"] as? String else {
+                print("fbdcli: set-mode \(id): the app accepted the write but reported no mode")
+                return 2
+            }
+            print("mode applied: \(mode) (via app)")
         }
-        print("mode applied: \(object["mode"] as? String ?? "?") (via app)")
         return 0
     }
 
@@ -295,13 +341,10 @@ enum HTTPRouting {
             print("xdr \(id): capable=\(capable ? "yes" : "no") upscaled=\(upscaled ? "yes" : "no")\(target.map { " (\($0) nits)" } ?? "")")
             return 0
         }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            if args[1] == "off" {
-                print("fbdcli: xdr \(id): failed to disable upscaling (via app)")
-            } else {
-                print("fbdcli: xdr \(id): failed to enable upscaling (via app)")
-            }
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "xdr \(id)",
+                     readBack: readBack(.xdr, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         if args[1] == "off" {
             print("xdr \(id): upscaling disabled (via app)")
@@ -314,9 +357,10 @@ enum HTTPRouting {
     private static func routedRotate(_ args: [String]) -> Int32 {
         guard let plan = planFor(.rotate, args) else { return 1 }
         guard let id = args.first else { return 1 }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: rotate: failed to rotate display \(id) (via app)")
-            return 2
+        switch write(plan.path, plan.payload ?? [:], command: "rotate \(id)",
+                     readBack: readBack(.rotate, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print("display \(id) rotated to \(args[1])° (via app)")
         return 0
@@ -336,10 +380,11 @@ enum HTTPRouting {
             }
         }
         guard let plan = planFor(.filter, args) else { return 1 }
-        guard !args.isEmpty else { return 1 }
-        guard postOK(plan.path, plan.payload ?? [:]) else {
-            print("fbdcli: filter: failed to apply filter (via app)")
-            return 2
+        guard let id = args.first else { return 1 }
+        switch write(plan.path, plan.payload ?? [:], command: "filter \(id)",
+                     readBack: readBack(.filter, id)) {
+        case .failed(let code): return code
+        case .applied: break
         }
         print(args.count >= 2 && args[1] == "off" ? "filter off (via app)" : "filter applied (via app)")
         return 0
@@ -378,18 +423,19 @@ enum HTTPRouting {
             return 0
 
         case "create":
-            guard let (status, data) = HTTPAPIClient.post(plan.path, json: plan.payload ?? [:]),
-                  status == 201, let object = HTTPAPIClient.json(data) else {
-                print("fbdcli: virtual create: failed via app")
-                return 2
+            switch write(plan.path, plan.payload ?? [:], command: "virtual create \(args[1])",
+                         readBack: readBack(.virtual)) {
+            case .failed(let code): return code
+            case .applied(let object):
+                print("virtual display created: \(object["displayID"] as? UInt32 ?? 0) (\(args[1])) via app")
             }
-            print("virtual display created: \(object["displayID"] as? UInt32 ?? 0) (\(args[1])) via app")
             return 0
 
         case "destroy":
-            guard postOK(plan.path, plan.payload ?? [:]) else {
-                print("fbdcli: virtual destroy: no virtual display '\(originalName ?? "?")' via app")
-                return 2
+            switch write(plan.path, plan.payload ?? [:], command: "virtual destroy \(originalName ?? "?")",
+                         readBack: readBack(.virtual)) {
+            case .failed(let code): return code
+            case .applied: break
             }
             print("virtual screen '\(originalName ?? "?")' destroyed (via app)")
             return 0

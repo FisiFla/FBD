@@ -38,8 +38,11 @@ func cmdNightShift(args: [String]) -> Int32 {
     if let arg = args.first {
         guard let value = parsePercent(arg, command: "nightshift") else { return 1 }
         guard controller.setStrength(value / 100.0) else {
-            print("fbdcli: nightshift: failed to set strength")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the strength was not changed"),
+                command: "nightshift",
+                readBack: readBackCommand(.nightshift)
+            )
         }
     }
     guard let strength = controller.strength() else {
@@ -70,13 +73,19 @@ func cmdDarkMode(args: [String]) -> Int32 {
     switch request {
     case .on:
         guard controller.setDark(true) else {
-            print("fbdcli: dark-mode: failed to switch")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the appearance was not changed"),
+                command: "dark-mode",
+                readBack: readBackCommand(.darkMode)
+            )
         }
     case .off:
         guard controller.setDark(false) else {
-            print("fbdcli: dark-mode: failed to switch")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "the appearance was not changed"),
+                command: "dark-mode",
+                readBack: readBackCommand(.darkMode)
+            )
         }
     case .report:
         break
@@ -109,8 +118,11 @@ func cmdTrueTone(args: [String]) -> Int32 {
             return 1
         }
         guard controller.setEnabled(enabled) else {
-            print("fbdcli: truetone: failed to set True Tone")
-            return 2
+            return reportWriteFailure(
+                outcome: .failed(reason: "True Tone was not changed"),
+                command: "truetone",
+                readBack: readBackCommand(.truetone)
+            )
         }
     }
     guard let enabled = controller.isEnabled() else {

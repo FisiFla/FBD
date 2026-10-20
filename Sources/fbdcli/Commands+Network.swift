@@ -125,8 +125,9 @@ func printTVResult(brand: String, host: String, action: TVCommand.Action, ok: Bo
         print("tv \(brand) \(host): \(actionLabel) ok")
         return 0
     }
-    print("tv \(brand) \(host): \(actionLabel) failed")
+    print("tv \(brand) \(host): \(actionLabel) failed — the device did not confirm the command")
     print("note: requires the device to be in network/API mode (and powered on)")
+    print("note: the device's state cannot be read back from the CLI; check the device before repeating the command")
     return 2
 }
 
