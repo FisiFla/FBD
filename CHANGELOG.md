@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-10-22
+
 ### Changed
 - The Application page now groups the HUD settings together, right under "General". The "Custom
   OSD" switch — which turns the brightness HUD off — sat in the "Integrations" group next to the
