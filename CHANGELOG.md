@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-10-22
+
 ### Fixed
 - The brightness slider drew a blue ring around itself. The slider's focusable view is the whole
   row — both sun icons included — so macOS's keyboard-focus effect was drawn as a border around
