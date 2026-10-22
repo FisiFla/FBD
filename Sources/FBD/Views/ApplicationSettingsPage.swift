@@ -30,6 +30,22 @@ struct ApplicationSettingsPage: View {
                 Label("General", systemImage: "gearshape")
             }
 
+            SettingsGroup {
+                OSDStyleSection()
+            } header: {
+                Label("On-screen display", systemImage: "rectangle.on.rectangle")
+            }
+
+            SettingsGroup {
+                Toggle("Show FBD in the Dock", isOn: bool(Settings.showDockIcon) { Settings.showDockIcon = $0 })
+                Toggle("Brief Dock icon at launch", isOn: bool(Settings.briefDockIconAtStartup) { Settings.briefDockIconAtStartup = $0 })
+                Text("A menu-bar app normally has no Dock icon. These make it findable there — permanently, or only just after it opens.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Label("Dock", systemImage: "app.dock")
+            }
+
             brightnessModelSection
             brightnessSection
             lockDimSection
@@ -63,11 +79,6 @@ struct ApplicationSettingsPage: View {
                     .accessibilityLabel("HTTP port")
                     .accessibilityValue("\(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort)")
                 }
-                Toggle("Custom OSD", isOn: bool(Settings.customOSDEnabled) { Settings.customOSDEnabled = $0 })
-                Text("Shows a brightness HUD when FBD changes the display brightness.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                OSDStyleSection()
                 SettingsSliderRow(
                     title: "Night Shift strength",
                     value: nightShift.strength() ?? 0,

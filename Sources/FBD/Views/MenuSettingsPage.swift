@@ -33,7 +33,7 @@ struct MenuSettingsPage: View {
                     get: { Settings.hideMenuBarIconWhenSingleDisplay },
                     set: { Settings.hideMenuBarIconWhenSingleDisplay = $0 }
                 ))
-                Text("Hiding takes effect only while Show FBD in the Dock is on (see the OSD section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then.")
+                Text("Hiding takes effect only while Show FBD in the Dock is on (see the Dock section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {

@@ -5,6 +5,13 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Changed
+- The Application page now groups the HUD settings together, right under "General". The "Custom
+  OSD" switch — which turns the brightness HUD off — sat in the "Integrations" group next to the
+  HTTP API, below the fold of the settings window. It now opens a group of its own, "On-screen
+  display", with the switch and the HUD's position, bar, background, shadow and corner radius; the
+  Dock icon options moved to a "Dock" group next to it.
+
 ## [2.1.3] - 2026-10-22
 
 ### Fixed

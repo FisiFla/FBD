@@ -10,6 +10,7 @@
 "Connected" = "已连接";
 "Connection" = "连接";
 "Disconnect display" = "断开显示器";
+"Dock" = "程序坞";
 "Failed: %@" = "失败：%@";
 "Install smooth scaling" = "安装平滑缩放";
 "Installs %lld scaled modes between the native size and half of it." = "在原生尺寸到其一半之间安装 %lld 个缩放模式。";
@@ -20,6 +21,7 @@
 /* 单个显示器的菜单 */
 "Manage Display" = "管理显示器";
 "Display Mode" = "显示模式";
+"On-screen display" = "屏幕显示";
 "Reaches the bottom of the brightness slider in software. Needs Screen Recording permission." = "在软件层到达亮度滑块的底部。需要屏幕录制权限。";
 "Reconnect display" = "重新连接显示器";
 "Refresh Rate" = "刷新率";
@@ -207,7 +209,7 @@
 "Display groups let one operation affect several displays: brightness synchronisation, UI scale matching and layout management." = "显示器组可让一次操作影响多台显示器：亮度同步、界面缩放匹配和布局管理。";
 "Entitlement-gated on macOS 26+; has no effect there." = "在 macOS 26 及更高版本上受权限限制；在那里不起作用。";
 "Experimental direct color-table method" = "实验性的直接色表方法";
-"Hiding takes effect only while Show FBD in the Dock is on (see the OSD section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then." = "仅在开启“在程序坞中显示 FBD”时隐藏才会生效（见 OSD 部分）：既无菜单栏图标又无程序坞图标的菜单栏应用将没有任何可点之处，因此在此之前该偏好会被忽略。";
+"Hiding takes effect only while Show FBD in the Dock is on (see the Dock section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then." = "仅在开启“在程序坞中显示 FBD”时隐藏才会生效（见程序坞部分）：既无菜单栏图标又无程序坞图标的菜单栏应用将没有任何可点之处，因此在此之前该偏好会被忽略。";
 "Hold ⇧ Shift while launching, or set FBD_SAFE_MODE=1, to skip applying stored configuration for one session — the escape hatch after a bad EDID override." = "启动时按住 ⇧ Shift，或设置 FBD_SAFE_MODE=1，可在本次运行中跳过应用已存储的配置——EDID 覆盖出错后的应急出口。";
 "Holds a power assertion while FBD runs, so the display stays on through a long transfer, render or presentation. It ends when FBD quits — the assertion belongs to this process, which is why there is no command-line switch for it." = "FBD 运行期间保持电源断言，使显示器在长时间的传输、渲染或演示过程中保持开启。退出 FBD 时即结束——该断言属于此进程，因此没有对应的命令行开关。";
 "Keys adjust every connected display that has brightness or volume control." = "按键调整所有支持亮度或音量控制的已连接显示器。";

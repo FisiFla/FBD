@@ -1,7 +1,7 @@
 import FBDCore
 import SwiftUI
 
-/// The HUD's look and placement, plus the Dock visibility rules.
+/// The HUD's on/off switch, look and placement.
 ///
 /// Its own view because the whole style is **one stored value**: the controls bind
 /// to a local copy and save it on change, rather than each writing its own key —
@@ -12,6 +12,11 @@ struct OSDStyleSection: View {
 
     var body: some View {
         Group {
+            Toggle("Custom OSD", isOn: bool(Settings.customOSDEnabled) { Settings.customOSDEnabled = $0 })
+            Text("Shows a brightness HUD when FBD changes the display brightness.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             SettingsRow(title: "HUD position") {
                 Picker("", selection: $style.position) {
                     ForEach(OSDStyle.Position.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -40,12 +45,6 @@ struct OSDStyleSection: View {
                 caption: nil,
                 onChange: { style.cornerRadius = $0 }
             )
-
-            Toggle("Show FBD in the Dock", isOn: bool(Settings.showDockIcon) { Settings.showDockIcon = $0 })
-            Toggle("Brief Dock icon at launch", isOn: bool(Settings.briefDockIconAtStartup) { Settings.briefDockIconAtStartup = $0 })
-            Text("A menu-bar app normally has no Dock icon. These make it findable there — permanently, or only just after it opens.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .onChange(of: style) { newValue in OSDStyle.save(newValue) }
     }

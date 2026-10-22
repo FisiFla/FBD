@@ -10,6 +10,7 @@
 "Connected" = "Connected";
 "Connection" = "Connection";
 "Disconnect display" = "Disconnect display";
+"Dock" = "Dock";
 "Failed: %@" = "Failed: %@";
 "Install smooth scaling" = "Install smooth scaling";
 "Installs %lld scaled modes between the native size and half of it." = "Installs %lld scaled modes between the native size and half of it.";
@@ -20,6 +21,7 @@
 /* Per-display menu */
 "Manage Display" = "Manage Display";
 "Display Mode" = "Display Mode";
+"On-screen display" = "On-screen display";
 "Reaches the bottom of the brightness slider in software. Needs Screen Recording permission." = "Reaches the bottom of the brightness slider in software. Needs Screen Recording permission.";
 "Reconnect display" = "Reconnect display";
 "Refresh Rate" = "Refresh Rate";
@@ -208,7 +210,7 @@
 "Display groups let one operation affect several displays: brightness synchronisation, UI scale matching and layout management." = "Display groups let one operation affect several displays: brightness synchronisation, UI scale matching and layout management.";
 "Entitlement-gated on macOS 26+; has no effect there." = "Entitlement-gated on macOS 26+; has no effect there.";
 "Experimental direct color-table method" = "Experimental direct color-table method";
-"Hiding takes effect only while Show FBD in the Dock is on (see the OSD section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then." = "Hiding takes effect only while Show FBD in the Dock is on (see the OSD section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then.";
+"Hiding takes effect only while Show FBD in the Dock is on (see the Dock section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then." = "Hiding takes effect only while Show FBD in the Dock is on (see the Dock section): a menu-bar app with no icon and no Dock icon would have nothing left to click, so the preference is ignored until then.";
 "Hold ⇧ Shift while launching, or set FBD_SAFE_MODE=1, to skip applying stored configuration for one session — the escape hatch after a bad EDID override." = "Hold ⇧ Shift while launching, or set FBD_SAFE_MODE=1, to skip applying stored configuration for one session — the escape hatch after a bad EDID override.";
 "Holds a power assertion while FBD runs, so the display stays on through a long transfer, render or presentation. It ends when FBD quits — the assertion belongs to this process, which is why there is no command-line switch for it." = "Holds a power assertion while FBD runs, so the display stays on through a long transfer, render or presentation. It ends when FBD quits — the assertion belongs to this process, which is why there is no command-line switch for it.";
 "Keys adjust every connected display that has brightness or volume control." = "Keys adjust every connected display that has brightness or volume control.";
