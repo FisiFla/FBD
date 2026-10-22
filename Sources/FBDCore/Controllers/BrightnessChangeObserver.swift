@@ -73,14 +73,34 @@ public final class BrightnessChangeObserver {
         let display = observed[id]
         lock.unlock()
         guard let display else { return }
-        let clamped = min(max(value, 0), 1)
         DispatchQueue.main.async {
-            display.updateBrightness(clamped)
-            NotificationCenter.default.post(name: .fbdDisplayUpdated, object: nil, userInfo: ["displayID": id])
+            Self.applyHardwareChange(displayID: id, brightness: value, to: display)
             // The ambient-light sync hangs on this: the built-in panel's
             // ambient sensor drives its backlight, and this is where that
             // change arrives.
-            self.onChange?(display, clamped)
+            self.onChange?(display, min(max(value, 0), 1))
         }
+    }
+
+    /// Apply a brightness change the **hardware** made and announce it as such.
+    ///
+    /// The hardware changed the display, not the user: the brightness keys,
+    /// the ambient-light sensor, another application. The origin is what tells
+    /// the HUD not to announce a change nobody asked for — the update is still
+    /// posted, so everything bound to the display keeps refreshing.
+    ///
+    /// Split out of the notification callback so the origin contract can be
+    /// checked without a display attached.
+    internal static func applyHardwareChange(displayID: CGDirectDisplayID, brightness: Double, to display: Display) {
+        let clamped = min(max(brightness, 0), 1)
+        display.updateBrightness(clamped)
+        NotificationCenter.default.post(
+            name: .fbdDisplayUpdated,
+            object: nil,
+            userInfo: [
+                "displayID": displayID,
+                DisplayUpdateOrigin.userInfoKey: DisplayUpdateOrigin.hardware.rawValue
+            ]
+        )
     }
 }

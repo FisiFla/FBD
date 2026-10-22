@@ -708,6 +708,18 @@ public final class DisplayController {
 
 // MARK: - Notifications
 
+/// Where a display change came from.
+public enum DisplayUpdateOrigin: String, Sendable {
+    /// FBD changed the display itself — the panel, the CLI, the HTTP API, a preset.
+    case user
+    /// The hardware changed the display on its own: the brightness keys, the
+    /// ambient-light sensor, another application.
+    case hardware
+
+    /// The `userInfo` key a `.fbdDisplayUpdated` post carries the origin in.
+    public static let userInfoKey = "FBDUpdateOrigin"
+}
+
 public extension Notification.Name {
     /// Posted after a full display enumeration (displays added/removed/changed).
     /// No userInfo.
@@ -718,4 +730,14 @@ public extension Notification.Name {
     /// Posted after an individual display's mode changed.
     /// userInfo: ["displayID": CGDirectDisplayID].
     static let fbdDisplayUpdated = Notification.Name("FBDDisplayUpdated")
+}
+
+public extension Notification {
+    /// The origin of a `.fbdDisplayUpdated` post. `.user` when the post does
+    /// not say, because every change FBD makes is a change the user asked for.
+    var fbdUpdateOrigin: DisplayUpdateOrigin {
+        guard let raw = userInfo?[DisplayUpdateOrigin.userInfoKey] as? String,
+              let origin = DisplayUpdateOrigin(rawValue: raw) else { return .user }
+        return origin
+    }
 }

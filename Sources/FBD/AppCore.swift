@@ -334,9 +334,16 @@ final class AppCore {
 
     /// Observe .fbdDisplayUpdated (carries the changed display's id) and show
     /// the brightness HUD, debounced to 100 ms.
+    ///
+    /// Only changes FBD made itself get a HUD. A change the hardware made on
+    /// its own — the brightness keys, the ambient-light sensor, another
+    /// application — is not FBD's news to announce: macOS shows its own
+    /// indicator for the keys, and a HUD that pops up every time the room's
+    /// light changes is noise.
     private func observeOSD() {
         observers.append(
             NotificationCenter.default.addObserver(forName: .fbdDisplayUpdated, object: nil, queue: .main) { [weak self] note in
+                guard note.fbdUpdateOrigin == .user else { return }
                 let id = (note.userInfo?["displayID"] as? NSNumber)?.uint32Value
                 Task { @MainActor in
                     self?.scheduleOSD(displayID: id)

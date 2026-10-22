@@ -71,6 +71,7 @@ struct FDBSlider: View {
         }
         .focusable()
         .focused($isFocused)
+        .modifier(WithoutSystemFocusEffect())
         .onMoveCommand { direction in
             applyKeyboardDirection(direction)
         }
@@ -206,6 +207,27 @@ struct FDBSlider: View {
     private func decrement(by amount: Double) {
         withAnimation(reduceMotion ? nil : FBDTheme.animationFast) {
             value = max(value - amount, range.lowerBound)
+        }
+    }
+}
+
+/// Drops macOS's default focus effect (the blue ring SwiftUI draws around a
+/// focused view).
+///
+/// The slider's focusable view is the whole row — the sun icons included — so
+/// the ring reads as a stray border drawn around the control rather than as a
+/// focus indicator. The thumb already grows when the control has focus, which
+/// is the indicator that belongs to this design.
+///
+/// `focusEffectDisabled()` needs macOS 14; FBD still supports macOS 13, where
+/// the modifier does not exist and the system effect is left alone.
+private struct WithoutSystemFocusEffect: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
         }
     }
 }

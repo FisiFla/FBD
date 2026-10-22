@@ -5,6 +5,18 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Fixed
+- The brightness slider drew a blue ring around itself. The slider's focusable view is the whole
+  row — both sun icons included — so macOS's keyboard-focus effect was drawn as a border around
+  the control instead of as a focus indicator. The thumb already grows when the control has the
+  focus, which is the indicator this design uses; the system's ring is switched off.
+- The brightness HUD popped up for changes FBD did not make. Every brightness change FBD observed
+  was announced, including the ones the hardware made on its own — the brightness keys, the
+  ambient-light sensor, another application — so the pill appeared on its own, often. The update
+  now carries where it came from, and only FBD's own changes are announced. The HUD stays for the
+  writes FBD performs, because macOS shows no indicator of its own for a brightness change an
+  application makes.
+
 ### Documentation
 - The install notes now say what an unsigned update costs: macOS treats the new binary as a new
   app, so Screen Recording is requested again and the login Keychain asks for its password once
