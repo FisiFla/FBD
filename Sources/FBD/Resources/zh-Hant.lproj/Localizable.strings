@@ -231,7 +231,7 @@
 "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays." = "儲存每台顯示器所選的屬性，並在其重新連接時重新套用。請在「顯示器」中為每台顯示器選擇屬性。";
 "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock." = "螢幕鎖定或螢幕保護程式執行時會降低螢幕亮度，解鎖後回復。";
 "Serves the control API on 127.0.0.1. Applies immediately." = "在 127.0.0.1 上提供控制 API。立即生效。";
-"Shows a brightness HUD when the display brightness changes." = "顯示器亮度變更時顯示亮度 HUD。";
+"Shows a brightness HUD when FBD changes the display brightness." = "FBD 調整顯示器亮度時顯示亮度 HUD。";
 "Shows displays the app has seen before even while they are disconnected." = "即使已中斷連接，也顯示應用程式先前見過的顯示器。";
 "The group is active only while every member is connected." = "僅當所有成員都已連接時該群組才生效。";
 "The group is active while at least one member is connected." = "至少有一個成員已連接時該群組即生效。";

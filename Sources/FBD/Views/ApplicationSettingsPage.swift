@@ -64,7 +64,7 @@ struct ApplicationSettingsPage: View {
                     .accessibilityValue("\(Settings.httpServerPort == 0 ? 1024 : Settings.httpServerPort)")
                 }
                 Toggle("Custom OSD", isOn: bool(Settings.customOSDEnabled) { Settings.customOSDEnabled = $0 })
-                Text("Shows a brightness HUD when the display brightness changes.")
+                Text("Shows a brightness HUD when FBD changes the display brightness.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 OSDStyleSection()

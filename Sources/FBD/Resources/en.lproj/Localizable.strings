@@ -232,7 +232,7 @@
 "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays." = "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays.";
 "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock." = "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock.";
 "Serves the control API on 127.0.0.1. Applies immediately." = "Serves the control API on 127.0.0.1. Applies immediately.";
-"Shows a brightness HUD when the display brightness changes." = "Shows a brightness HUD when the display brightness changes.";
+"Shows a brightness HUD when FBD changes the display brightness." = "Shows a brightness HUD when FBD changes the display brightness.";
 "Shows displays the app has seen before even while they are disconnected." = "Shows displays the app has seen before even while they are disconnected.";
 "The group is active only while every member is connected." = "The group is active only while every member is connected.";
 "The group is active while at least one member is connected." = "The group is active while at least one member is connected.";

@@ -231,7 +231,7 @@
 "Saves each display's selected properties and re-applies them when the display reconnects. Choose the properties per display under Displays." = "存储每台显示器所选的属性，并在其重新连接时重新应用。请在“显示器”中为每台显示器选择属性。";
 "Screen brightness is lowered while the screen is locked or the screensaver is up, and restored on unlock." = "屏幕锁定或屏幕保护程序运行时会降低屏幕亮度，解锁后恢复。";
 "Serves the control API on 127.0.0.1. Applies immediately." = "在 127.0.0.1 上提供控制 API。立即生效。";
-"Shows a brightness HUD when the display brightness changes." = "显示器亮度变化时显示亮度 HUD。";
+"Shows a brightness HUD when FBD changes the display brightness." = "FBD 调整显示器亮度时显示亮度 HUD。";
 "Shows displays the app has seen before even while they are disconnected." = "即使已断开，也显示应用此前见过的显示器。";
 "The group is active only while every member is connected." = "仅当所有成员都已连接时该组才生效。";
 "The group is active while at least one member is connected." = "至少有一个成员已连接时该组即生效。";
