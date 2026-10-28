@@ -232,8 +232,10 @@ those rows' route assumed, so they are blocked on design rather than on a name.
 component: the private symbol, the wire framing, the reply validation, the read cache, the
 read quarantine, the write cadence, the bus contention and the display↔channel matching.
 
-The claim it supports is **code-verified equivalence**, never hardware verification: FBD's
-DDC path has not been exercised against a real DDC monitor in this repository (issue #7).
+The claim it supports is **code-verified equivalence**, never hardware verification: the
+audit itself compares source. The transport has since been run against a real DDC monitor
+on a second Apple Silicon Mac (2026-10-28, below); what that run does not prove is that the
+*repo's* smoke harness (`scripts/ddc-smoke.sh`, issue #26) was the thing that ran.
 The symbols it relies on are the ones already listed above — `IOAVServiceCreateWithService`,
 `IOAVServiceReadI2C`, `IOAVServiceWriteI2C` — and no new private symbol was declared for the
 hardening work (issue #25).
@@ -253,8 +255,10 @@ So the HiDPI ladder adds **no** entry to the table above. The privileged part of
 documented, user-visible administrator prompt. ADR 0005 records why the command model is
 kept separate from that executor.
 
-The claim this feature supports is *implemented, not yet verified on hardware*: no display
-with a HiDPI ladder has been re-enumerated through this path in this repository.
+The claim this feature supports is *implemented, and since 2026-10-28 verified on
+hardware*: the ladder was installed through the administrator prompt on a second Apple
+Silicon Mac with an external monitor and the display re-enumerated with a HiDPI mode (see
+below).
 
 ## Live-verified on this machine — 2026-10-20
 
@@ -284,11 +288,31 @@ Two measured facts that change a claim made elsewhere:
   so the upscaling falls back to the software boost overlay — which needs Screen Recording and
   lives in an overlay session that does not outlive a one-shot `fbdcli` run.
 
-Still unverified here, because this machine cannot show them: DDC/CI on an external monitor
-(issue #7), EDID on the built-in panel (macOS 27 exposes none), the below-floor blend's DDC
-floor, the remembered-disconnect / docked-built-in / ambient-sync behaviours (they need an
-external display), and the privileged HiDPI write to `/Library/Displays` together with the
-display re-enumeration.
+Still unverified here, because this machine cannot show them: the remembered-disconnect /
+docked-built-in / ambient-sync behaviours (they need a display that can be unplugged and
+docked) and screen rotation on an external display.
+
+## Live-verified on a second machine — 2026-10-28
+
+A second Apple Silicon Mac with an external monitor attached. The four paths that this
+repository had only ever reasoned about, or measured without the hardware that exercises
+them, ran there:
+
+- **DDC/CI on an external monitor** — the monitor answered VCP reads and accepted VCP writes
+  through `IOAVServiceCreateWithService` / `IOAVServiceReadI2C` / `IOAVServiceWriteI2C`, the
+  path the audit in [ddc-equivalence.md](ddc-equivalence.md) compares with Crisp. One monitor
+  and one run: a second display is still a second set of quirks.
+- **EDID** — the external monitor's EDID is read where the built-in panel on macOS 27 exposes
+  none.
+- **Below-floor blend** — a request below the monitor's own hardware brightness floor engaged
+  the software blend, and the screen followed the request below that floor instead of
+  stopping at it.
+- **HiDPI smooth scaling** — the privileged install wrote the `scale-resolutions` override,
+  the display re-enumerated, and the HiDPI mode rendered smoothly.
+
+What this does **not** turn into a verified claim: DDC/CI under Rosetta (still unsupported by
+design), the repository's own `scripts/ddc-smoke.sh` as the harness that produced these
+results, a DDC reply from a second monitor, and the connection behaviours above.
 
 ## Notes
 

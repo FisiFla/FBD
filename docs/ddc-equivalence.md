@@ -8,8 +8,8 @@ bus and back — compared component by component with the transport of
 **Method.** Source-level comparison of every component on that path: the private
 symbol used, the wire framing, the reply handling, the timing, the concurrency,
 and the way a display is matched to a DDC channel. Crisp is the reference
-because its transport has been exercised against real hardware; FBD's has not
-(see the honesty rule below).
+because its transport has been exercised against real hardware; FBD's was not
+when this audit was written (see the honesty rule below).
 
 **Rules observed while writing this audit.** No code, strings or assets were
 copied from Crisp. Behaviour was re-derived from the DDC/CI specification and
@@ -20,13 +20,18 @@ reader can check a claim — quoting a location is not copying an implementation
 ## The honesty rule
 
 This document claims **code-verified equivalence**: FBD's transport is
-equivalent to Crisp v1.7.1's transport *at the level of the source*. It does
-**not** claim hardware verification.
+equivalent to Crisp v1.7.1's transport *at the level of the source*. The
+verdicts below come from reading code, and nothing in them changed when the
+transport later ran on hardware.
 
-FBD's DDC path has never been exercised against a real DDC monitor in this
-repository. The machine this audit was written on has no external display
-attached. Issue [#7](https://github.com/FisiFla/FBD/issues/7) tracks the
-empirical leg, and `scripts/ddc-smoke.sh` (issue #26) is the harness for it.
+That hardware leg is no longer open. On 2026-10-28 the path was exercised
+against one external monitor on a second Apple Silicon Mac: the monitor
+answered VCP reads and accepted VCP writes (see
+[PRIVATE_APIS.md](PRIVATE_APIS.md#live-verified-on-a-second-machine--2026-10-28)).
+One monitor is not a survey, so it does not convert this document's verdicts
+into a hardware claim about *monitors* — it converts the "never ran at all"
+caveat into "ran against one". `scripts/ddc-smoke.sh` (issue #26) is still the
+harness to run against the next display.
 
 Two phrases are therefore never used interchangeably in this repository:
 
@@ -353,11 +358,10 @@ uses, applied to the probe.
 
 ## What this audit does not claim
 
-- **Not hardware verification.** FBD's DDC path has not been run against a
-  real DDC monitor here. Issue #7 is the empirical leg; `scripts/ddc-smoke.sh`
-  (issue #26) is its harness. Until that runs, the strongest true statement is
-  the one this document makes: *code-verified equivalent to Crisp v1.7.1's
-  hardware-proven transport*.
+- **Not a hardware survey.** FBD's DDC path has run against one external
+  monitor (2026-10-28). The strongest statement this document makes is still
+  the source-level one: *code-verified equivalent to Crisp v1.7.1's
+  hardware-proven transport*, plus *ran against one monitor once*.
 - **Not a behaviour match for the matching layer.** §9 is open.
 - **Not a write-path match.** §6 is a documented, deliberate divergence.
 - **Not a claim that Crisp is correct.** Crisp is the reference because it has
@@ -366,7 +370,9 @@ uses, applied to the probe.
 
 ## Residual risk on real hardware
 
-The parts of this audit that a code review cannot settle:
+The parts of this audit that a code review cannot settle. One monitor exercised the
+path on 2026-10-28 and none of the rows below was hit by it — which is evidence
+about *that* monitor, not about the risk:
 
 | Risk | Why the code cannot answer it | How it would be caught |
 |---|---|---|

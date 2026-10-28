@@ -52,9 +52,9 @@ public enum DDC {
     /// handed to IOAVServiceWriteI2C: it is passed as the call's data address
     /// (offset) and the transport puts it on the wire.
     ///
-    /// NOTE: hardware verification of this framing is still pending (issue #7); the
-    /// code-level equivalence audit against didriksg/Crisp v1.7.1 lives in
-    /// `docs/ddc-equivalence.md`.
+    /// NOTE: this framing ran against one external monitor on 2026-10-28, so it is no
+    /// longer unmeasured; the code-level equivalence audit against didriksg/Crisp v1.7.1
+    /// lives in `docs/ddc-equivalence.md`.
     public static func checksum(_ payload: [UInt8], includeSource: Bool = true) -> UInt8 {
         payload.reduce(UInt8(0x6E) ^ (includeSource ? sourceAddress : 0)) { $0 ^ $1 }
     }

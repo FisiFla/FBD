@@ -14,22 +14,26 @@ next. The per-release record is in [CHANGELOG.md](../CHANGELOG.md).
   control, EDID export and saved devices.
 - English, 简体中文 and 繁體中文 throughout the panel and the Settings pages.
 
+## Verified on real hardware
+
+A second Apple Silicon Mac with an external monitor, 2026-10-28: DDC/CI against that
+monitor, its EDID, the below-floor brightness blend below its own hardware floor, and HiDPI
+smooth scaling through the privileged install and the display re-enumeration. One monitor,
+one run — that is the scope of the claim. The evidence is in
+[PRIVATE_APIS.md](PRIVATE_APIS.md).
+
 ## Not proven on hardware
 
-- **DDC/CI on an external monitor** (issue #7) — needs an Apple Silicon Mac
-  with a DDC-capable display. The transport is audited component by component
-  in [ddc-equivalence.md](ddc-equivalence.md); the hardware leg is open, and
-  `scripts/ddc-smoke.sh` is the harness for it.
 - **Legacy `CGVirtualDisplay` virtual displays** on macOS 13–15 (the macOS
   26+ `SLVirtualDisplay` path is live-verified).
 - **Screen rotation on an external display** — the built-in returns 1001 on
   macOS 27.
-- **The below-floor brightness blend** against a real monitor with a high
-  brightness floor, and the three display-connection behaviours (remembered
-  disconnects, the docked built-in display, the ambient sync) — they need an
-  external display attached.
-- **The privileged HiDPI write** to `/Library/Displays` and the display
-  re-enumeration that follows it.
+- **The three display-connection behaviours** (remembered disconnects, the
+  docked built-in display, the ambient sync) — they need a display that can be
+  unplugged and docked.
+- **A second DDC monitor.** The transport is verified against one; a display
+  with unusual reply timing or a wrong channel pairing is still untested, and
+  `scripts/ddc-smoke.sh` remains the harness for that.
 - **Signed, notarised distribution** — blocked on a Developer ID certificate
   (issue #6). Until then the release asset is `FBD-unsigned.zip`, Gatekeeper
   asks the user to open it by hand, and the appcast cannot be regenerated.
@@ -49,7 +53,8 @@ next. The per-release record is in [CHANGELOG.md](../CHANGELOG.md).
 
 1. A Developer ID certificate, so releases are signed and notarised and the
    appcast can be regenerated (issue #6).
-2. Hardware verification on an Apple Silicon Mac with an external monitor
-   (issue #7).
+2. A second DDC display through `scripts/ddc-smoke.sh`. The transport has run
+   against one monitor; the audit's residual risks — reply timing, a wrong
+   channel pairing, a maximum of `0` — only show up on a display that misbehaves.
 3. The privileged helper for system-level display overrides, which needs the
    signed release first (issue #23).

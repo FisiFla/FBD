@@ -6,11 +6,13 @@ displays, HDR and XDR, full-screen software filters, screen rotation, EDID,
 per-display automation, a command-line client and a local HTTP API — with no
 Pro tier, no licensing and no telemetry.
 
-**Status: beta.** Most of the surface is implemented and unit-tested; some
-paths are not yet verified against real hardware, and the app says so where
-that applies. Apple locks down private display APIs differently on every macOS
-release, so FBD degrades gracefully — the feature turns off and the UI says
-why — instead of guessing.
+**Status: beta.** Most of the surface is implemented and unit-tested; the
+features that needed hardware to prove — DDC/CI on an external monitor, EDID,
+the below-floor brightness blend and HiDPI smooth scaling — have now been
+measured on real machines, and the paths that still have not say so. Apple
+locks down private display APIs differently on every macOS release, so FBD
+degrades gracefully — the feature turns off and the UI says why — instead of
+guessing.
 
 [![CI](https://github.com/FisiFla/FBD/actions/workflows/ci.yml/badge.svg)](https://github.com/FisiFla/FBD/actions/workflows/ci.yml)
 
@@ -74,19 +76,26 @@ missing stays off.
 | Feature | macOS 13–15 | macOS 26 | macOS 27 |
 |---|---|---|---|
 | Apple brightness / resolution | ✅ | ✅ | ✅ live-verified |
-| DDC/CI (external displays, Apple Silicon) | ⚠️ not verified on hardware ([#7](https://github.com/FisiFla/FBD/issues/7)) | ⚠️ same | ⚠️ same |
+| DDC/CI (external displays, Apple Silicon) | ✅ verified on an external monitor | ✅ same | ✅ same |
 | Virtual displays | ⚠️ `CGVirtualDisplay`, unverified | ✅ `SLVirtualDisplay` | ✅ live-verified |
 | XDR upscaling (native preset rewrite) | ✅ | ⚠️ write-protected → software boost | ⚠️ write-protected → software boost (the boost overlay is live-verified); preset switching ✅ |
 | Night Shift / Dark Mode / True Tone / OSD / PiP / profiles | ✅ | ✅ | ✅ live-verified |
 | Full-screen software filters | ✅ | ✅ | ✅ live-verified |
-| EDID | ⚠️ the built-in panel exposes none | ⚠️ same | ⚠️ none on the built-in panel; external displays untested |
-| Below-floor brightness blend | ⚠️ needs Screen Recording; not verified on hardware | ⚠️ same | ✅ the blend path is live-verified; a DDC floor is not |
-| HiDPI smooth scaling | ⚠️ the install mechanism is verified; the privileged write is not | ⚠️ same | ⚠️ same |
+| EDID | ✅ external displays verified; the built-in panel exposes none | ✅ same | ✅ same |
+| Below-floor brightness blend | ✅ needs Screen Recording; verified below an external monitor's own floor | ✅ same | ✅ same |
+| HiDPI smooth scaling | ✅ the privileged write is verified on hardware | ✅ same | ✅ same |
 | Remembered disconnects · docked built-in · ambient sync | ⚠️ implemented, not verified on hardware | ⚠️ same | ⚠️ same |
 
 *Live-verified* means it was measured on a real machine, not merely
 implemented; the evidence is in [`docs/PRIVATE_APIS.md`](docs/PRIVATE_APIS.md).
-Screen rotation on an external display is implemented but unverified.
+Two machines carry it: the built-in XDR panel of an M1 Max on macOS 27, and —
+since 2026-10-28 — a second Apple Silicon Mac with an external monitor, which
+verified DDC/CI, EDID, the below-floor blend and HiDPI smooth scaling. Those
+rows are marked in every macOS column because the same code path serves all
+three; one monitor is one monitor, so a display with unusual DDC quirks can
+still surprise the transport. Screen rotation on an external display and the
+three display-connection behaviours (remembered disconnects, the docked
+built-in display, the ambient sync) are implemented but unverified.
 
 Two safety notes. The built-in display is **not** disconnected on base-M3
 MacBooks, where Apple repurposed the panel's connection for clamshell mode —

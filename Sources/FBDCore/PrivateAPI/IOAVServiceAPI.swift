@@ -227,7 +227,8 @@ public enum IOAVServiceAPI {
 
     /// Install a virtual EDID on the display. Disabled: `IOAVServiceSetVirtualEDIDMode` takes a
     /// mode whose values are undocumented and unmeasured, and a wrong guess can blank the
-    /// display. Fails closed until a mode is verified on hardware (issue #7).
+    /// display. Fails closed until a mode is measured on hardware — reading a monitor's
+    /// EDID is verified (2026-10-28), installing a virtual one is not.
     public static func setVirtualEDID(_ edid: Data, service: IOAVServiceRef) -> Bool {
         log.error("Virtual EDID install is disabled: IOAVServiceSetVirtualEDIDMode mode values are unverified")
         return false

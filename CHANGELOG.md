@@ -5,6 +5,17 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Documentation
+- The four paths that needed hardware to prove are now recorded as verified. On 2026-10-28, on a
+  second Apple Silicon Mac with an external monitor: DDC/CI against that monitor (VCP reads and
+  writes through `IOAVServiceCreateWithService` / `ReadI2C` / `WriteI2C`), that monitor's EDID, the
+  below-floor brightness blend below the monitor's own floor, and HiDPI smooth scaling through the
+  privileged install and the display re-enumeration. The README matrix,
+  `docs/PRIVATE_APIS.md`, `docs/ROADMAP.md` and `docs/ddc-equivalence.md` all say the same thing
+  about scope: one monitor, one run. The DDC audit stays *code-verified equivalence*, the repo's
+  `ddc-smoke.sh` was not the harness that ran, and a second display with unusual reply timing or
+  channel pairing is still untested.
+
 ## [2.1.4] - 2026-10-22
 
 ### Changed

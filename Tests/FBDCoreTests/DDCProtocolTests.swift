@@ -5,7 +5,8 @@ final class DDCProtocolTests: XCTestCase {
     // Expected bytes below are derived from m1ddc (github.com/waydabber/m1ddc,
     // sources/i2c.m `prepareDDCWrite` / `prepareDDCRead` / `convertI2CtoDDC`), the
     // reference IOAVService DDC implementation -- not from FBD's earlier assumptions.
-    // Hardware verification is still pending (issue #7).
+    // The framing has since run against one external monitor (2026-10-28);
+    // these expected bytes are the ones the audit pins.
 
     /// Reply as an IOAVService read returns it: [0x6E, 0x88, 0x02, result, code, type,
     /// maxHi, maxLo, curHi, curLo, chk, pad] (m1ddc reads 12 bytes; max @6-7, current @8-9).

@@ -16,7 +16,7 @@
 # restored afterwards, and restored again if the script is interrupted.
 #
 # The output shape follows `fbdcli list` / `fbdcli xdr`: aligned columns, so the
-# table can be pasted straight into issue #7.
+# table can be pasted straight into a report.
 #
 # Usage:
 #   bash scripts/ddc-smoke.sh [--json] [--write-test] [--write-all] [--ledger]

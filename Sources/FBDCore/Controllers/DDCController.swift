@@ -23,8 +23,8 @@ import os
 ///
 /// Never throws: failures degrade to nil/false with a logged warning.
 ///
-/// Wire framing follows m1ddc (see `DDC`). It has NOT yet been verified on real
-/// hardware (issue #7).
+/// Wire framing follows m1ddc (see `DDC`). It has been exercised against one external
+/// monitor (2026-10-28); a second display is still untested.
 public final class DDCController {
     private let external: ExternalControlling
     /// Whether the DDC transport is supported on this host (Apple Silicon).
