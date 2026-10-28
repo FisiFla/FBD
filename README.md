@@ -76,14 +76,14 @@ missing stays off.
 | Feature | macOS 13–15 | macOS 26 | macOS 27 |
 |---|---|---|---|
 | Apple brightness / resolution | ✅ | ✅ | ✅ live-verified |
-| DDC/CI (external displays, Apple Silicon) | ✅ verified on an external monitor | ✅ same | ✅ same |
+| DDC/CI (external displays, Apple Silicon) | ✅ live-verified on an external monitor | ✅ same | ✅ same |
 | Virtual displays | ⚠️ `CGVirtualDisplay`, unverified | ✅ `SLVirtualDisplay` | ✅ live-verified |
 | XDR upscaling (native preset rewrite) | ✅ | ⚠️ write-protected → software boost | ⚠️ write-protected → software boost (the boost overlay is live-verified); preset switching ✅ |
 | Night Shift / Dark Mode / True Tone / OSD / PiP / profiles | ✅ | ✅ | ✅ live-verified |
 | Full-screen software filters | ✅ | ✅ | ✅ live-verified |
-| EDID | ✅ external displays verified; the built-in panel exposes none | ✅ same | ✅ same |
-| Below-floor brightness blend | ✅ needs Screen Recording; verified below an external monitor's own floor | ✅ same | ✅ same |
-| HiDPI smooth scaling | ✅ the privileged write is verified on hardware | ✅ same | ✅ same |
+| EDID | ✅ live-verified on an external monitor; the built-in panel exposes none | ✅ same | ✅ same |
+| Below-floor brightness blend | ✅ live-verified below an external monitor's own floor; needs Screen Recording | ✅ same | ✅ same |
+| HiDPI smooth scaling | ✅ live-verified on hardware (the privileged write and the re-enumeration) | ✅ same | ✅ same |
 | Remembered disconnects · docked built-in · ambient sync | ⚠️ implemented, not verified on hardware | ⚠️ same | ⚠️ same |
 
 *Live-verified* means it was measured on a real machine, not merely
@@ -91,11 +91,12 @@ implemented; the evidence is in [`docs/PRIVATE_APIS.md`](docs/PRIVATE_APIS.md).
 Two machines carry it: the built-in XDR panel of an M1 Max on macOS 27, and —
 since 2026-10-28 — a second Apple Silicon Mac with an external monitor, which
 verified DDC/CI, EDID, the below-floor blend and HiDPI smooth scaling. Those
-rows are marked in every macOS column because the same code path serves all
-three; one monitor is one monitor, so a display with unusual DDC quirks can
-still surprise the transport. Screen rotation on an external display and the
-three display-connection behaviours (remembered disconnects, the docked
-built-in display, the ambient sync) are implemented but unverified.
+four rows read live-verified in every macOS column because the same code path
+serves all three versions; the measurement was one monitor on one machine, so
+a second display with unusual DDC quirks can still surprise the transport.
+Screen rotation on an external display and the three display-connection
+behaviours (remembered disconnects, the docked built-in display, the ambient
+sync) are implemented but unverified.
 
 Two safety notes. The built-in display is **not** disconnected on base-M3
 MacBooks, where Apple repurposed the panel's connection for clamshell mode —
