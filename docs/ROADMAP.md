@@ -34,6 +34,9 @@ one run — that is the scope of the claim. The evidence is in
 - **A second DDC monitor.** The transport is verified against one; a display
   with unusual reply timing or a wrong channel pairing is still untested, and
   `scripts/ddc-smoke.sh` remains the harness for that.
+- **DDC across three displays at once** — the per-display queues shipped
+  (#17), but the simultaneous-write timing that made them necessary has never
+  been measured: the verification above used one monitor.
 - **Signed, notarised distribution** — blocked on a Developer ID certificate
   (issue #6). Until then the release asset is `FBD-unsigned.zip`, Gatekeeper
   asks the user to open it by hand, and the appcast cannot be regenerated.
