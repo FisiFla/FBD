@@ -5,6 +5,8 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-11-15
+
 ### Security
 - Automation rules now need approval in the app before they run on an event. Rules are stored in
   UserDefaults, which any process running as you can write, so a rule planted there used to be
