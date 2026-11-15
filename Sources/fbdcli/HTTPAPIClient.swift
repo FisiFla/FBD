@@ -113,12 +113,13 @@ enum HTTPAPIClient {
     /// The request itself (URL/method/body/headers) is built by the tested
     /// HTTPRequestBuilder (FBDCLIParser); this function only executes it.
     private static func request(method: String, path: String, port: Int, body: [String: Any]?) -> Outcome {
+        let token = Settings.httpAPIToken
         guard let urlRequest = HTTPRequestBuilder.request(
             method: method,
             path: path,
             port: port,
             body: body,
-            token: Settings.httpAPIToken
+            signature: { APIToken.signature(token: token, method: method, path: path, body: $0) }
         ) else { return .notSent("the request could not be built") }
         let semaphore = DispatchSemaphore(value: 0)
         var outcome: Outcome = .timedOut

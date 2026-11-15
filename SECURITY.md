@@ -22,6 +22,20 @@ team.
   and rejects any request carrying an `Origin` header, and emits no CORS
   headers, to block DNS rebinding and browser access. Concurrent connections
   are capped.
+- `fbdcli` never sends the token. It finds the app through a port number in
+  UserDefaults, so its request may reach some other listener; it sends an
+  `X-FBD-Signature` instead (HMAC-SHA256 over a timestamp, the method, the path
+  and the body, keyed with the token, valid for 30 seconds). The plain token
+  headers remain for your own scripts — send them only to a port you know is
+  FBD. A captured signature can be replayed for the same request within those
+  30 seconds; it cannot be turned into a different request or into the token.
+- Automation rules are stored in UserDefaults, which any process running as you
+  can write, so a stored rule is not trusted by itself. The app runs a rule on
+  its event only if it carries a seal (HMAC-SHA256, key in the login Keychain)
+  made when you added or approved that exact rule in Settings → Automation. A
+  rule added with `fbdcli automation add`, or edited outside the app, is listed
+  as "Not approved" and does not run until you approve it. There is no
+  fallback: without the key, or with a seal that does not verify, nothing runs.
 - Automation scripts: `FBD_DISPLAY_NAME` comes from the monitor's EDID and is
   untrusted; it is restricted to letters, digits, space and `- _ . ( )` before
   being exported to shell rules.
@@ -32,6 +46,10 @@ team.
   fails with 401 until it is answered. FBD does not widen the item's ACL to
   avoid the prompt — a signed build ([#6](https://github.com/FisiFla/FBD/issues/6))
   keeps the grant across updates instead.
+- Network TV control (LG webOS, Sony Bravia, Roku) speaks those devices'
+  plaintext LAN protocols (`ws://`, `http://`). Pairing keys and commands are
+  readable by anyone on the same network; use it on networks you trust.
+- `fbd://` URLs are logged without their query, which carries the token.
 - Secrets: never commit `.env` files or tokens; the repo gitignores them.
 - Private-API usage: every private symbol is a forward-compatibility risk —
   see `docs/PRIVATE_APIS.md`.

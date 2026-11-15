@@ -22,6 +22,64 @@ public enum APIToken {
         return providedDigest == expectedDigest
     }
 
+    /// How far a signed request's timestamp may be from now, in seconds.
+    public static let signatureWindow: TimeInterval = 30
+
+    /// `X-FBD-Signature` value for one request: proof of knowing the token
+    /// that does not contain it.
+    ///
+    /// `fbdcli` authenticates this way because it finds the app through a
+    /// port number in UserDefaults, and whatever is listening there gets the
+    /// request. A bearer token sent to the wrong listener is lost for good; a
+    /// signature is good for this one request, for `signatureWindow` seconds.
+    ///
+    /// `v1:<unix seconds>:<base64 HMAC-SHA256>` over the version, timestamp,
+    /// method, path and a SHA-256 of the body, keyed with the token.
+    public static func signature(
+        token: String,
+        method: String,
+        path: String,
+        body: Data?,
+        now: Date = Date()
+    ) -> String {
+        let timestamp = Int(now.timeIntervalSince1970)
+        return "v1:\(timestamp):\(mac(token: token, timestamp: timestamp, method: method, path: path, body: body))"
+    }
+
+    /// Whether `signature` was made with `expected` for exactly this request,
+    /// within `signatureWindow` of `now`. Fails closed like `matches`: an
+    /// absent signature or an empty token never passes.
+    public static func signatureMatches(
+        _ signature: String?,
+        _ expected: String,
+        method: String,
+        path: String,
+        body: Data?,
+        now: Date = Date()
+    ) -> Bool {
+        guard let signature, !expected.isEmpty else { return false }
+        let parts = signature.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "v1", let timestamp = Int(parts[1]),
+              abs(now.timeIntervalSince1970 - TimeInterval(timestamp)) <= signatureWindow else {
+            return false
+        }
+        // Compared through `matches`, so timing says nothing about the MAC.
+        return matches(
+            String(parts[2]),
+            mac(token: expected, timestamp: timestamp, method: method, path: path, body: body)
+        )
+    }
+
+    private static func mac(token: String, timestamp: Int, method: String, path: String, body: Data?) -> String {
+        let bodyDigest = SHA256.hash(data: body ?? Data()).map { String(format: "%02x", $0) }.joined()
+        let message = "v1\n\(timestamp)\n\(method)\n\(path)\n\(bodyDigest)"
+        let code = HMAC<SHA256>.authenticationCode(
+            for: Data(message.utf8),
+            using: SymmetricKey(data: Data(token.utf8))
+        )
+        return Data(code).base64EncodedString()
+    }
+
     /// Guidance printed instead of the token itself. The token grants full
     /// control of the user's displays, so `fbdcli auth-token` must not put
     /// it on stdout by default — only `--reveal` does that.

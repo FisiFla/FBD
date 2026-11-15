@@ -370,6 +370,18 @@ public enum Settings {
         defaults.set(data, forKey: automationRulesKey)
     }
 
+    /// Approval seals for the rules above, keyed by rule id — see
+    /// `AutomationSeal`. A rule without a valid one never fires on its event.
+    private static let automationSealsKey = "automation.v1.seals"
+
+    static func loadAutomationSeals() -> [String: String] {
+        defaults.dictionary(forKey: automationSealsKey) as? [String: String] ?? [:]
+    }
+
+    static func saveAutomationSeals(_ seals: [String: String]) {
+        defaults.set(seals, forKey: automationSealsKey)
+    }
+
     public static func saveVirtualScreens(_ configs: [VirtualScreenConfig]) {
         if let data = try? JSONEncoder().encode(configs) {
             defaults.set(data, forKey: virtualScreensKey)

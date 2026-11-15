@@ -276,6 +276,8 @@
 "Enabled" = "Enabled";
 "Off" = "Off";
 "Add rule" = "Add rule";
+"Not approved: this rule will not run on its event until you approve it here." = "Not approved: this rule will not run on its event until you approve it here.";
+"Approve" = "Approve";
 "Remove rule" = "Remove rule";
 "Run rule" = "Run rule";
 "Run this rule now" = "Run this rule now";

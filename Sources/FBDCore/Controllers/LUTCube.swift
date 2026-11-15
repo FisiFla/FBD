@@ -69,6 +69,21 @@ public enum LUTCubeParser {
 
     /// Read and parse a `.cube` file at `url`.
     public static func parse(contentsOf url: URL) throws -> LUTCube {
+        // Checked BEFORE reading: `Data(contentsOf:)` on a device or FIFO
+        // (`/dev/zero`) never returns, and on a huge file it allocates the
+        // whole thing before the cap in `parse(_ data:)` can refuse it.
+        let values: URLResourceValues
+        do {
+            values = try url.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        } catch {
+            throw LUTCubeError.unreadable(error.localizedDescription)
+        }
+        guard values.isRegularFile == true, let bytes = values.fileSize else {
+            throw LUTCubeError.unreadable("not a regular file")
+        }
+        guard bytes <= maxBytes else {
+            throw LUTCubeError.tooLarge(bytes: bytes, limit: maxBytes)
+        }
         let data: Data
         do {
             data = try Data(contentsOf: url)

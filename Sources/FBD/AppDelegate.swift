@@ -1,4 +1,5 @@
 import AppKit
+import FBDCore
 import os
 
 /// Application delegate: wires up the composition root and handles the
@@ -17,6 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu-bar app — never terminate just because the last window closed.
         false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // The listener dies with the process. Leaving the port published would
+        // point fbdcli at whatever binds it next.
+        Settings.httpServerActivePort = 0
     }
 
     /// `fbd://` URL scheme: `fbd://brightness/<id>/<value>`, `fbd://open` and

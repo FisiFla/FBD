@@ -249,7 +249,7 @@ final class AppCore {
 
     func handle(url: URL) {
         guard url.scheme == "fbd" else {
-            log.error("Ignoring non-fbd URL: \(url.absoluteString, privacy: .public)")
+            log.error("Ignoring non-fbd URL (scheme \(url.scheme ?? "none", privacy: .public))")
             return
         }
         switch url.host {
@@ -264,7 +264,8 @@ final class AppCore {
         case "brightness":
             setBrightness(from: url)
         default:
-            log.error("Unknown fbd URL: \(url.absoluteString, privacy: .public)")
+            // Host only: the query can carry `?token=`, which must not reach the log.
+            log.error("Unknown fbd URL host: \(url.host ?? "none", privacy: .public)")
         }
     }
 
@@ -286,7 +287,8 @@ final class AppCore {
         guard parts.count == 2,
               let id = UInt32(parts[0]),
               let value = Double(parts[1]) else {
-            log.error("Malformed fbd://brightness URL: \(url.absoluteString, privacy: .public)")
+            // Path only: the query carries the API token.
+            log.error("Malformed fbd://brightness URL path: \(url.path, privacy: .public)")
             return
         }
         guard let display = displayController.display(withID: id) else {

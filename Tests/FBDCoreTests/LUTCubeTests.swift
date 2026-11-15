@@ -177,6 +177,29 @@ final class LUTCubeTests: XCTestCase {
         }
     }
 
+    func testDeviceFileIsRefusedWithoutBeingRead() {
+        // `/dev/zero` never ends: reading it would hang rather than fail.
+        XCTAssertThrowsError(try LUTCubeParser.parse(contentsOf: URL(fileURLWithPath: "/dev/zero"))) { error in
+            XCTAssertEqual(error as? LUTCubeError, .unreadable("not a regular file"))
+        }
+    }
+
+    func testOversizedFileIsRefusedBySizeBeforeBeingRead() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("fbd-\(UUID().uuidString).cube")
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: nil))
+        defer { try? FileManager.default.removeItem(at: url) }
+        // Sparse: the size is what the check sees, without writing 16 MB.
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: UInt64(LUTCubeParser.maxBytes + 1))
+        try handle.close()
+        XCTAssertThrowsError(try LUTCubeParser.parse(contentsOf: url)) { error in
+            XCTAssertEqual(
+                error as? LUTCubeError,
+                .tooLarge(bytes: LUTCubeParser.maxBytes + 1, limit: LUTCubeParser.maxBytes)
+            )
+        }
+    }
+
     func testMissingFileIsReportedAsUnreadable() {
         let url = URL(fileURLWithPath: "/nonexistent/fbd-does-not-exist.cube")
         XCTAssertThrowsError(try LUTCubeParser.parse(contentsOf: url)) { error in

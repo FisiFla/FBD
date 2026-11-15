@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure construction of the CLI's HTTP API requests (URL, method, JSON body,
-/// auth header, timeout). Extracted from `fbdcli/HTTPAPIClient.swift` so the
+/// signature header, timeout). Extracted from `fbdcli/HTTPAPIClient.swift` so the
 /// wire contract is unit-tested without a server.
 public enum HTTPRequestBuilder {
     /// Timeout for CLI requests (seconds).
@@ -14,7 +14,7 @@ public enum HTTPRequestBuilder {
         path: String,
         port: Int,
         body: [String: Any]?,
-        token: String
+        signature: (_ body: Data?) -> String
     ) -> URLRequest? {
         guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else { return nil }
         var urlRequest = URLRequest(url: url)
@@ -24,9 +24,10 @@ public enum HTTPRequestBuilder {
             urlRequest.httpBody = try? JSONSerialization.data(withJSONObject: body)
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        // The app's HTTP API requires the shared local token (same defaults
-        // domain, so both sides read the same value).
-        urlRequest.setValue(token, forHTTPHeaderField: "X-FBD-Token")
+        // Signed, never the token itself: the port comes from UserDefaults, so
+        // this request may reach a listener that is not FBD. The signature
+        // covers the body exactly as it is sent.
+        urlRequest.setValue(signature(urlRequest.httpBody), forHTTPHeaderField: "X-FBD-Signature")
         return urlRequest
     }
 }

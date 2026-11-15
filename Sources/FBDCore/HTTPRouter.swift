@@ -134,7 +134,8 @@ public enum HTTPRouter {
         path: String,
         body: String?,
         headers: [String: String],
-        expectedToken: String
+        expectedToken: String,
+        now: Date = Date()
     ) -> HTTPRouteResult {
         // /api/health is the one unauthenticated endpoint (uptime/monitoring
         // checks from local tools that may not know the token).
@@ -148,7 +149,16 @@ public enum HTTPRouter {
         // Local API token auth (fail closed).
         let provided = headers["x-fbd-token"] ?? headers["authorization"]
             .flatMap { $0.hasPrefix("Bearer ") ? String($0.dropFirst(7)) : nil }
-        guard APIToken.matches(provided, expectedToken) else {
+        // `fbdcli` signs each request instead of sending the token itself.
+        let signed = APIToken.signatureMatches(
+            headers["x-fbd-signature"],
+            expectedToken,
+            method: method,
+            path: path,
+            body: body.map { Data($0.utf8) },
+            now: now
+        )
+        guard signed || APIToken.matches(provided, expectedToken) else {
             return .error(status: 401, message: "unauthorized")
         }
 

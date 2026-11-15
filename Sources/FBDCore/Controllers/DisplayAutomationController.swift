@@ -138,6 +138,10 @@ public final class ProcessAutomationExecutor: AutomationExecuting {
 ///
 /// - A rule exists only because someone created one; `enabled` gates it
 ///   further, and nothing is ever inferred or inherited.
+/// - A rule fires on its event only once it is **approved in the app**
+///   (`AutomationSeal`): the rule store is plain UserDefaults, so a rule that
+///   merely appears there — written by `fbdcli` or by anything else running
+///   as the user — is listed but not run.
 /// - Rules are addressed to one display's `identityKey`, or to "any display".
 /// - Every action is killed at `AutomationLimits.timeout` and rate-limited to
 ///   one run per `minimumInterval`, because topology changes arrive in bursts.
@@ -158,6 +162,13 @@ public final class DisplayAutomationController {
     private let queue = DispatchQueue(label: "dev.fisifla.fbd.automation")
 
     private var rules: [AutomationRule]
+    /// Whether rules added through this instance are approved as they are
+    /// added. True in the app, whose Settings UI is the approval; false in
+    /// `fbdcli`, which never touches the sealing key.
+    private let approvesOwnRules: Bool
+    /// The sealing key once read from the Keychain. Cached so approval checks
+    /// on the main actor never wait on a Keychain prompt.
+    private var sealKey: Data?
     /// Last run per rule, for the rate limit.
     private var lastRun: [UUID: Date] = [:]
     private var runLog: [AutomationRunRecord] = []
@@ -176,11 +187,13 @@ public final class DisplayAutomationController {
     public init(
         executor: AutomationExecuting = ProcessAutomationExecutor(),
         notifier: AutomationNotifying = UserNotificationDeliverer(),
-        limits: AutomationLimits = .default
+        limits: AutomationLimits = .default,
+        approvesOwnRules: Bool = Bundle.main.bundleIdentifier == "dev.fisifla.fbd"
     ) {
         self.executor = executor
         self.notifier = notifier
         self.limits = limits
+        self.approvesOwnRules = approvesOwnRules
         self.rules = Settings.loadAutomationRules()
     }
 
@@ -212,6 +225,7 @@ public final class DisplayAutomationController {
         )
         rules.append(rule)
         Settings.saveAutomationRules(rules)
+        if approvesOwnRules { approve(ruleID: rule.id) }
         if rule.kind == .notification, UserNotificationDeliverer.isAvailable {
             // Ask the moment one is configured rather than at launch, so the prompt
             // arrives when its reason is on screen. Guarded, because the CLI shares
@@ -226,6 +240,10 @@ public final class DisplayAutomationController {
         guard let index = rules.firstIndex(where: { $0.id == id }) else { return false }
         rules.remove(at: index)
         Settings.saveAutomationRules(rules)
+        var seals = Settings.loadAutomationSeals()
+        if seals.removeValue(forKey: id.uuidString) != nil {
+            Settings.saveAutomationSeals(seals)
+        }
         return true
     }
 
@@ -239,6 +257,49 @@ public final class DisplayAutomationController {
 
     public func rule(withID id: UUID) -> AutomationRule? {
         rules.first { $0.id == id }
+    }
+
+    // MARK: - Approval
+
+    /// Whether `rule` may fire on its event. False until the sealing key has
+    /// been loaded (`loadApprovals`), and for any rule whose seal is missing
+    /// or does not match what the rule says now.
+    public func isApproved(_ rule: AutomationRule) -> Bool {
+        AutomationSeal.isValid(
+            Settings.loadAutomationSeals()[rule.id.uuidString],
+            for: rule,
+            key: sealKey
+        )
+    }
+
+    /// Read the sealing key off the main actor (the Keychain may stop to ask
+    /// the user), then call back on it. Immediate once the key is cached.
+    public func loadApprovals(_ completion: @escaping @MainActor () -> Void) {
+        guard sealKey == nil else { return completion() }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let key = AutomationSeal.key(store: Settings.secretStore, create: false)
+            Task { @MainActor in
+                self?.sealKey = key
+                completion()
+            }
+        }
+    }
+
+    /// Approve a rule as it stands. The user's action in the app: this is the
+    /// only place the sealing key is created, and it may wait on a Keychain
+    /// prompt. False when the rule is unknown or the Keychain is unavailable —
+    /// the rule then stays unapproved.
+    @discardableResult
+    public func approve(ruleID: UUID) -> Bool {
+        guard let rule = rule(withID: ruleID),
+              let key = sealKey ?? AutomationSeal.key(store: Settings.secretStore, create: true) else {
+            return false
+        }
+        sealKey = key
+        var seals = Settings.loadAutomationSeals()
+        seals[ruleID.uuidString] = AutomationSeal.seal(rule, key: key)
+        Settings.saveAutomationSeals(seals)
+        return true
     }
 
     // MARK: - Manual run
@@ -350,9 +411,21 @@ public final class DisplayAutomationController {
         // suite, so a rule added by `fbdcli automation add` takes effect
         // without restarting the app.
         rules = Settings.loadAutomationRules()
+        // Nothing stored: no reason to touch the Keychain at all.
+        guard !rules.isEmpty else { return }
+        loadApprovals { [weak self] in
+            self?.fireApproved(event, displayID: displayID, known: known)
+        }
+    }
+
+    private func fireApproved(_ event: AutomationEvent, displayID: CGDirectDisplayID?, known: KnownDisplay?) {
+        let approved = AutomationSeal.approved(rules, seals: Settings.loadAutomationSeals(), key: sealKey)
+        if approved.count < rules.count {
+            log.notice("automation: \(self.rules.count - approved.count) rule(s) not approved in the app, skipped")
+        }
         let now = Date()
         let due = AutomationScheduler.dueRules(
-            rules,
+            approved,
             event: event,
             identityKey: known?.identityKey,
             lastRun: lastRun,

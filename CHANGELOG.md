@@ -5,6 +5,28 @@ Versioning: semver from 1.0.0 (the first release with an update feed).
 
 ## [Unreleased]
 
+### Security
+- Automation rules now need approval in the app before they run on an event. Rules are stored in
+  UserDefaults, which any process running as you can write, so a rule planted there used to be
+  run by FBD on the next display or sleep event. The app now seals each rule you add or approve in
+  Settings → Automation (HMAC-SHA256, key in the login Keychain) and runs only rules whose seal
+  verifies. **Existing rules, and rules added with `fbdcli automation add`, show "Not approved" and
+  do not fire until you click Approve once in Settings → Automation.** Running a rule by hand
+  (`fbdcli automation run`, the play button) is unchanged. On unsigned builds the Keychain asks for
+  access to the sealing key again after each update, as it already does for the API token.
+- `fbdcli` no longer sends the API token to the app. It signs each request instead
+  (`X-FBD-Signature`), so a process that takes over the port the CLI was told about gets a
+  signature for one request, good for 30 seconds, and not the token. `x-fbd-token` and
+  `Authorization: Bearer` still work for your own scripts. An older `fbdcli` keeps working against
+  this app; this `fbdcli` needs this app.
+- The app clears the published API port when it quits, so `fbdcli` is not pointed at a port
+  nothing of FBD's is listening on.
+- `fbd://` URLs are no longer written to the log in full; the query carries the API token.
+- `lutPath` is checked before it is read: it must be a regular file no larger than the 16 MB cap.
+  A device or pipe (`/dev/zero`) used to hang the request, and a huge file was read whole first.
+- `SECURITY.md` now covers the points above and notes that network TV control uses the devices'
+  plaintext LAN protocols.
+
 ### Documentation
 - The four paths that needed hardware to prove are now recorded as verified. On 2026-10-28, on a
   second Apple Silicon Mac with an external monitor: DDC/CI against that monitor (VCP reads and

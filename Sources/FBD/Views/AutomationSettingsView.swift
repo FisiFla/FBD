@@ -53,6 +53,9 @@ struct AutomationSettingsView: View {
         } header: {
             Label("Automation", systemImage: "bolt.horizontal.circle")
         }
+        // The sealing key is read off the main actor; until it arrives every
+        // rule reads as unapproved.
+        .onAppear { controller.loadApprovals { tick += 1 } }
     }
 
     // MARK: - Rows
@@ -119,6 +122,20 @@ struct AutomationSettingsView: View {
                 .controlSize(.small)
                 .help("Remove this rule")
                 .accessibilityLabel("Remove rule")
+            }
+
+            if !controller.isApproved(rule) {
+                HStack(spacing: FBDTheme.spacingS) {
+                    Text("Not approved: this rule will not run on its event until you approve it here.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Approve") {
+                        _ = controller.approve(ruleID: rule.id)
+                        tick += 1
+                    }
+                    .controlSize(.small)
+                }
             }
 
             if let lastRun, lastRun.ruleID == rule.id {

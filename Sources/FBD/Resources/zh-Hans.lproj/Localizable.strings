@@ -275,6 +275,8 @@
 "Enabled" = "已启用";
 "Off" = "关闭";
 "Add rule" = "添加规则";
+"Not approved: this rule will not run on its event until you approve it here." = "未批准：在此处批准之前，此规则不会在事件发生时运行。";
+"Approve" = "批准";
 "Remove rule" = "移除规则";
 "Run rule" = "运行规则";
 "Run this rule now" = "立即运行此规则";

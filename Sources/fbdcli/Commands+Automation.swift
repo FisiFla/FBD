@@ -8,7 +8,8 @@ import Foundation
 /// wakes.
 ///
 /// **Opt-in**: nothing runs unless a rule exists for it. Rules are persisted in
-/// the shared suite, so one added here applies to the running app too.
+/// the shared suite, so one added here shows up in the running app too — where
+/// it has to be approved before the app will run it on its event.
 /// Process-wide controller so `add` and `test` see the same rule set.
 @MainActor
 private let cliAutomation = DisplayAutomationController()
@@ -89,6 +90,10 @@ func cmdAutomation(_ controller: DisplayController, args: [String]) -> Int32 {
         if event == .manual {
             // A manual control is useless without knowing how to invoke it.
             print("run it with: fbdcli automation run \(rule.id.uuidString)")
+        } else {
+            // Only the app approves rules, so saying nothing here would leave a
+            // rule that silently never fires.
+            print("approve it in FBD → Settings → Automation before it runs on its event")
         }
         return 0
 
